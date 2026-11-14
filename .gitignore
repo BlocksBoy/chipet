@@ -1,0 +1,16 @@
+node_modules/
+dist/
+.env
+.env.*
+!.env.example
+contracts/out/
+contracts/cache/
+contracts/broadcast/*/31337/
+*.log
+.DS_Store
+server/data/
+.cache
+.cache
+
+web/dist-deweb
+contracts/deweb

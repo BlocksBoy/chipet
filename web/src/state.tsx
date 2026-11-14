@@ -1,0 +1,112 @@
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { createPublicClient, http, type Address, type Chain, type Hex, type PublicClient, type WalletClient } from 'viem';
+import { useAccount, useSwitchChain } from 'wagmi';
+import { getWalletClient } from 'wagmi/actions';
+import { useConnectModal } from '@rainbow-me/rainbowkit';
+import { CHAINS, ChainLibrary, DEPLOYMENTS, type Deployment, type Signer } from '@tapearena/chain';
+import { errMsg } from './format.ts';
+import { CHAIN_IDS } from './env.ts';
+import { wagmiConfig } from './wallet.tsx';
+
+export interface Toast { id: number; kind: 'busy' | 'ok' | 'err'; text: string; hash?: Hex }
+
+interface Ctx {
+  chainId: number;
+  chain: Chain;
+  setChainId(id: number): void;
+  pub: PublicClient;
+  lib: ChainLibrary;
+  deployment: Deployment | undefined;
+  account: Address | null;
+  connect(): void;
+  signer(): Promise<Signer>;
+  toasts: Toast[];
+  run<T>(label: string, f: (step: (s: string, hash?: Hex) => void) => Promise<T>): Promise<T | undefined>;
+  dismiss(id: number): void;
+  explorer(hash: string): string | null;
+  refreshKey: number;
+  refresh(): void;
+}
+
+const C = createContext<Ctx | null>(null);
+export const useApp = () => useContext(C)!;
+
+const defaultChain = () => {
+  const saved = Number(localStorage.getItem('tapearena.chain'));
+  if (CHAIN_IDS.includes(saved)) return saved;
+  return Number(import.meta.env.VITE_CHAIN_ID ?? 196);
+};
+
+let toastSeq = 0;
+
+export function AppProvider({ children }: { children: ReactNode }) {
+  const [chainId, setChainIdRaw] = useState(defaultChain);
+  const { address, chainId: walletChainId } = useAccount();
+  const account = address ?? null;
+  const { switchChainAsync } = useSwitchChain();
+  const { openConnectModal } = useConnectModal();
+  const [toasts, setToasts] = useState<Toast[]>([]);
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  const chain = CHAINS[chainId as keyof typeof CHAINS] as Chain;
+  const { pub, lib } = useMemo(() => {
+    const rpc = import.meta.env[`VITE_RPC_${chainId}`] as string | undefined;
+    const pub = createPublicClient({ chain, transport: http(rpc ?? chain.rpcUrls.default.http[0], { batch: true }) }) as PublicClient;
+    return { pub, lib: new ChainLibrary(pub) };
+  }, [chainId, chain]);
+
+  const setChainId = (id: number) => { localStorage.setItem('tapearena.chain', String(id)); setChainIdRaw(id); };
+
+  const connect = useCallback(() => openConnectModal?.(), [openConnectModal]);
+
+  const signer = useCallback(async (): Promise<Signer> => {
+    if (!account) {
+      openConnectModal?.();
+      throw new Error('请先连接钱包');
+    }
+    // 钱包不认识这条链时 wagmi 会自动发起 wallet_addEthereumChain
+    if (walletChainId !== chainId) await switchChainAsync({ chainId });
+    const wallet = (await getWalletClient(wagmiConfig, { chainId, account })) as WalletClient;
+    return { pub, wallet, account, chain } as Signer;
+  }, [account, walletChainId, chainId, chain, pub, switchChainAsync, openConnectModal]);
+
+  const dismiss = (id: number) => setToasts((t) => t.filter((x) => x.id !== id));
+  const put = (t: Toast) => setToasts((all) => [...all.filter((x) => x.id !== t.id), t]);
+
+  const run = useCallback(async <T,>(label: string, f: (step: (s: string, hash?: Hex) => void) => Promise<T>) => {
+    const id = ++toastSeq;
+    put({ id, kind: 'busy', text: label });
+    try {
+      const r = await f((s, hash) => put({ id, kind: 'busy', text: hash ? `${s}：已发送，等待确认…` : `${s}：请在钱包中确认`, hash }));
+      put({ id, kind: 'ok', text: `${label}完成` });
+      setTimeout(() => dismiss(id), 5000);
+      setRefreshKey((k) => k + 1);
+      return r;
+    } catch (e) {
+      put({ id, kind: 'err', text: `${label}失败：${errMsg(e)}` });
+      return undefined;
+    }
+  }, []);
+
+  const explorer = (hash: string) => (chain.blockExplorers ? `${chain.blockExplorers.default.url}/tx/${hash}` : null);
+
+  const value: Ctx = {
+    chainId, chain, setChainId, pub, lib, deployment: DEPLOYMENTS[chainId], account, connect, signer,
+    toasts, run, dismiss, explorer, refreshKey, refresh: () => setRefreshKey((k) => k + 1),
+  };
+  return <C.Provider value={value}>{children}</C.Provider>;
+}
+
+/** 简单的异步数据钩子：依赖变了或 refreshKey 变了就重取。 */
+export function useAsync<T>(f: () => Promise<T>, deps: unknown[]): { data?: T; error?: Error; loading: boolean } {
+  const { refreshKey } = useApp();
+  const [s, setS] = useState<{ data?: T; error?: Error; loading: boolean }>({ loading: true });
+  useEffect(() => {
+    let live = true;
+    setS((p) => ({ ...p, loading: true }));
+    f().then((data) => live && setS({ data, loading: false })).catch((error) => live && setS({ error, loading: false }));
+    return () => { live = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [...deps, refreshKey]);
+  return s;
+}

@@ -1,0 +1,16 @@
+{
+  "name": "tapearena",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "server",
+    "web"
+  ],
+  "scripts": {
+    "test": "npm run test -w @tapearena/netlist && npm run test -w @tapearena/server",
+    "dev:server": "npm run dev -w @tapearena/server",
+    "dev:web": "npm run dev -w @tapearena/web",
+    "build:web": "npm run build -w @tapearena/web"
+  }
+}

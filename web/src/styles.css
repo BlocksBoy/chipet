@@ -1,0 +1,61 @@
+@import 'tailwindcss';
+
+@theme {
+  --color-substrate: #0b0e0c;
+  --color-panel: #111612;
+  --color-panel-2: #161d18;
+  --color-line: #233027;
+  --color-line-2: #2f4034;
+  --color-copper: #e08a4c;
+  --color-copper-hi: #ffb27a;
+  --color-copper-dim: #7a4a2a;
+  --color-si: #7fd1b9;
+  --color-si-dim: #2c5a4d;
+  --color-gold: #f2c46d;
+  --color-gold-dim: #6b5527;
+  --color-ink: #ebe6d9;
+  --color-mute: #8a9389;
+  --color-faint: #59625a;
+  --color-danger: #ff5d4a;
+  --color-danger-dim: #6a2a22;
+
+  --font-display: 'Bricolage Grotesque', 'Noto Sans SC', system-ui, sans-serif;
+  --font-sans: 'Noto Sans SC', 'Bricolage Grotesque', system-ui, -apple-system, 'PingFang SC', sans-serif;
+  --font-mono: 'Fragment Mono', 'SF Mono', ui-monospace, Menlo, monospace;
+
+  --animate-rise: rise 0.4s ease-out both;
+  @keyframes rise {
+    from { opacity: 0; transform: translateY(8px); }
+  }
+}
+
+@layer base {
+  :root { color-scheme: dark; }
+  html, body { @apply bg-substrate font-sans text-[15px] leading-relaxed text-ink antialiased; }
+  body::before {
+    content: '';
+    @apply pointer-events-none fixed inset-0 -z-10;
+    background:
+      repeating-linear-gradient(0deg, transparent 0 47px, rgb(127 209 185 / 0.04) 47px 48px),
+      repeating-linear-gradient(90deg, transparent 0 47px, rgb(127 209 185 / 0.04) 47px 48px);
+  }
+  h1, h2, h3 { @apply font-display font-extrabold text-balance; }
+  code { @apply rounded bg-panel-2 px-1 py-0.5 font-mono text-[0.9em] text-copper-hi; }
+  a { @apply text-copper-hi; }
+  ::selection { @apply bg-copper/30; }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+  }
+}
+
+@layer components {
+  .table-t { @apply w-full border-collapse text-sm; }
+  .table-t th { @apply border-b border-line px-3 py-2 text-left font-mono text-[11px] font-normal uppercase text-faint; }
+  .table-t td { @apply border-b border-line/60 px-3 py-2.5 align-middle; }
+  .table-t tbody tr { @apply transition-colors hover:bg-panel-2/60; }
+
+  .editor { @apply relative grid max-h-[70vh] min-h-[460px] grid-cols-[44px_1fr] overflow-auto bg-[#080a09] font-mono text-[13.5px] leading-[1.65]; }
+  .editor .gutter { @apply border-r border-line py-3 pr-2 text-right text-faint select-none; }
+  .editor .gutter .err { @apply bg-danger/15 text-danger; }
+  .editor textarea { @apply min-h-full resize-none overflow-hidden border-0 bg-transparent px-3.5 py-3 whitespace-pre text-ink caret-copper outline-none; tab-size: 2; font: inherit; }
+}

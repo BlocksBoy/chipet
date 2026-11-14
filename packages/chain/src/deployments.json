@@ -1,0 +1,10 @@
+{
+  "31337": {
+    "chainId": 31337,
+    "factory": "0x1f09daefa827f02cbb40967cc91b259763760761",
+    "arena": "0xe1e541024e39e7cfb4327e97d015040bf3ee945d",
+    "library": "0x1b14d9e17936b8bff16ad2b2ed121f2d75657368",
+    "cpu": "0xdE64a1584D6389D27318239DC5d6f58b0AeD52A3",
+    "deployedAt": "2026-11-14T03:12:31.913Z"
+  }
+}
