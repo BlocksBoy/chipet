@@ -2,25 +2,56 @@ import '@rainbow-me/rainbowkit/styles.css';
 import type { ReactNode } from 'react';
 import { http, createConfig, WagmiProvider } from 'wagmi';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { connectorsForWallets, darkTheme, RainbowKitProvider, type Theme } from '@rainbow-me/rainbowkit';
+import { connectorsForWallets, darkTheme, RainbowKitProvider, type Theme, type WalletList } from '@rainbow-me/rainbowkit';
 import {
   binanceWallet, bitgetWallet, coinbaseWallet, injectedWallet, metaMaskWallet, okxWallet, oneKeyWallet, rabbyWallet, tokenPocketWallet,
-  trustWallet, walletConnectWallet,
+  trustWallet,
 } from '@rainbow-me/rainbowkit/wallets';
 import type { Chain } from 'viem';
 import { CHAINS } from '@tapearena/chain';
 import { CHAIN_IDS } from './env.ts';
 
-// WalletConnect 扫码需要在 cloud.reown.com 申请项目 ID；没配时只提供浏览器插件钱包。
-const projectId = (import.meta.env.VITE_WC_PROJECT_ID as string | undefined) ?? '';
+type CreateWallet = WalletList[number]['wallets'][number];
 
-const connectors = connectorsForWallets(
-  [
-    { groupName: '推荐', wallets: [okxWallet, metaMaskWallet, rabbyWallet, binanceWallet, bitgetWallet] },
-    { groupName: '更多', wallets: [coinbaseWallet, trustWallet, oneKeyWallet, tokenPocketWallet, injectedWallet, ...(projectId ? [walletConnectWallet] : [])] },
-  ],
-  { appName: 'TapeArena', projectId: projectId || 'tapearena-local' },
-);
+// 网格里每格很窄，统一用短名
+const short = (create: CreateWallet, name: string): CreateWallet => (params) => ({ ...create(params), name });
+
+// 只用插件钱包，不走 WalletConnect，projectId 只是占位
+const walletParams = { appName: 'TapeArena', projectId: 'tapearena-local' };
+
+type Eth = { isCoinbaseWallet?: boolean; providers?: Eth[] };
+const win = () => window as { ethereum?: Eth; okxwallet?: unknown; coinbaseWalletExtension?: unknown };
+
+const viaFlag = (create: CreateWallet) => () => create(walletParams).installed === true;
+
+// okxWallet 不带 installed 字段；coinbaseWallet 总是报 installed（没插件时走 SDK 弹窗）
+const KNOWN: [CreateWallet, () => boolean][] = [
+  [short(okxWallet, 'OKX'), () => !!win().okxwallet],
+  [metaMaskWallet, viaFlag(metaMaskWallet)],
+  [short(rabbyWallet, 'Rabby'), viaFlag(rabbyWallet)],
+  [short(binanceWallet, 'Binance'), viaFlag(binanceWallet)],
+  [short(bitgetWallet, 'Bitget'), viaFlag(bitgetWallet)],
+  [short(trustWallet, 'Trust'), viaFlag(trustWallet)],
+  [oneKeyWallet, viaFlag(oneKeyWallet)],
+  [tokenPocketWallet, viaFlag(tokenPocketWallet)],
+  [short(coinbaseWallet, 'Coinbase'), () => {
+    const { ethereum: e, coinbaseWalletExtension } = win();
+    return !!(coinbaseWalletExtension || e?.isCoinbaseWallet || e?.providers?.some((p) => p.isCoinbaseWallet));
+  }],
+];
+
+/**
+ * 只列出浏览器里检测到的钱包。没在 KNOWN 里的插件钱包由 wagmi 的 EIP-6963 发现补上，
+ * RainbowKit 会把它们并进同名的 Installed 分组。
+ */
+function installedWallets(): CreateWallet[] {
+  const found = KNOWN.filter(([, detect]) => detect()).map(([create]) => create);
+  if (!found.length && win().ethereum) found.push(short(injectedWallet, '浏览器钱包'));
+  return found;
+}
+
+const installed = installedWallets();
+const connectors = installed.length ? connectorsForWallets([{ groupName: 'Installed', wallets: installed }], walletParams) : [];
 
 const chains = CHAIN_IDS.map((id) => CHAINS[id as keyof typeof CHAINS]) as unknown as [Chain, ...Chain[]];
 

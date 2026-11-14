@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { createPublicClient, http, type Address, type Chain, type Hex, type PublicClient, type WalletClient } from 'viem';
-import { useAccount, useSwitchChain } from 'wagmi';
+import { useAccount, useConnectors, useSwitchChain } from 'wagmi';
 import { getWalletClient } from 'wagmi/actions';
 import { useConnectModal } from '@rainbow-me/rainbowkit';
 import { CHAINS, ChainLibrary, DEPLOYMENTS, type Deployment, type Signer } from '@tapearena/chain';
@@ -38,6 +38,7 @@ const defaultChain = () => {
 };
 
 let toastSeq = 0;
+const NO_WALLET_TOAST = -1;
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [chainId, setChainIdRaw] = useState(defaultChain);
@@ -57,18 +58,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const setChainId = (id: number) => { localStorage.setItem('tapearena.chain', String(id)); setChainIdRaw(id); };
 
-  const connect = useCallback(() => openConnectModal?.(), [openConnectModal]);
+  const connectors = useConnectors();
+  const connect = useCallback(() => {
+    if (connectors.length) return openConnectModal?.();
+    put({ id: NO_WALLET_TOAST, kind: 'err', text: '没有检测到钱包插件。请先安装 OKX Wallet、MetaMask 等浏览器钱包，然后刷新页面。' });
+  }, [connectors.length, openConnectModal]);
 
   const signer = useCallback(async (): Promise<Signer> => {
     if (!account) {
-      openConnectModal?.();
+      connect();
       throw new Error('请先连接钱包');
     }
     // 钱包不认识这条链时 wagmi 会自动发起 wallet_addEthereumChain
     if (walletChainId !== chainId) await switchChainAsync({ chainId });
     const wallet = (await getWalletClient(wagmiConfig, { chainId, account })) as WalletClient;
     return { pub, wallet, account, chain } as Signer;
-  }, [account, walletChainId, chainId, chain, pub, switchChainAsync, openConnectModal]);
+  }, [account, walletChainId, chainId, chain, pub, switchChainAsync, connect]);
 
   const dismiss = (id: number) => setToasts((t) => t.filter((x) => x.id !== id));
   const put = (t: Toast) => setToasts((all) => [...all.filter((x) => x.id !== t.id), t]);

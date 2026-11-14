@@ -39,11 +39,12 @@ const NAV = [
 
 function WalletButton() {
   const { connector } = useAccount();
+  const { connect } = useApp();
   return (
     <ConnectButton.Custom>
-      {({ account, chain, mounted, openConnectModal, openAccountModal, openChainModal }) => {
+      {({ account, chain, mounted, openAccountModal, openChainModal }) => {
         if (!mounted) return <span className="h-8 w-28" aria-hidden />;
-        if (!account) return <Button size="sm" icon={Wallet} onClick={openConnectModal}>连接钱包</Button>;
+        if (!account) return <Button size="sm" icon={Wallet} onClick={connect}>连接钱包</Button>;
         if (chain?.unsupported) return <Button size="sm" variant="danger" icon={TriangleAlert} onClick={openChainModal}>切换网络</Button>;
         return (
           <button type="button" onClick={openAccountModal} title={account.address}

@@ -48,6 +48,68 @@
   }
 }
 
+/* RainbowKit 紧凑弹窗把高度锁在 468px，中文下「获取钱包」页会被截断 */
+[data-rk] div[style*='max-height: 468px'] {
+  max-height: min(580px, calc(100dvh - 32px)) !important;
+}
+
+/* 钱包列表改为五列网格：图标在上、名称在下 */
+[data-rk] ._1ckjpok4 {
+  width: min(500px, 100vw) !important;
+  min-width: 0 !important;
+}
+[data-rk] div:has(> div > div > button[data-testid^='rk-wallet-option-']) {
+  max-height: min(520px, calc(100dvh - 160px));
+}
+[data-rk] div:has(> div > button[data-testid^='rk-wallet-option-']) {
+  display: grid !important;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px !important;
+}
+[data-rk] button[data-testid^='rk-wallet-option-'] {
+  height: 100%;
+  padding: 12px 4px 10px !important;
+  border-color: var(--rk-colors-generalBorder) !important;
+  background: var(--rk-colors-generalBorderDim);
+}
+[data-rk] button[data-testid^='rk-wallet-option-']:hover:not(:disabled) {
+  border-color: var(--rk-colors-selectedOptionBorder) !important;
+  background: var(--rk-colors-menuItemBackground);
+}
+[data-rk] button[data-testid^='rk-wallet-option-']:disabled {
+  border-color: var(--rk-colors-accentColor) !important;
+  background: rgb(224 138 76 / 0.12) !important;
+}
+[data-rk] button[data-testid^='rk-wallet-option-']:disabled > div {
+  color: var(--rk-colors-accentColor) !important;
+}
+[data-rk] button[data-testid^='rk-wallet-option-'] > div {
+  width: 100%;
+}
+[data-rk] button[data-testid^='rk-wallet-option-'] > div > div {
+  flex-direction: column !important;
+  align-items: center !important;
+  gap: 7px !important;
+  text-align: center;
+}
+[data-rk] button[data-testid^='rk-wallet-option-'] > div > div > div:first-child,
+[data-rk] button[data-testid^='rk-wallet-option-'] > div > div > div:first-child img {
+  width: 36px !important;
+  height: 36px !important;
+  border-radius: 10px !important;
+}
+[data-rk] button[data-testid^='rk-wallet-option-'] > div > div > div:last-child,
+[data-rk] button[data-testid^='rk-wallet-option-'] > div > div > div:last-child * {
+  width: 100%;
+  max-width: 100% !important;
+  font-size: 12px;
+  line-height: 1.3;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 @layer components {
   .table-t { @apply w-full border-collapse text-sm; }
   .table-t th { @apply border-b border-line px-3 py-2 text-left font-mono text-[11px] font-normal uppercase text-faint; }
