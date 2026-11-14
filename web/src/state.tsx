@@ -19,6 +19,8 @@ interface Ctx {
   deployment: Deployment | undefined;
   account: Address | null;
   connect(): void;
+  walletGuide: boolean;
+  closeWalletGuide(): void;
   signer(): Promise<Signer>;
   toasts: Toast[];
   run<T>(label: string, f: (step: (s: string, hash?: Hex) => void) => Promise<T>): Promise<T | undefined>;
@@ -38,7 +40,6 @@ const defaultChain = () => {
 };
 
 let toastSeq = 0;
-const NO_WALLET_TOAST = -1;
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [chainId, setChainIdRaw] = useState(defaultChain);
@@ -59,9 +60,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const setChainId = (id: number) => { localStorage.setItem('tapearena.chain', String(id)); setChainIdRaw(id); };
 
   const connectors = useConnectors();
+  const [walletGuide, setWalletGuide] = useState(false);
+  const closeWalletGuide = useCallback(() => setWalletGuide(false), []);
   const connect = useCallback(() => {
-    if (connectors.length) return openConnectModal?.();
-    put({ id: NO_WALLET_TOAST, kind: 'err', text: '没有检测到钱包插件。请先安装 OKX Wallet、MetaMask 等浏览器钱包，然后刷新页面。' });
+    if (connectors.length) openConnectModal?.();
+    else setWalletGuide(true);
   }, [connectors.length, openConnectModal]);
 
   const signer = useCallback(async (): Promise<Signer> => {
@@ -96,7 +99,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const explorer = (hash: string) => (chain.blockExplorers ? `${chain.blockExplorers.default.url}/tx/${hash}` : null);
 
   const value: Ctx = {
-    chainId, chain, setChainId, pub, lib, deployment: DEPLOYMENTS[chainId], account, connect, signer,
+    chainId, chain, setChainId, pub, lib, deployment: DEPLOYMENTS[chainId], account, connect, walletGuide, closeWalletGuide, signer,
     toasts, run, dismiss, explorer, refreshKey, refresh: () => setRefreshKey((k) => k + 1),
   };
   return <C.Provider value={value}>{children}</C.Provider>;

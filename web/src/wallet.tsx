@@ -53,6 +53,28 @@ function installedWallets(): CreateWallet[] {
 const installed = installedWallets();
 const connectors = installed.length ? connectorsForWallets([{ groupName: 'Installed', wallets: installed }], walletParams) : [];
 
+export interface GuideWallet { id: string; name: string; note: string; url: string; background: string; icon: () => Promise<string> }
+
+const guide = (create: CreateWallet, name: string, note: string): GuideWallet => {
+  const w = create(walletParams);
+  const d = w.downloadUrls ?? {};
+  return {
+    id: w.id, name, note, background: w.iconBackground,
+    url: d.browserExtension ?? d.chrome ?? d.qrCode ?? '#',
+    icon: typeof w.iconUrl === 'string' ? async () => w.iconUrl as string : w.iconUrl,
+  };
+};
+
+/** 一个钱包都没检测到时，引导用户安装的常用钱包。 */
+export const GUIDE_WALLETS: GuideWallet[] = [
+  guide(okxWallet, 'OKX Wallet', 'X Layer 官方钱包，推荐'),
+  guide(metaMaskWallet, 'MetaMask', '最常用的以太坊钱包'),
+  guide(rabbyWallet, 'Rabby', '多链插件，交易前预览'),
+  guide(binanceWallet, 'Binance Wallet', '币安 Web3 钱包'),
+  guide(bitgetWallet, 'Bitget Wallet', '多链 Web3 钱包'),
+  guide(coinbaseWallet, 'Coinbase Wallet', 'Coinbase 自托管钱包'),
+];
+
 const chains = CHAIN_IDS.map((id) => CHAINS[id as keyof typeof CHAINS]) as unknown as [Chain, ...Chain[]];
 
 export const wagmiConfig = createConfig({

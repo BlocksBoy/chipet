@@ -10,6 +10,7 @@ import { Link, useRoute } from '../router.tsx';
 import { useApp } from '../state.tsx';
 import { short } from '../format.ts';
 import { Button, cn } from './ui.tsx';
+import { WalletGuide } from './WalletGuide.tsx';
 
 export function Logo({ size = 28 }: { size?: number }) {
   return (
@@ -64,7 +65,7 @@ function WalletButton() {
 }
 
 export function Shell({ children }: { children: ReactNode }) {
-  const { chainId, setChainId, toasts, dismiss, explorer } = useApp();
+  const { chainId, setChainId, toasts, dismiss, explorer, walletGuide, closeWalletGuide } = useApp();
   const r = useRoute();
   const here = r.parts[0] ?? '';
 
@@ -131,6 +132,8 @@ export function Shell({ children }: { children: ReactNode }) {
           </div>
         ))}
       </div>
+
+      <WalletGuide open={walletGuide} onClose={closeWalletGuide} />
     </div>
   );
 }
