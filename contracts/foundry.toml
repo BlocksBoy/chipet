@@ -19,6 +19,8 @@ fs_permissions = [{ access = "read", path = "./test/fixtures" }, { access = "rea
 [rpc_endpoints]
 xlayer = "https://rpc.xlayer.tech"
 xlayer_testnet = "https://testrpc.xlayer.tech"
+bsc = "https://bsc-dataseed.bnbchain.org"
+bsc_testnet = "https://bsc-testnet-dataseed.bnbchain.org"
 
 [fmt]
 line_length = 120

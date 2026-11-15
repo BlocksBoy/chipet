@@ -11,13 +11,15 @@ import {
 import { useApp, useAsync } from '../state.tsx';
 import { Link } from '../router.tsx';
 import { Die } from '../components/Die.tsx';
-import { amount, left, PHASE_TEXT, short, unit } from '../format.ts';
+import { amount, left, phaseText, short, unit } from '../format.ts';
+import { tr } from '../i18n.ts';
 import { btn, Button, cn, Empty, Input, KV, Loading, Panel, PhaseTag, Tag } from '../components/ui.tsx';
 
 export function BountyPage({ id }: { id: number }) {
   const app = useApp();
   const arena = app.deployment?.arena;
-  const q = useAsync(() => (arena ? fetchBounty(app.pub, arena, id) : Promise.reject(new Error('未部署'))), [arena, id, app.pub]);
+  const sym = app.chain.nativeCurrency.symbol;
+  const q = useAsync(() => (arena ? fetchBounty(app.pub, arena, id) : Promise.reject(new Error(tr('这条链上还没有部署 TapeArena', 'TapeArena isn\'t deployed on this chain')))), [arena, id, app.pub]);
   const credit = useAsync(async () => {
     if (!arena || !app.account || !q.data) return 0n;
     return app.pub.readContract({ address: arena, abi: arenaAbi, functionName: 'credit', args: [q.data.token, app.account] });
@@ -38,8 +40,8 @@ export function BountyPage({ id }: { id: number }) {
     return { winner: w.solver, fee, each, owners, comps, prize: b.reward - fee - each * BigInt(owners.length) };
   }, [q.data, app.deployment?.library]);
 
-  if (q.loading && !q.data) return <Loading>读取擂台…</Loading>;
-  if (!q.data) return <div className="mx-auto max-w-[1240px] px-7"><Empty icon={ShieldAlert} title={`找不到擂台 #${id}`} action={<Link to="/" className={btn('ghost')}><ArrowLeft />回到擂台</Link>}><span className="text-danger">{q.error?.message}</span></Empty></div>;
+  if (q.loading && !q.data) return <Loading>{tr('读取擂台…', 'Loading bounty…')}</Loading>;
+  if (!q.data) return <div className="mx-auto w-full max-w-[1180px] px-7"><Empty icon={ShieldAlert} title={tr(`找不到擂台 #${id}`, `Bounty #${id} not found`)} action={<Link to="/lab" className={btn('ghost')}><ArrowLeft />{tr('回到擂台', 'Back to the Arena')}</Link>}><span className="text-danger">{q.error?.message}</span></Empty></div>;
   const b = q.data;
   const phase = bountyPhase(b);
   const ranked = b.submissions.map((s, i) => ({ s, i })).sort((x, y) =>
@@ -50,12 +52,12 @@ export function BountyPage({ id }: { id: number }) {
   const pinText = b.meta.inputs && `${b.meta.inputs.map((p) => p.name + (p.width > 1 ? `[${p.width}]` : '')).join(', ')} → ${b.meta.outputs?.map((p) => p.name + (p.width > 1 ? `[${p.width}]` : '')).join(', ')}`;
 
   return (
-    <div className="mx-auto max-w-[1240px] px-4 sm:px-7">
-      <div className="grid gap-5 pt-6 pb-16 lg:grid-cols-[minmax(0,1fr)_360px]">
+    <div className="mx-auto w-full max-w-[1180px] px-4 sm:px-7">
+      <div className="grid grid-cols-1 gap-5 pt-6 pb-16 lg:grid-cols-[minmax(0,1fr)_360px]">
         <div className="flex flex-col gap-5">
           <div>
             <div className="flex items-center gap-2.5">
-              <Link to="/" className="flex items-center gap-1 font-mono text-xs text-mute no-underline hover:text-ink"><ArrowLeft className="size-3.5" />擂台</Link>
+              <Link to="/lab" className="flex items-center gap-1 font-mono text-xs text-mute no-underline hover:text-ink"><ArrowLeft className="size-3.5" />{tr('擂台', 'Arena')}</Link>
               <ChevronRight className="size-3.5 text-faint" />
               <PhaseTag phase={phase} />
               <span className="font-mono text-xs text-faint">#{b.id}</span>
@@ -67,7 +69,7 @@ export function BountyPage({ id }: { id: number }) {
                 const I = STAGE_ICON[st];
                 return (
                   <li key={st} className={cn('border-t-2 pt-2 font-mono text-[11px]', k === at ? 'border-copper text-ink' : k < at ? 'border-copper-dim text-mute' : 'border-line-2 text-faint')}>
-                    <span className="flex items-center gap-1.5"><I className={cn('size-3.5', k === at && 'text-copper')} />{PHASE_TEXT[st]}</span>
+                    <span className="flex items-center gap-1.5"><I className={cn('size-3.5', k === at && 'text-copper')} />{phaseText(st)}</span>
                     {st === 'open' && <span className="mt-0.5 block text-faint">{left(b.deadline)}</span>}
                     {st === 'challenge' && <span className="mt-0.5 block text-faint">{left(b.challengeEnd)}</span>}
                   </li>
@@ -76,60 +78,62 @@ export function BountyPage({ id }: { id: number }) {
             </ol>
           </div>
 
-          <Panel title="排行榜" icon={Trophy}
-            right={<><span className="hidden font-mono text-xs text-faint sm:inline">门数少者胜 · 同门数先到先得</span>{phase === 'open' && <Link to={`/studio?bounty=${b.id}`} className={btn('primary', 'sm')}><PenTool />去设计</Link>}</>}>
+          <Panel title={tr('排行榜', 'Leaderboard')} icon={Trophy}
+            right={<><span className="hidden font-mono text-xs text-faint sm:inline">{tr('门数少者胜 · 同门数先到先得', 'Fewest gates wins · ties go to the earliest')}</span>{phase === 'open' && <Link to={`/lab/studio?bounty=${b.id}`} className={btn('primary', 'sm')}><PenTool />{tr('去设计', 'Design')}</Link>}</>}>
             {ranked.length === 0
-              ? <Empty icon={Send} title="还没有人提交" action={phase === 'open' && <Link to={`/studio?bounty=${b.id}`} className={btn()}><PenTool />去设计</Link>}>第一个提交的人直接领先。</Empty>
+              ? <Empty icon={Send} title={tr('还没有人提交', 'No submissions yet')} action={phase === 'open' && <Link to={`/lab/studio?bounty=${b.id}`} className={btn()}><PenTool />{tr('去设计', 'Design')}</Link>}>{tr('第一个提交的人直接领先。', 'The first submission takes the lead.')}</Empty>
               : <div className="overflow-x-auto"><table className="table-t">
-                  <thead><tr><th>#</th><th>设计者</th><th>电路</th><th>门数</th><th>状态</th><th /></tr></thead>
+                  <thead><tr><th>#</th><th>{tr('设计者', 'Designer')}</th><th>{tr('电路', 'Circuit')}</th><th>{tr('门数', 'Gates')}</th><th>{tr('状态', 'Status')}</th><th /></tr></thead>
                   <tbody>{ranked.map(({ s, i }, k) => (
                     <SubmissionRow key={i} b={b} s={s} rank={s.disqualified ? null : k + 1} win={b.best === i} refCircuit={ref.data ?? null} />
                   ))}</tbody>
                 </table></div>}
           </Panel>
 
-          {ref.data && <Die elements={ref.data.elements} nIn={ref.data.nIn} height={220} label="参考电路" />}
+          {ref.data && <Die elements={ref.data.elements} nIn={ref.data.nIn} height={220} label={tr('参考电路', 'Reference circuit')} />}
         </div>
 
         <div className="flex flex-col gap-5">
           <Panel bodyClass="p-5">
-            <div className="flex items-center gap-1.5 font-mono text-xs text-mute"><Coins className="size-3.5 text-copper" />奖金</div>
-            <div className="mt-1 font-display text-[44px] leading-tight font-extrabold text-copper-hi tabular-nums">{amount(b.reward)} <span className="text-base font-medium text-mute">{unit(b.token)}</span></div>
+            <div className="flex items-center gap-1.5 font-mono text-xs text-mute"><Coins className="size-3.5 text-copper" />{tr('奖金', 'Prize')}</div>
+            <div className="mt-1 font-display text-[44px] leading-tight font-extrabold text-copper-hi tabular-nums">{amount(b.reward)} <span className="text-base font-medium text-mute">{unit(b.token, sym)}</span></div>
             <div className="mt-4 border-t border-line pt-4">
               <KV rows={[
-                [Zap, '引脚', `${b.nIn} 入 → ${b.nOut} 出`],
-                ...(pinText ? [[CircuitBoard, '接口', pinText] as [typeof Zap, string, string]] : []),
-                [ListChecks, '测试向量', `${b.vectors.length} 条${b.sampleSize ? `（抽检 ${b.sampleSize}）` : '（全量）'}`],
-                [Gauge, '门数上限', b.maxGates || '无'],
-                [Lock, '保证金', `${formatEther(b.bond)} OKB`],
-                [Blocks, '上游分润', `${b.royaltyBps / 100}%`],
-                [Percent, '平台费', `${b.feeBps / 100}%`],
-                [FlaskConical, '参考电路', b.refCpu === zeroAddress ? '无（只用向量判）' : `${short(b.refCpu)} #${b.refId}`],
-                [User, '出题人', short(b.poster)],
+                [Zap, tr('引脚', 'Pins'), tr(`${b.nIn} 入 → ${b.nOut} 出`, `${b.nIn} in → ${b.nOut} out`)],
+                ...(pinText ? [[CircuitBoard, tr('接口', 'Interface'), pinText] as [typeof Zap, string, string]] : []),
+                [ListChecks, tr('测试向量', 'Test vectors'), b.sampleSize
+                  ? tr(`${b.vectors.length} 条（抽检 ${b.sampleSize}）`, `${b.vectors.length} (${b.sampleSize} sampled)`)
+                  : tr(`${b.vectors.length} 条（全量）`, `${b.vectors.length} (all run)`)],
+                [Gauge, tr('门数上限', 'Gate limit'), b.maxGates || tr('无', 'None')],
+                [Lock, tr('保证金', 'Bond'), `${formatEther(b.bond)} ${sym}`],
+                [Blocks, tr('上游分润', 'Upstream royalty'), `${b.royaltyBps / 100}%`],
+                [Percent, tr('平台费', 'Platform fee'), `${b.feeBps / 100}%`],
+                [FlaskConical, tr('参考电路', 'Reference circuit'), b.refCpu === zeroAddress ? tr('无（只用向量判）', 'None (vectors only)') : `${short(b.refCpu)} #${b.refId}`],
+                [User, tr('出题人', 'Poster'), short(b.poster)],
               ]} />
             </div>
           </Panel>
 
           {payout.data && (
-            <Panel title="结算分账" icon={Banknote} bodyClass="flex flex-col gap-2 p-4">
-              <Payee icon={Crown} tone="text-gold" label="冠军" who={payout.data.winner} v={`${amount(payout.data.prize)} ${unit(b.token)}`} />
+            <Panel title={tr('结算分账', 'Payout')} icon={Banknote} bodyClass="flex flex-col gap-2 p-4">
+              <Payee icon={Crown} tone="text-gold" label={tr('冠军', 'Winner')} who={payout.data.winner} v={`${amount(payout.data.prize)} ${unit(b.token, sym)}`} />
               {payout.data.owners.map((o, k) => (
-                <Fragment key={k}><Payee icon={Blocks} tone="text-si" label={`上游组件 ${payout.data!.comps[k].slice(0, 8)}`} who={o} v={`${amount(payout.data!.each)} ${unit(b.token)}`} /></Fragment>
+                <Fragment key={k}><Payee icon={Blocks} tone="text-si" label={`${tr('上游组件', 'Upstream component')} ${payout.data!.comps[k].slice(0, 8)}`} who={o} v={`${amount(payout.data!.each)} ${unit(b.token, sym)}`} /></Fragment>
               ))}
-              <Payee icon={Landmark} tone="text-mute" label="平台费" v={`${amount(payout.data.fee)} ${unit(b.token)}`} />
+              <Payee icon={Landmark} tone="text-mute" label={tr('平台费', 'Platform fee')} v={`${amount(payout.data.fee)} ${unit(b.token, sym)}`} />
             </Panel>
           )}
 
           {phase === 'open' && <SubmitExisting b={b} />}
 
           {phase === 'settle' && (
-            <Button size="lg" icon={Gauge} onClick={() => app.run('结算', async (st) => finalize(await app.signer(), arena!, b.id, st))}>结算并发奖</Button>
+            <Button size="lg" icon={Gauge} onClick={() => app.run(tr('结算', 'Settle'), async (st) => finalize(await app.signer(), arena!, b.id, st))}>{tr('结算并发奖', 'Settle and pay out')}</Button>
           )}
           {credit.data !== undefined && credit.data > 0n && (
             <Panel bodyClass="p-5">
-              <div className="flex items-center gap-1.5 text-[13px] text-mute"><Wallet className="size-4 text-copper" />你在合约里的可提余额</div>
-              <div className="mt-1 font-display text-2xl font-extrabold text-copper-hi tabular-nums">{amount(credit.data)} {unit(b.token)}</div>
-              <Button variant="si" className="mt-3 w-full" icon={Banknote} onClick={() => app.run('提取', async (st) => withdraw(await app.signer(), arena!, b.token, st))}>提取</Button>
+              <div className="flex items-center gap-1.5 text-[13px] text-mute"><Wallet className="size-4 text-copper" />{tr('你在合约里的可提余额', 'Your withdrawable balance in the contract')}</div>
+              <div className="mt-1 font-display text-2xl font-extrabold text-copper-hi tabular-nums">{amount(credit.data)} {unit(b.token, sym)}</div>
+              <Button variant="si" className="mt-3 w-full" icon={Banknote} onClick={() => app.run(tr('提取', 'Withdraw'), async (st) => withdraw(await app.signer(), arena!, b.token, st))}>{tr('提取', 'Withdraw')}</Button>
             </Panel>
           )}
         </div>
@@ -140,7 +144,7 @@ export function BountyPage({ id }: { id: number }) {
 
 function Payee({ icon: I, tone, label, who, v }: { icon: typeof Crown; tone: string; label: string; who?: string; v: string }) {
   return (
-    <div className="flex items-center gap-3 rounded-lg bg-substrate/60 px-3 py-2.5 ring-1 ring-line">
+    <div className="flex items-center gap-3 rounded-xl bg-substrate/60 px-3 py-2.5 ring-1 ring-line">
       <I className={cn('size-4 shrink-0', tone)} />
       <div className="min-w-0 flex-1">
         <div className="truncate font-mono text-[11px] text-faint">{label}</div>
@@ -155,16 +159,21 @@ function SubmissionRow({ b, s, rank, win, refCircuit }: { b: Bounty; s: Submissi
   const app = useApp();
   const arena = app.deployment!.arena!;
   const phase = bountyPhase(b);
-  const [hint, setHint] = useState<string | null>(null);
+  const [hint, setHint] = useState<{ found: boolean; text: string } | null>(null);
   const canChallenge = !s.disqualified && phase !== 'finalized' && phase !== 'settle';
   const mine = app.account && s.solver.toLowerCase() === app.account.toLowerCase();
 
-  const hunt = () => app.run('发起挑战', async (st) => {
-    st('在浏览器里对比参考电路');
+  const hunt = () => app.run(tr('发起挑战', 'Challenge'), async (st) => {
+    st(tr('在浏览器里对比参考电路', 'Comparing with the reference in your browser'));
     const cand = await app.lib.resolved(s.cpu, s.circuitId);
     const h = challengeHint(cand, refCircuit, app.lib, b.vectors);
-    if (!h) { setHint('没找到反例，这个电路是对的'); return; }
-    setHint(h.kind === 'vector' ? `找到反例：向量 #${h.vectorIndex} 不通过` : `找到反例：输入 ${h.input} 与参考电路输出不同`);
+    if (!h) { setHint({ found: false, text: tr('没找到反例，这个电路是对的', 'No counterexample found: this circuit is correct') }); return; }
+    setHint({
+      found: true,
+      text: h.kind === 'vector'
+        ? tr(`找到反例：向量 #${h.vectorIndex} 不通过`, `Counterexample found: vector #${h.vectorIndex} fails`)
+        : tr(`找到反例：输入 ${h.input} 与参考电路输出不同`, `Counterexample found: input ${h.input} differs from the reference`),
+    });
     const signer = await app.signer();
     if (h.kind === 'vector') return challengeVector(signer, arena, b.id, s.index, h.vectorIndex, st);
     return challenge(signer, arena, b.id, s.index, h.input as Hex, st);
@@ -173,18 +182,18 @@ function SubmissionRow({ b, s, rank, win, refCircuit }: { b: Bounty; s: Submissi
   return (
     <tr className={cn(win && 'bg-gold/[0.06]', s.disqualified && 'opacity-50')}>
       <td className="font-mono tabular-nums">
-        {win ? <Crown className="size-4 text-gold" aria-label="领先" /> : rank ?? '—'}
+        {win ? <Crown className="size-4 text-gold" aria-label={tr('领先', 'Leading')} /> : rank ?? '—'}
       </td>
-      <td className="font-mono"><span className="flex items-center gap-1.5">{short(s.solver)}{mine && <Tag tone="copper">我</Tag>}</span></td>
+      <td className="font-mono"><span className="flex items-center gap-1.5">{short(s.solver)}{mine && <Tag tone="copper">{tr('我', 'Me')}</Tag>}</span></td>
       <td className="font-mono text-faint"><span className="flex items-center gap-1"><Hash className="size-3" />{short(s.cpu)} #{s.circuitId.toString()}</span></td>
       <td><b className={cn('font-display text-lg tabular-nums', win && 'text-gold', s.disqualified && 'line-through decoration-danger/60')}>{s.gateCount}</b></td>
-      <td>{s.disqualified ? <Tag tone="danger" icon={ShieldAlert}>被挑战出局</Tag> : win ? <Tag tone="gold" icon={Trophy}>领先</Tag> : <Tag icon={CircleCheck}>有效</Tag>}</td>
+      <td>{s.disqualified ? <Tag tone="danger" icon={ShieldAlert}>{tr('被挑战出局', 'Disqualified')}</Tag> : win ? <Tag tone="gold" icon={Trophy}>{tr('领先', 'Leading')}</Tag> : <Tag icon={CircleCheck}>{tr('有效', 'Valid')}</Tag>}</td>
       <td className="text-right">
-        {canChallenge && !mine && <Button variant="ghost" size="sm" icon={Crosshair} onClick={hunt} title="自动找反例并发起挑战，成功可拿走对方保证金">挑战</Button>}
+        {canChallenge && !mine && <Button variant="ghost" size="sm" icon={Crosshair} onClick={hunt} title={tr('自动找反例并发起挑战，成功可拿走对方保证金', 'Finds a counterexample automatically and challenges; if it succeeds you take their bond')}>{tr('挑战', 'Challenge')}</Button>}
         {phase === 'finalized' && mine && !s.disqualified && !s.bondClaimed && b.bond > 0n && (
-          <Button variant="ghost" size="sm" icon={Banknote} onClick={() => app.run('取回保证金', async (st) => claimBond(await app.signer(), arena, b.id, s.index, st))}>取回保证金</Button>
+          <Button variant="ghost" size="sm" icon={Banknote} onClick={() => app.run(tr('取回保证金', 'Reclaim bond'), async (st) => claimBond(await app.signer(), arena, b.id, s.index, st))}>{tr('取回保证金', 'Reclaim bond')}</Button>
         )}
-        {hint && <div className={cn('mt-1 flex items-center justify-end gap-1 text-xs', hint.startsWith('找到') ? 'text-danger' : 'text-faint')}><ScanSearch className="size-3" />{hint}</div>}
+        {hint && <div className={cn('mt-1 flex items-center justify-end gap-1 text-xs', hint.found ? 'text-danger' : 'text-faint')}><ScanSearch className="size-3" />{hint.text}</div>}
       </td>
     </tr>
   );
@@ -200,22 +209,24 @@ function SubmitExisting({ b }: { b: Bounty }) {
     try {
       const c = await app.lib.resolved(cpu as Address, BigInt(cid));
       const r = precheck(c, app.lib, b);
-      setMsg(r.ok ? { ok: true, text: `通过全部向量，${r.gateCount} 门，预计排名 #${r.rankIfSubmitted}` } : { ok: false, text: r.reasons.join('；') });
+      setMsg(r.ok
+        ? { ok: true, text: tr(`通过全部向量，${r.gateCount} 门，预计排名 #${r.rankIfSubmitted}`, `Passes every vector: ${r.gateCount} gates, estimated rank #${r.rankIfSubmitted}`) }
+        : { ok: false, text: r.reasons.join(tr('；', '; ')) });
       return r.ok;
     } catch (e) { setMsg({ ok: false, text: (e as Error).message }); return false; }
   };
   const valid = isAddress(cpu) && Boolean(cid);
 
   return (
-    <Panel title="提交已流片的电路" icon={Send} bodyClass="flex flex-col gap-2.5 p-4">
-      <Input mono placeholder="处理器地址 0x…" value={cpu} onChange={(e) => setCpu(e.target.value.trim())} />
-      <Input mono placeholder="电路号" value={cid} onChange={(e) => setCid(e.target.value.trim())} />
+    <Panel title={tr('提交已流片的电路', 'Submit a taped-out circuit')} icon={Send} bodyClass="flex flex-col gap-2.5 p-4">
+      <Input mono placeholder={tr('处理器地址 0x…', 'Processor address 0x…')} value={cpu} onChange={(e) => setCpu(e.target.value.trim())} />
+      <Input mono placeholder={tr('电路号', 'Circuit ID')} value={cid} onChange={(e) => setCid(e.target.value.trim())} />
       <div className="flex gap-2">
-        <Button variant="ghost" size="sm" icon={ScanSearch} disabled={!valid} onClick={check}>预检</Button>
+        <Button variant="ghost" size="sm" icon={ScanSearch} disabled={!valid} onClick={check}>{tr('预检', 'Pre-check')}</Button>
         <Button size="sm" icon={Send} className="flex-1" disabled={!valid} onClick={async () => {
           if (!(await check())) return;
-          await app.run('提交', async (st) => submit(await app.signer(), app.deployment!.arena!, b.id, cpu as Address, BigInt(cid), b.bond, st));
-        }}>提交{b.bond > 0n ? `（押 ${formatEther(b.bond)} OKB）` : ''}</Button>
+          await app.run(tr('提交', 'Submit'), async (st) => submit(await app.signer(), app.deployment!.arena!, b.id, cpu as Address, BigInt(cid), b.bond, st));
+        }}>{tr('提交', 'Submit')}{b.bond > 0n ? tr(`（押 ${formatEther(b.bond)} ${app.chain.nativeCurrency.symbol}）`, ` (bond ${formatEther(b.bond)} ${app.chain.nativeCurrency.symbol})`) : ''}</Button>
       </div>
       {msg && <div className={cn('flex items-start gap-1.5 text-[13px]', msg.ok ? 'text-si' : 'text-danger')}>{msg.ok ? <CircleCheck className="mt-0.5 size-4 shrink-0" /> : <ShieldAlert className="mt-0.5 size-4 shrink-0" />}{msg.text}</div>}
     </Panel>

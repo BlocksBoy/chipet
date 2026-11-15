@@ -18,6 +18,7 @@
 
 import { encode, type Element } from './format.ts';
 import type { RefSource } from './vm.ts';
+import { L } from './locale.ts';
 
 // ------------------------------------------------------------------ 词法
 
@@ -26,9 +27,12 @@ interface Tok { kind: TokKind; text: string; line: number; col: number }
 
 export class HdlError extends Error {
   constructor(msg: string, public line: number, public col: number) {
-    super(`第 ${line} 行第 ${col} 列：${msg}`);
+    super(L(`第 ${line} 行第 ${col} 列：${msg}`, `Line ${line}, col ${col}: ${msg}`));
   }
 }
+
+/** 报错里展示的记号文本：文件结尾与换行没有可见字符。 */
+const shown = (t: Tok) => (t.kind === 'eof' ? L('文件结尾', 'end of file') : t.text === '\n' ? L('换行', 'end of line') : t.text);
 
 const OPS = ['<=', '..', '(', ')', '[', ']', '{', '}', ',', '=', '~', '!', '&', '|', '^', '?', ':', '+', '-', '*', '/', '%', '#'];
 
@@ -65,7 +69,7 @@ function lex(src: string): Tok[] {
       col += j - i; i = j; continue;
     }
     const op = OPS.find((o) => src.startsWith(o, i));
-    if (!op) throw new HdlError(`无法识别的字符 '${ch}'`, l, c);
+    if (!op) throw new HdlError(L(`无法识别的字符 '${ch}'`, `Unrecognized character '${ch}'`), l, c);
     push('op', op, l, c);
     i += op.length; col += op.length;
   }
@@ -107,12 +111,12 @@ class Parser {
   is(text: string) { const t = this.peek(); return (t.kind === 'op' || t.kind === 'id') && t.text === text; }
   eat(text: string) {
     const t = this.next();
-    if (t.text !== text) throw new HdlError(`应为 '${text}'，实际是 '${t.text || '文件结尾'}'`, t.line, t.col);
+    if (t.text !== text) throw new HdlError(L(`应为 '${text}'，实际是 '${shown(t)}'`, `Expected '${text}', got '${shown(t)}'`), t.line, t.col);
     return t;
   }
   id() {
     const t = this.next();
-    if (t.kind !== 'id') throw new HdlError(`应为名字，实际是 '${t.text || '文件结尾'}'`, t.line, t.col);
+    if (t.kind !== 'id') throw new HdlError(L(`应为名字，实际是 '${shown(t)}'`, `Expected a name, got '${shown(t)}'`), t.line, t.col);
     return t;
   }
   skipNl() { while (this.peek().kind === 'nl') this.p++; }
@@ -120,7 +124,7 @@ class Parser {
     const t = this.peek();
     if (t.kind === 'nl') { this.skipNl(); return; }
     if (t.kind === 'eof' || t.text === '}') return;
-    throw new HdlError(`语句后多余的 '${t.text}'`, t.line, t.col);
+    throw new HdlError(L(`语句后多余的 '${t.text}'`, `Unexpected '${t.text}' after the statement`), t.line, t.col);
   }
 
   program(): { name: string; body: Stmt[] } {
@@ -160,10 +164,10 @@ class Parser {
       const n = this.id();
       this.eat('=');
       const a = this.next();
-      if (a.kind !== 'addr') throw new HdlError('use 需要 0x 开头的 40 位处理器地址', a.line, a.col);
+      if (a.kind !== 'addr') throw new HdlError(L('use 需要 0x 开头的 40 位处理器地址', 'use needs a processor address: 0x followed by 40 hex digits'), a.line, a.col);
       this.eat('#');
       const c = this.next();
-      if (c.kind !== 'num') throw new HdlError('use 需要 #电路号', c.line, c.col);
+      if (c.kind !== 'num') throw new HdlError(L('use 需要 #电路号', 'use needs a #circuit-id'), c.line, c.col);
       this.endStmt();
       return { k: 'use', name: n.text, cpu: a.text, cid: BigInt(c.text), t: n };
     }
@@ -191,7 +195,7 @@ class Parser {
       lhs = [this.lval()];
     }
     const op = this.next();
-    if (op.text !== '=' && op.text !== '<=') throw new HdlError(`应为 '=' 或 '<='，实际是 '${op.text}'`, op.line, op.col);
+    if (op.text !== '=' && op.text !== '<=') throw new HdlError(L(`应为 '=' 或 '<='，实际是 '${shown(op)}'`, `Expected '=' or '<=', got '${shown(op)}'`), op.line, op.col);
     const rhs = this.expr();
     this.endStmt();
     return { k: 'assign', lhs, rhs, latch: op.text === '<=', t: op };
@@ -227,7 +231,7 @@ class Parser {
     if (t.kind === 'num' && !t.text.startsWith('0b')) return { k: 'int', v: Number(t.text) };
     if (t.kind === 'id') return { k: 'var', name: t.text, t };
     if (t.text === '(') { const e = this.iexpr(); this.eat(')'); return e; }
-    throw new HdlError(`下标里应为整数表达式，实际是 '${t.text}'`, t.line, t.col);
+    throw new HdlError(L(`下标里应为整数表达式，实际是 '${shown(t)}'`, `Expected an integer expression in the index, got '${shown(t)}'`), t.line, t.col);
   }
 
   expr(): Expr {
@@ -254,10 +258,10 @@ class Parser {
     if (t.kind === 'num') {
       if (t.text.startsWith('0b')) {
         const digits = t.text.slice(2).replace(/_/g, '');
-        if (!digits) throw new HdlError('空的二进制字面量', t.line, t.col);
+        if (!digits) throw new HdlError(L('空的二进制字面量', 'Empty binary literal'), t.line, t.col);
         return { k: 'lit', bits: [...digits].reverse().map(Number), t };
       }
-      if (t.text !== '0' && t.text !== '1') throw new HdlError('信号字面量只能是 0、1 或 0b…', t.line, t.col);
+      if (t.text !== '0' && t.text !== '1') throw new HdlError(L('信号字面量只能是 0、1 或 0b…', 'A signal literal must be 0, 1 or 0b…'), t.line, t.col);
       return { k: 'lit', bits: [Number(t.text)], t };
     }
     if (t.kind === 'id') {
@@ -273,7 +277,7 @@ class Parser {
       }
       return { k: 'ref', name: t.text, index: this.index(), t };
     }
-    throw new HdlError(`意外的 '${t.text || '文件结尾'}'`, t.line, t.col);
+    throw new HdlError(L(`意外的 '${shown(t)}'`, `Unexpected '${shown(t)}'`), t.line, t.col);
   }
 }
 
@@ -393,7 +397,7 @@ export function compile(src: string, opts: CompileOptions = {}): CompileResult {
     if (e.k === 'int') return e.v;
     if (e.k === 'var') {
       const v = env.get(e.name);
-      if (v === undefined) throw new HdlError(`下标里的 '${e.name}' 不是循环变量`, e.t.line, e.t.col);
+      if (v === undefined) throw new HdlError(L(`下标里的 '${e.name}' 不是循环变量`, `'${e.name}' in the index is not a loop variable`), e.t.line, e.t.col);
       return v;
     }
     const a = ival(e.a, env), b = ival(e.b, env);
@@ -413,7 +417,7 @@ export function compile(src: string, opts: CompileOptions = {}): CompileResult {
     const out: number[] = [];
     const step = hi >= lo ? 1 : -1;
     for (let i = lo; step > 0 ? i <= hi : i >= hi; i += step) {
-      if (i < 0 || i >= sym.width) throw new HdlError(`下标 ${i} 越界（宽度 ${sym.width}）`, t.line, t.col);
+      if (i < 0 || i >= sym.width) throw new HdlError(L(`下标 ${i} 越界（宽度 ${sym.width}）`, `Index ${i} is out of range (width ${sym.width})`), t.line, t.col);
       out.push(i);
     }
     return out;
@@ -423,7 +427,7 @@ export function compile(src: string, opts: CompileOptions = {}): CompileResult {
     if (a.length === b.length) return [a, b];
     if (a.length === 1) return [Array(b.length).fill(a[0]), b];
     if (b.length === 1) return [a, Array(a.length).fill(b[0])];
-    throw new HdlError(`宽度不一致：${a.length} 与 ${b.length}`, t?.line ?? 0, t?.col ?? 0);
+    throw new HdlError(L(`宽度不一致：${a.length} 与 ${b.length}`, `Width mismatch: ${a.length} vs ${b.length}`), t?.line ?? 0, t?.col ?? 0);
   };
 
   const firstTok = (e: Expr): Tok | undefined => {
@@ -435,7 +439,7 @@ export function compile(src: string, opts: CompileOptions = {}): CompileResult {
 
   const callComp = (ci: number, argBits: number[], t: Tok): number[] => {
     const c = comps[ci];
-    if (argBits.length !== c.nIn) throw new HdlError(`组件 ${c.name} 需要 ${c.nIn} 个输入位，实际给了 ${argBits.length}`, t.line, t.col);
+    if (argBits.length !== c.nIn) throw new HdlError(L(`组件 ${c.name} 需要 ${c.nIn} 个输入位，实际给了 ${argBits.length}`, `Component ${c.name} takes ${c.nIn} input bits, got ${argBits.length}`), t.line, t.col);
     return g.ref(ci, argBits, c.nOut);
   };
 
@@ -444,12 +448,12 @@ export function compile(src: string, opts: CompileOptions = {}): CompileResult {
       case 'lit': return e.bits.map((b) => (b ? 1 : 0));
       case 'ref': {
         const s = syms.get(e.name);
-        if (!s) throw new HdlError(`未声明的信号 '${e.name}'`, e.t.line, e.t.col);
-        if (s.kind === 'comp') throw new HdlError(`'${e.name}' 是组件，需要用 ${e.name}(…) 调用`, e.t.line, e.t.col);
-        if (s.kind === 'out') throw new HdlError(`输出 '${e.name}' 不能被读取，请先赋给 wire`, e.t.line, e.t.col);
+        if (!s) throw new HdlError(L(`未声明的信号 '${e.name}'`, `Undeclared signal '${e.name}'`), e.t.line, e.t.col);
+        if (s.kind === 'comp') throw new HdlError(L(`'${e.name}' 是组件，需要用 ${e.name}(…) 调用`, `'${e.name}' is a component: call it as ${e.name}(…)`), e.t.line, e.t.col);
+        if (s.kind === 'out') throw new HdlError(L(`输出 '${e.name}' 不能被读取，请先赋给 wire`, `Output '${e.name}' can't be read: assign it to a wire first`), e.t.line, e.t.col);
         return range(s, e.index, env, e.t).map((i) => {
           const b = s.bits[i];
-          if (b === undefined) throw new HdlError(`'${e.name}[${i}]' 在使用前还没有赋值`, e.t.line, e.t.col);
+          if (b === undefined) throw new HdlError(L(`'${e.name}[${i}]' 在使用前还没有赋值`, `'${e.name}[${i}]' is used before it is assigned`), e.t.line, e.t.col);
           return b;
         });
       }
@@ -461,7 +465,7 @@ export function compile(src: string, opts: CompileOptions = {}): CompileResult {
       }
       case 'mux': {
         const s = ev(e.s, env);
-        if (s.length !== 1) throw new HdlError('三元运算的条件必须是 1 位', firstTok(e.s)?.line ?? 0, firstTok(e.s)?.col ?? 0);
+        if (s.length !== 1) throw new HdlError(L('三元运算的条件必须是 1 位', 'The condition of ?: must be 1 bit wide'), firstTok(e.s)?.line ?? 0, firstTok(e.s)?.col ?? 0);
         const [a, b] = broadcast(ev(e.a, env), ev(e.b, env), firstTok(e));
         return a.map((x, i) => g.mux(s[0], x, b[i]));
       }
@@ -473,7 +477,7 @@ export function compile(src: string, opts: CompileOptions = {}): CompileResult {
           out = callComp(sym.comp, args.flat(), e.t);
         } else {
           const need = (n: number) => {
-            if (args.length !== n) throw new HdlError(`${e.name}() 需要 ${n} 个参数`, e.t.line, e.t.col);
+            if (args.length !== n) throw new HdlError(L(`${e.name}() 需要 ${n} 个参数`, `${e.name}() takes ${n} argument${n === 1 ? '' : 's'}`), e.t.line, e.t.col);
           };
           switch (e.name) {
             case 'not': need(1); out = args[0].map((x) => g.not(x)); break;
@@ -495,12 +499,12 @@ export function compile(src: string, opts: CompileOptions = {}): CompileResult {
             }
             case 'mux': {
               need(3);
-              if (args[0].length !== 1) throw new HdlError('mux 的选择信号必须是 1 位', e.t.line, e.t.col);
+              if (args[0].length !== 1) throw new HdlError(L('mux 的选择信号必须是 1 位', 'The select signal of mux must be 1 bit wide'), e.t.line, e.t.col);
               const [a, b] = broadcast(args[1], args[2], e.t);
               out = a.map((x, i) => g.mux(args[0][0], x, b[i]));
               break;
             }
-            default: throw new HdlError(`未知的函数或组件 '${e.name}'`, e.t.line, e.t.col);
+            default: throw new HdlError(L(`未知的函数或组件 '${e.name}'`, `Unknown function or component '${e.name}'`), e.t.line, e.t.col);
           }
         }
         if (e.index) out = range({ width: out.length }, e.index, env, e.t).map((i) => out[i]);
@@ -513,12 +517,12 @@ export function compile(src: string, opts: CompileOptions = {}): CompileResult {
     for (const s of stmts) {
       if (s.k === 'decl') {
         for (const d of s.decls) {
-          if (syms.has(d.name)) throw new HdlError(`重复声明 '${d.name}'`, d.t.line, d.t.col);
+          if (syms.has(d.name)) throw new HdlError(L(`重复声明 '${d.name}'`, `'${d.name}' is already declared`), d.t.line, d.t.col);
           const width = d.width ? ival(d.width, env) : 1;
-          if (!(width >= 1 && width <= 4096)) throw new HdlError(`宽度 ${width} 不合法`, d.t.line, d.t.col);
+          if (!(width >= 1 && width <= 4096)) throw new HdlError(L(`宽度 ${width} 不合法`, `Invalid width ${width}`), d.t.line, d.t.col);
           const bits: (number | undefined)[] = Array(width).fill(undefined);
           if (s.kind === 'in') {
-            if (pin + width > 65536) throw new HdlError('输入引脚过多', d.t.line, d.t.col);
+            if (pin + width > 65536) throw new HdlError(L('输入引脚过多', 'Too many input pins'), d.t.line, d.t.col);
             for (let i = 0; i < width; i++) bits[i] = g.input(pin++);
             inputs.push({ name: d.name, width });
           } else if (s.kind === 'out') {
@@ -532,15 +536,15 @@ export function compile(src: string, opts: CompileOptions = {}): CompileResult {
           syms.set(d.name, { kind: s.kind, width, bits, t: d.t });
         }
       } else if (s.k === 'use') {
-        if (syms.has(s.name)) throw new HdlError(`重复声明 '${s.name}'`, s.t.line, s.t.col);
+        if (syms.has(s.name)) throw new HdlError(L(`重复声明 '${s.name}'`, `'${s.name}' is already declared`), s.t.line, s.t.col);
         const src = opts.components?.get(s.cpu, s.cid);
-        if (!src) throw new HdlError(`组件 ${s.cpu}#${s.cid} 未加载（需要先从链上读取）`, s.t.line, s.t.col);
+        if (!src) throw new HdlError(L(`组件 ${s.cpu}#${s.cid} 未加载（需要先从链上读取）`, `Component ${s.cpu}#${s.cid} isn't loaded (it has to be read from chain first)`), s.t.line, s.t.col);
         const gc = opts.components?.gateCountOf?.(s.cpu, s.cid) ?? 0;
         comps.push({ name: s.name, cpu: s.cpu, cid: s.cid, nIn: src.nIn, nOut: src.nOut, gateCount: gc });
         syms.set(s.name, { kind: 'comp', comp: comps.length - 1 });
       } else if (s.k === 'for') {
         const from = ival(s.from, env), to = ival(s.to, env);
-        if (Math.abs(to - from) > 100000) throw new HdlError('循环次数过多', s.t.line, s.t.col);
+        if (Math.abs(to - from) > 100000) throw new HdlError(L('循环次数过多', 'Too many loop iterations'), s.t.line, s.t.col);
         const step = to >= from ? 1 : -1;
         for (let i = from; step > 0 ? i <= to : i >= to; i += step) {
           const inner = new Map(env);
@@ -552,22 +556,22 @@ export function compile(src: string, opts: CompileOptions = {}): CompileResult {
         const targets: { sym: Extract<Sym, { bits: unknown }>; i: number; name: string; t: Tok }[] = [];
         for (const lv of s.lhs) {
           const sym = syms.get(lv.name);
-          if (!sym) throw new HdlError(`未声明的信号 '${lv.name}'`, lv.t.line, lv.t.col);
-          if (sym.kind === 'comp' || sym.kind === 'in') throw new HdlError(`不能给 '${lv.name}' 赋值`, lv.t.line, lv.t.col);
+          if (!sym) throw new HdlError(L(`未声明的信号 '${lv.name}'`, `Undeclared signal '${lv.name}'`), lv.t.line, lv.t.col);
+          if (sym.kind === 'comp' || sym.kind === 'in') throw new HdlError(L(`不能给 '${lv.name}' 赋值`, `'${lv.name}' can't be assigned to`), lv.t.line, lv.t.col);
           for (const i of range(sym, lv.index, env, lv.t)) targets.push({ sym, i, name: lv.name, t: lv.t });
         }
         let vals = rhs;
         if (rhs.length === 1 && targets.length > 1) vals = Array(targets.length).fill(rhs[0]);
-        if (vals.length !== targets.length) throw new HdlError(`赋值宽度不一致：左边 ${targets.length} 位，右边 ${rhs.length} 位`, s.t.line, s.t.col);
+        if (vals.length !== targets.length) throw new HdlError(L(`赋值宽度不一致：左边 ${targets.length} 位，右边 ${rhs.length} 位`, `Assignment width mismatch: ${targets.length} bits on the left, ${rhs.length} on the right`), s.t.line, s.t.col);
         targets.forEach((tg, j) => {
           if (s.latch) {
-            if (tg.sym.kind !== 'reg') throw new HdlError(`'<=' 只能用于 reg，'${tg.name}' 不是寄存器`, tg.t.line, tg.t.col);
+            if (tg.sym.kind !== 'reg') throw new HdlError(L(`'<=' 只能用于 reg，'${tg.name}' 不是寄存器`, `'<=' only works on a reg, and '${tg.name}' isn't one`), tg.t.line, tg.t.col);
             const r = regs.find((x) => x.name === tg.name)!;
-            if (r.d[tg.i] !== undefined) throw new HdlError(`寄存器 '${tg.name}[${tg.i}]' 重复赋值`, tg.t.line, tg.t.col);
+            if (r.d[tg.i] !== undefined) throw new HdlError(L(`寄存器 '${tg.name}[${tg.i}]' 重复赋值`, `Register '${tg.name}[${tg.i}]' is assigned more than once`), tg.t.line, tg.t.col);
             r.d[tg.i] = vals[j];
           } else {
-            if (tg.sym.kind === 'reg') throw new HdlError(`寄存器 '${tg.name}' 要用 '<=' 赋下一周期的值`, tg.t.line, tg.t.col);
-            if (tg.sym.bits[tg.i] !== undefined) throw new HdlError(`'${tg.name}[${tg.i}]' 重复赋值`, tg.t.line, tg.t.col);
+            if (tg.sym.kind === 'reg') throw new HdlError(L(`寄存器 '${tg.name}' 要用 '<=' 赋下一周期的值`, `Register '${tg.name}' takes its next-cycle value with '<='`), tg.t.line, tg.t.col);
+            if (tg.sym.bits[tg.i] !== undefined) throw new HdlError(L(`'${tg.name}[${tg.i}]' 重复赋值`, `'${tg.name}[${tg.i}]' is assigned more than once`), tg.t.line, tg.t.col);
             tg.sym.bits[tg.i] = vals[j];
           }
         });
@@ -577,18 +581,18 @@ export function compile(src: string, opts: CompileOptions = {}): CompileResult {
 
   exec(prog.body, new Map());
 
-  if (outputs.length === 0) throw new HdlError('至少需要一个 out 输出', 1, 1);
+  if (outputs.length === 0) throw new HdlError(L('至少需要一个 out 输出', 'At least one out is required'), 1, 1);
   const outBits: number[] = [];
   for (const name of outSyms) {
     const s = syms.get(name) as Extract<Sym, { bits: unknown }>;
     s.bits.forEach((b, i) => {
-      if (b === undefined) throw new HdlError(`输出 '${name}[${i}]' 没有赋值`, s.t.line, s.t.col);
+      if (b === undefined) throw new HdlError(L(`输出 '${name}[${i}]' 没有赋值`, `Output '${name}[${i}]' is never assigned`), s.t.line, s.t.col);
       outBits.push(b);
     });
   }
   for (const r of regs) {
     r.d.forEach((d, i) => {
-      if (d === undefined) throw new HdlError(`寄存器 '${r.name}[${i}]' 没有用 '<=' 指定下一周期的值`, r.t.line, r.t.col);
+      if (d === undefined) throw new HdlError(L(`寄存器 '${r.name}[${i}]' 没有用 '<=' 指定下一周期的值`, `Register '${r.name}[${i}]' has no next-cycle value (assign it with '<=')`), r.t.line, r.t.col);
       (g.nodes[r.bits[i]] as { t: 'latch'; d: number }).d = d;
     });
   }

@@ -1,8 +1,10 @@
 // 内置示例：设计器模板、演示擂台的参考实现与对应的「优化解」。
 
-export const EXAMPLES: Record<string, { title: string; src: string }> = {
+import { L } from './locale.ts';
+
+export const EXAMPLES: Record<string, { readonly title: string; src: string }> = {
   fullAdder: {
-    title: '一位全加器',
+    get title() { return L('一位全加器', 'One-bit full adder'); },
     src: `circuit full_adder
 in a, b, cin
 out s, cout
@@ -13,7 +15,7 @@ cout = (a & b) | (p & cin)
 `,
   },
   add4: {
-    title: '4 位行波进位加法器',
+    get title() { return L('4 位行波进位加法器', '4-bit ripple-carry adder'); },
     src: `circuit add4
 in a[4], b[4], cin
 out s[4], cout
@@ -27,7 +29,7 @@ cout = c[4]
 `,
   },
   cmp4: {
-    title: '4 位无符号比较器（a > b）',
+    get title() { return L('4 位无符号比较器（a > b）', '4-bit unsigned comparator (a > b)'); },
     src: `circuit gt4
 in a[4], b[4]
 out gt
@@ -41,7 +43,7 @@ gt = g[4]
 `,
   },
   counter4: {
-    title: '4 位计数器（寄存器示例）',
+    get title() { return L('4 位计数器（寄存器示例）', '4-bit counter (register example)'); },
     src: `circuit counter4
 in en
 out q[4]
@@ -56,7 +58,7 @@ q = r
 `,
   },
   mux4: {
-    title: '4 选 1 多路选择器',
+    get title() { return L('4 选 1 多路选择器', '4-to-1 multiplexer'); },
     src: `circuit mux4
 in d[4], s[2]
 out y
@@ -64,7 +66,7 @@ y = s[1] ? (s[0] ? d[3] : d[2]) : (s[0] ? d[1] : d[0])
 `,
   },
   popcount3: {
-    title: '3 位人口计数（数 1 的个数）',
+    get title() { return L('3 位人口计数（数 1 的个数）', '3-bit popcount (number of 1s)'); },
     src: `circuit popcount3
 in x[3]
 out n[2]

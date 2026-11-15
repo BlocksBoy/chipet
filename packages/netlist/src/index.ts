@@ -1,3 +1,4 @@
+export * from './locale.ts';
 export * from './bits.ts';
 export * from './format.ts';
 export * from './vm.ts';

@@ -103,6 +103,29 @@ export const libraryAbi = parseAbi([
   'error OnlyArena()',
 ]);
 
+const chipetPetTuple =
+  '(address cpu, uint64 circuitId, uint8 rarity, uint16 energy, uint16 mood, uint32 intimacy, uint16 level, uint64 lastFeed, uint64 lastPlay, string name)';
+
+export const chipetAbi = parseAbi([
+  'function hatch(string name) payable returns (uint256 petId)',
+  'function feed(uint256 petId)',
+  'function play(uint256 petId)',
+  'function rename(uint256 petId, string name)',
+  'function hatchPrice() view returns (uint256)',
+  'function feedCooldown() view returns (uint64)',
+  'function playCooldown() view returns (uint64)',
+  'function nextId() view returns (uint256)',
+  'function templateCount() view returns (uint256)',
+  `function petOf(uint256 petId) view returns (${chipetPetTuple})`,
+  'function petsOfOwner(address owner) view returns (uint256[])',
+  'function geneHint(uint256 petId) view returns (address cpu, uint64 circuitId, uint8 rarity, uint32 gates, uint32 nIn, uint32 nOut)',
+  'function ownerOf(uint256 tokenId) view returns (address)',
+  'function balanceOf(address owner) view returns (uint256)',
+  'event Hatched(uint256 indexed petId, address indexed owner, address cpu, uint64 circuitId, uint8 rarity, string name)',
+  'event Fed(uint256 indexed petId, uint16 energy, uint32 intimacy)',
+  'event Played(uint256 indexed petId, uint16 mood, uint32 intimacy)',
+]);
+
 export const erc20Abi = parseAbi([
   'function approve(address spender, uint256 amount) returns (bool)',
   'function transfer(address to, uint256 amount) returns (bool)',

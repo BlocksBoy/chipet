@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef } from 'react';
 import type { Element } from '@tapearena/netlist';
 import { Cpu, Layers } from 'lucide-react';
+import { tr } from '../i18n.ts';
 
 interface Cell { x: number; y: number; level: number; kind: Element['op']; sig: number; w: number; ins: number[] }
 
@@ -116,7 +117,7 @@ export function Die({ elements, nIn, signals, height = 280, label }: {
   const nLatch = elements.filter((e) => e.op === 'latch').length;
   const nRef = elements.filter((e) => e.op === 'ref').length;
   return (
-    <div className="relative overflow-hidden rounded-xl border border-line bg-[#070908]" style={{ height }}>
+    <div className="relative overflow-hidden rounded-2xl border border-line bg-[#070908]" style={{ height }}>
       <canvas ref={ref} className="block size-full" />
       <div className="absolute top-3 left-3 flex items-center gap-1.5 rounded-md bg-substrate/80 px-2 py-1 font-mono text-[11px] text-mute ring-1 ring-line backdrop-blur-sm">
         <Cpu className="size-3.5 text-copper" />{label ?? 'DIE'}
@@ -125,7 +126,7 @@ export function Die({ elements, nIn, signals, height = 280, label }: {
         <span className="flex items-center gap-1"><span className="size-2 rounded-sm bg-copper" /><b className="font-normal text-copper-hi">{nNand}</b> NAND</span>
         <span className="flex items-center gap-1"><span className="size-2 rounded-sm bg-si" /><b className="font-normal text-si">{nLatch}</b> LATCH</span>
         <span className="flex items-center gap-1"><span className="size-2 rounded-sm bg-gold" /><b className="font-normal text-gold">{nRef}</b> REF</span>
-        <span className="ml-auto flex items-center gap-1"><Layers className="size-3" />深度 <b className="font-normal text-ink">{lay.maxLevel}</b></span>
+        <span className="ml-auto flex items-center gap-1"><Layers className="size-3" />{tr('深度', 'depth')} <b className="font-normal text-[#e8f3ee]">{lay.maxLevel}</b></span>
       </div>
     </div>
   );

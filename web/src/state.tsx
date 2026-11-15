@@ -5,6 +5,7 @@ import { getWalletClient } from 'wagmi/actions';
 import { useConnectModal } from '@rainbow-me/rainbowkit';
 import { CHAINS, ChainLibrary, DEPLOYMENTS, type Deployment, type Signer } from '@tapearena/chain';
 import { errMsg } from './format.ts';
+import { tr } from './i18n.ts';
 import { CHAIN_IDS } from './env.ts';
 import { wagmiConfig } from './wallet.tsx';
 
@@ -23,6 +24,8 @@ interface Ctx {
   closeWalletGuide(): void;
   signer(): Promise<Signer>;
   toasts: Toast[];
+  /** 一条几秒后自动消失的轻提示 */
+  notify(kind: 'ok' | 'err', text: string): void;
   run<T>(label: string, f: (step: (s: string, hash?: Hex) => void) => Promise<T>): Promise<T | undefined>;
   dismiss(id: number): void;
   explorer(hash: string): string | null;
@@ -70,7 +73,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const signer = useCallback(async (): Promise<Signer> => {
     if (!account) {
       connect();
-      throw new Error('请先连接钱包');
+      throw new Error(tr('请先连接钱包', 'Connect your wallet first'));
     }
     // 钱包不认识这条链时 wagmi 会自动发起 wallet_addEthereumChain
     if (walletChainId !== chainId) await switchChainAsync({ chainId });
@@ -81,17 +84,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const dismiss = (id: number) => setToasts((t) => t.filter((x) => x.id !== id));
   const put = (t: Toast) => setToasts((all) => [...all.filter((x) => x.id !== t.id), t]);
 
+  const notify = useCallback((kind: 'ok' | 'err', text: string) => {
+    const id = ++toastSeq;
+    put({ id, kind, text });
+    setTimeout(() => dismiss(id), 4000);
+  }, []);
+
   const run = useCallback(async <T,>(label: string, f: (step: (s: string, hash?: Hex) => void) => Promise<T>) => {
     const id = ++toastSeq;
     put({ id, kind: 'busy', text: label });
     try {
-      const r = await f((s, hash) => put({ id, kind: 'busy', text: hash ? `${s}：已发送，等待确认…` : `${s}：请在钱包中确认`, hash }));
-      put({ id, kind: 'ok', text: `${label}完成` });
+      const r = await f((s, hash) => put({
+        id, kind: 'busy', hash,
+        text: hash ? tr(`${s}：已发送，等待确认…`, `${s}: sent, waiting for confirmation…`) : tr(`${s}：请在钱包中确认`, `${s}: confirm in your wallet`),
+      }));
+      put({ id, kind: 'ok', text: tr(`${label}完成`, `${label}: done`) });
       setTimeout(() => dismiss(id), 5000);
       setRefreshKey((k) => k + 1);
       return r;
     } catch (e) {
-      put({ id, kind: 'err', text: `${label}失败：${errMsg(e)}` });
+      put({ id, kind: 'err', text: tr(`${label}失败：${errMsg(e)}`, `${label} failed: ${errMsg(e)}`) });
       return undefined;
     }
   }, []);
@@ -100,7 +112,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const value: Ctx = {
     chainId, chain, setChainId, pub, lib, deployment: DEPLOYMENTS[chainId], account, connect, walletGuide, closeWalletGuide, signer,
-    toasts, run, dismiss, explorer, refreshKey, refresh: () => setRefreshKey((k) => k + 1),
+    toasts, notify, run, dismiss, explorer, refreshKey, refresh: () => setRefreshKey((k) => k + 1),
   };
   return <C.Provider value={value}>{children}</C.Provider>;
 }

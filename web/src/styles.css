@@ -1,48 +1,65 @@
 @import 'tailwindcss';
 
 @theme {
-  --color-substrate: #0b0e0c;
-  --color-panel: #111612;
-  --color-panel-2: #161d18;
-  --color-line: #233027;
-  --color-line-2: #2f4034;
-  --color-copper: #e08a4c;
-  --color-copper-hi: #ffb27a;
-  --color-copper-dim: #7a4a2a;
-  --color-si: #7fd1b9;
-  --color-si-dim: #2c5a4d;
-  --color-gold: #f2c46d;
-  --color-gold-dim: #6b5527;
-  --color-ink: #ebe6d9;
-  --color-mute: #8a9389;
-  --color-faint: #59625a;
-  --color-danger: #ff5d4a;
-  --color-danger-dim: #6a2a22;
+  --color-substrate: #f2f8f5;
+  --color-panel: #ffffff;
+  --color-panel-2: #e8f3ee;
+  --color-line: #d3e5dc;
+  --color-line-2: #b9d4c7;
+  --color-copper: #e07a45;
+  --color-copper-hi: #f08b55;
+  --color-copper-dim: #c45e2a;
+  --color-si: #2a9d8f;
+  --color-si-dim: #1d7a6f;
+  --color-gold: #d4a017;
+  --color-gold-dim: #a67c0a;
+  --color-ink: #1a2e28;
+  --color-mute: #5a736a;
+  --color-faint: #8aa399;
+  --color-danger: #e24b4b;
+  --color-danger-dim: #b83333;
 
-  --font-display: 'Bricolage Grotesque', 'Noto Sans SC', system-ui, sans-serif;
-  --font-sans: 'Noto Sans SC', 'Bricolage Grotesque', system-ui, -apple-system, 'PingFang SC', sans-serif;
+  --font-display: 'Outfit', 'Noto Sans SC', system-ui, sans-serif;
+  --font-sans: 'Noto Sans SC', 'Outfit', system-ui, -apple-system, 'PingFang SC', sans-serif;
   --font-mono: 'Fragment Mono', 'SF Mono', ui-monospace, Menlo, monospace;
 
-  --animate-rise: rise 0.4s ease-out both;
+  --animate-rise: rise 0.35s ease-out both;
   @keyframes rise {
     from { opacity: 0; transform: translateY(8px); }
+  }
+  @keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-6px); }
+  }
+  @keyframes hatch-pop {
+    0% { opacity: 0; transform: scale(0.4) rotate(-8deg); }
+    70% { transform: scale(1.06) rotate(2deg); }
+    100% { opacity: 1; transform: scale(1) rotate(0); }
+  }
+  @keyframes bar-glow {
+    0%, 100% { filter: brightness(1); }
+    50% { filter: brightness(1.15); }
+  }
+  @keyframes scene-mote {
+    0%, 100% { transform: translateY(0); opacity: 0.35; }
+    50% { transform: translateY(-10px); opacity: 0.9; }
   }
 }
 
 @layer base {
-  :root { color-scheme: dark; }
+  :root { color-scheme: light; }
   html, body { @apply bg-substrate font-sans text-[15px] leading-relaxed text-ink antialiased; }
-  body::before {
-    content: '';
-    @apply pointer-events-none fixed inset-0 -z-10;
-    background:
-      repeating-linear-gradient(0deg, transparent 0 47px, rgb(127 209 185 / 0.04) 47px 48px),
-      repeating-linear-gradient(90deg, transparent 0 47px, rgb(127 209 185 / 0.04) 47px 48px);
+  body {
+    background-image:
+      radial-gradient(ellipse 80% 50% at 10% -10%, rgb(42 157 143 / 0.14), transparent 55%),
+      radial-gradient(ellipse 70% 45% at 90% 0%, rgb(224 122 69 / 0.12), transparent 50%),
+      radial-gradient(ellipse 60% 40% at 50% 100%, rgb(42 157 143 / 0.08), transparent 55%);
+    background-attachment: fixed;
   }
-  h1, h2, h3 { @apply font-display font-extrabold text-balance; }
-  code { @apply rounded bg-panel-2 px-1 py-0.5 font-mono text-[0.9em] text-copper-hi; }
-  a { @apply text-copper-hi; }
-  ::selection { @apply bg-copper/30; }
+  h1, h2, h3 { @apply font-display font-bold text-balance tracking-normal; }
+  code { @apply rounded-md bg-panel-2 px-1.5 py-0.5 font-mono text-[0.9em] text-si-dim; }
+  a { @apply text-si-dim; }
+  ::selection { @apply bg-si/25; }
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
   }
@@ -53,7 +70,6 @@
   max-height: min(580px, calc(100dvh - 32px)) !important;
 }
 
-/* 钱包列表改为五列网格：图标在上、名称在下 */
 [data-rk] ._1ckjpok4 {
   width: min(500px, 100vw) !important;
   min-width: 0 !important;
@@ -78,7 +94,7 @@
 }
 [data-rk] button[data-testid^='rk-wallet-option-']:disabled {
   border-color: var(--rk-colors-accentColor) !important;
-  background: rgb(224 138 76 / 0.12) !important;
+  background: rgb(224 122 69 / 0.12) !important;
 }
 [data-rk] button[data-testid^='rk-wallet-option-']:disabled > div {
   color: var(--rk-colors-accentColor) !important;
@@ -111,13 +127,416 @@
 }
 
 @layer components {
+  /* ── 孵化彩蛋（KittyEgg） ───────────────────────── */
+  .egg-scene {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    user-select: none;
+    touch-action: manipulation;
+  }
+  .egg-scene.is-idle { cursor: pointer; }
+  .egg-layer {
+    position: absolute;
+    left: 50%;
+    top: 53%;
+    width: 66%;
+    translate: -50% -50%;
+    overflow: visible;
+  }
+  .egg-front { z-index: 3; pointer-events: none; }
+  .egg-slot {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    display: grid;
+    place-items: center;
+    pointer-events: none;
+  }
+  .egg-slot > * { pointer-events: auto; }
+
+  .egg-whole,
+  .egg-rock,
+  .egg-top,
+  .egg-bottom,
+  .egg-eye,
+  .egg-shadow { transform-box: fill-box; transform-origin: 50% 100%; }
+  .egg-eye,
+  .egg-shadow { transform-origin: center; }
+  .egg-ear { transform-box: fill-box; transform-origin: 80% 100%; animation: egg-ear-twitch 4.6s ease-in-out infinite; }
+  .egg-ear.is-right { animation-delay: 1.9s; }
+  .egg-bow { transform-box: fill-box; transform-origin: center; animation: egg-bow-sway 2.8s ease-in-out infinite; }
+  .egg-halo { transform-box: fill-box; transform-origin: center; animation: egg-halo 2.8s ease-in-out infinite; }
+  .egg-orbit { transform-box: fill-box; transform-origin: center; animation: rays-spin 36s linear infinite; }
+  .egg-core { transform-box: fill-box; transform-origin: center; animation: egg-core-beat 1.4s ease-in-out infinite; }
+  .egg-flow {
+    fill: none;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-dasharray: 0.24 1.76;
+    stroke-dashoffset: 2;
+    animation: egg-flow 2.6s linear infinite;
+  }
+
+  .is-idle .egg-layer { animation: egg-drop-in 0.6s cubic-bezier(0.3, 1.4, 0.5, 1) both; }
+  .egg-rock { animation: egg-wobble 2.8s ease-in-out infinite; }
+  .egg-scene.is-idle:hover .egg-rock { animation-duration: 1.5s; }
+  .egg-whole.is-bonk { animation: egg-bonk 0.5s ease-out; }
+  .egg-shadow { animation: egg-shadow 2.8s ease-in-out infinite; }
+  .egg-eye { animation: egg-blink 3.6s ease-in-out infinite; }
+
+  /* 裂到第三级：坐不住了，一直抖 */
+  .is-ready .egg-rock { animation: egg-rumble 0.3s linear infinite; }
+
+  /* 破壳前：越抖越凶、发光 */
+  .is-shake .egg-rock { animation: egg-quake 0.7s ease-in forwards; }
+  .is-shake .egg-layer { animation: egg-glow 0.7s ease-in forwards; }
+
+  /* 破壳：上半壳掀飞，下半壳托着猫再掉落 */
+  .egg-top { animation: egg-top-fly 0.8s cubic-bezier(0.2, 0.7, 0.3, 1) forwards; }
+  .egg-bottom {
+    transform-origin: 50% 50%;
+    animation:
+      egg-cup-pop 0.35s ease-out,
+      egg-cup-drop 0.55s ease-in 0.95s forwards;
+  }
+  .is-open .egg-shadow { animation: egg-fade 0.4s ease-out 0.9s forwards; }
+
+  .egg-crack {
+    fill: none;
+    stroke-width: 3.5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  /* 垫在裂缝下面的一圈电光 */
+  .egg-crack.is-glow {
+    stroke: #8ff2e2;
+    stroke-width: 8.5;
+    opacity: 0.85;
+  }
+  .egg-crack.is-new {
+    stroke-dasharray: 1;
+    stroke-dashoffset: 1;
+    animation: egg-crack-draw 0.32s ease-out forwards;
+  }
+
+  .egg-spark {
+    position: absolute;
+    font-size: 20px;
+    line-height: 1;
+    color: #ffd24d;
+    text-shadow: 0 0 8px rgb(255 255 255 / 0.95);
+    pointer-events: none;
+    animation: egg-twinkle 2.4s ease-in-out infinite;
+  }
+  .egg-spark.s1 { left: 12%; top: 20%; }
+  .egg-spark.s2 { right: 11%; top: 30%; font-size: 14px; color: #ffffff; animation-delay: 0.6s; }
+  .egg-spark.s3 { left: 9%; top: 62%; font-size: 13px; color: #59d6c0; animation-delay: 1.1s; }
+  .egg-spark.s4 { right: 14%; top: 68%; font-size: 17px; color: #ff8fbf; animation-delay: 1.6s; }
+
+  /* 慢慢飘起来的小爱心 */
+  .egg-heart {
+    position: absolute;
+    font-size: 15px;
+    line-height: 1;
+    color: #ff8fbf;
+    opacity: 0;
+    pointer-events: none;
+    animation: egg-heart-float 3.6s ease-in infinite;
+  }
+  .egg-heart.h1 { left: 19%; top: 44%; }
+  .egg-heart.h2 { right: 18%; top: 50%; font-size: 12px; color: #b79cff; animation-delay: 1.8s; }
+
+  /* 破壳后猫背后的放射光 */
+  .hatch-rays {
+    position: absolute;
+    inset: -25%;
+    border-radius: 50%;
+    background: repeating-conic-gradient(from 0deg, rgb(255 255 255 / 0.62) 0deg 10deg, transparent 10deg 30deg);
+    mask-image: radial-gradient(circle, #000 18%, transparent 66%);
+    pointer-events: none;
+    animation:
+      rays-spin 20s linear infinite,
+      rays-in 1.6s ease-out both;
+  }
+
+  @keyframes egg-drop-in {
+    0% { opacity: 0; transform: translateY(-40%) scale(0.6) rotate(-10deg); }
+    100% { opacity: 1; transform: none; }
+  }
+  @keyframes egg-wobble {
+    0%, 100% { transform: rotate(-4deg); }
+    25%, 75% { transform: rotate(0) scale(1.02, 0.98); }
+    50% { transform: rotate(4deg); }
+  }
+  @keyframes egg-bonk {
+    0% { transform: translateY(0) scale(1, 1); }
+    20% { transform: translateY(6px) scale(1.12, 0.86); }
+    50% { transform: translateY(-20px) scale(0.94, 1.08); }
+    75% { transform: translateY(0) scale(1.05, 0.95); }
+    100% { transform: none; }
+  }
+  @keyframes egg-rumble {
+    0%, 100% { transform: rotate(-3deg) translateX(-1.5px); }
+    50% { transform: rotate(3deg) translateX(1.5px); }
+  }
+  @keyframes egg-quake {
+    0% { transform: rotate(0) scale(1); }
+    12% { transform: rotate(-7deg) scale(1.02); }
+    24% { transform: rotate(7deg) scale(1.03); }
+    36% { transform: rotate(-9deg) scale(1.05); }
+    48% { transform: rotate(9deg) scale(1.06); }
+    60% { transform: rotate(-11deg) scale(1.08); }
+    72% { transform: rotate(11deg) scale(1.1); }
+    84% { transform: rotate(-12deg) scale(1.12); }
+    100% { transform: rotate(0) scale(1.18, 1.1); }
+  }
+  @keyframes egg-glow {
+    to { filter: brightness(1.18) drop-shadow(0 0 16px rgb(255 255 255 / 0.95)); }
+  }
+  @keyframes egg-top-fly {
+    0% { transform: none; opacity: 1; }
+    60% { opacity: 1; }
+    100% { transform: translate(-36px, -170px) rotate(-32deg); opacity: 0; }
+  }
+  @keyframes egg-cup-pop {
+    0% { transform: scale(1.12, 0.9); }
+    60% { transform: scale(0.97, 1.04); }
+    100% { transform: none; }
+  }
+  @keyframes egg-cup-drop {
+    to { transform: translateY(150px) rotate(10deg); opacity: 0; }
+  }
+  @keyframes egg-fade {
+    to { opacity: 0; }
+  }
+  @keyframes egg-shadow {
+    0%, 100% { transform: scaleX(1); }
+    50% { transform: scaleX(0.9); }
+  }
+  @keyframes egg-crack-draw {
+    to { stroke-dashoffset: 0; }
+  }
+  @keyframes egg-blink {
+    0%, 90%, 100% { transform: scaleY(1); }
+    94% { transform: scaleY(0.1); }
+  }
+  @keyframes egg-ear-twitch {
+    0%, 86%, 100% { transform: none; }
+    90% { transform: rotate(-9deg); }
+    94% { transform: rotate(4deg); }
+    97% { transform: rotate(-2deg); }
+  }
+  @keyframes egg-bow-sway {
+    0%, 100% { transform: rotate(-5deg); }
+    50% { transform: rotate(5deg); }
+  }
+  @keyframes egg-halo {
+    0%, 100% { transform: scale(0.94); opacity: 0.75; }
+    50% { transform: scale(1.04); opacity: 1; }
+  }
+  @keyframes egg-heart-float {
+    0% { transform: translateY(10px) scale(0.5); opacity: 0; }
+    25% { opacity: 0.9; }
+    100% { transform: translateY(-46px) scale(1.1) rotate(14deg); opacity: 0; }
+  }
+  @keyframes egg-core-beat {
+    0%, 36%, 100% { transform: scale(1); }
+    12% { transform: scale(1.16); }
+    24% { transform: scale(1.04); }
+    30% { transform: scale(1.1); }
+  }
+  @keyframes egg-flow {
+    to { stroke-dashoffset: 0; }
+  }
+  @keyframes egg-twinkle {
+    0%, 100% { transform: scale(0.5) rotate(0); opacity: 0.35; }
+    50% { transform: scale(1.15) rotate(40deg); opacity: 1; }
+  }
+  @keyframes rays-spin {
+    to { rotate: 360deg; }
+  }
+  @keyframes rays-in {
+    0% { opacity: 0; scale: 0.4; }
+    35% { opacity: 1; scale: 1; }
+    100% { opacity: 0.45; scale: 1; }
+  }
+
+  /* 宠物页展示台的版图网格：往四周淡出 */
+  .pet-stage-grid {
+    background-image:
+      linear-gradient(rgb(255 255 255 / 0.55) 1px, transparent 1px),
+      linear-gradient(90deg, rgb(255 255 255 / 0.55) 1px, transparent 1px);
+    background-size: 28px 28px;
+    background-position: center;
+    mask-image: radial-gradient(ellipse 75% 75% at 50% 50%, transparent 30%, #000 100%);
+  }
+
+  /* 对战场地：电路板底纹 + 回合出手时的暗角脉冲 */
+  .fight-stage {
+    background:
+      radial-gradient(ellipse 70% 55% at 50% 58%, rgb(42 157 143 / 0.08), transparent 70%),
+      linear-gradient(180deg, rgb(247 250 248), rgb(236 243 240));
+  }
+  .fight-stage-grid {
+    background-image:
+      linear-gradient(rgb(42 157 143 / 0.07) 1px, transparent 1px),
+      linear-gradient(90deg, rgb(42 157 143 / 0.07) 1px, transparent 1px);
+    background-size: 24px 24px;
+    mask-image: radial-gradient(ellipse 80% 70% at 50% 55%, #000 20%, transparent 78%);
+  }
+  .fight-stage.is-busy .fight-stage-grid {
+    animation: fight-grid-pulse 0.9s ease-in-out 2;
+  }
+  @keyframes fight-grid-pulse {
+    0%, 100% { opacity: 0.55; }
+    45% { opacity: 1; }
+  }
+  .hp-chip {
+    transition: width 0.55s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .hp-chip.is-hit {
+    animation: hp-flash 0.45s ease-out;
+  }
+  @keyframes hp-flash {
+    0% { filter: brightness(1.6); }
+    100% { filter: brightness(1); }
+  }
+
+  /* ── 芯喵闲置动画 ──────────────────────────────── */
+  .pet-avatar.is-lively .pet-root,
+  .pet-avatar.is-sleepy .pet-root {
+    transform-box: fill-box;
+    transform-origin: center bottom;
+  }
+  .pet-avatar.is-lively .pet-root { animation: pet-bob 2.4s ease-in-out infinite; }
+  .pet-avatar.is-lively .pet-body { animation: pet-breathe 2.4s ease-in-out infinite; }
+  .pet-avatar.is-lively .pet-head { animation: pet-tilt 5.2s ease-in-out infinite; }
+  .pet-avatar.is-lively .pet-tail { animation: pet-tail 1.8s ease-in-out infinite; }
+  .pet-avatar.is-lively .pet-ear-l { animation: pet-ear 3.2s ease-in-out infinite; }
+  .pet-avatar.is-lively .pet-ear-r { animation: pet-ear 3.2s ease-in-out infinite 0.35s; }
+  .pet-avatar.is-lively .pet-eye-l,
+  .pet-avatar.is-lively .pet-eye-r { animation: pet-blink 4.5s ease-in-out infinite; }
+  .pet-avatar.is-lively .pet-pupil { animation: pet-look 5.5s ease-in-out infinite; }
+  .pet-avatar.is-lively .pet-whisk-l { animation: pet-whisk 3.6s ease-in-out infinite; }
+  .pet-avatar.is-lively .pet-whisk-r { animation: pet-whisk 3.6s ease-in-out infinite reverse; }
+  .pet-avatar.is-lively .pet-shadow {
+    animation: pet-shadow 2.4s ease-in-out infinite;
+    transform-box: fill-box;
+    transform-origin: center;
+  }
+  .pet-avatar.is-excited .pet-root { animation: pet-hop 0.9s ease-in-out infinite; }
+  .pet-avatar.is-excited .pet-tail { animation: pet-tail 0.7s ease-in-out infinite; }
+  .pet-avatar.is-sleepy .pet-root { animation: pet-bob 4s ease-in-out infinite; }
+  .pet-avatar.is-sleepy .pet-zzz { animation: pet-zzz 2.6s ease-in-out infinite; }
+  .pet-avatar.is-sleepy .pet-zzz.is-late { animation-delay: 0.9s; }
+  .pet-avatar:active .pet-root { animation: pet-squish 0.35s ease-out; }
+
+  @keyframes pet-bob {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-5px); }
+  }
+  @keyframes pet-hop {
+    0%, 100% { transform: translateY(0) scale(1, 1); }
+    35% { transform: translateY(-12px) scale(0.96, 1.05); }
+    55% { transform: translateY(0) scale(1.05, 0.94); }
+  }
+  @keyframes pet-breathe {
+    0%, 100% { transform: scale(1, 1); }
+    50% { transform: scale(1.025, 0.975); }
+  }
+  @keyframes pet-tilt {
+    0%, 100% { transform: rotate(-2.5deg); }
+    50% { transform: rotate(2.5deg); }
+  }
+  @keyframes pet-tail {
+    0%, 100% { transform: rotate(-5deg); }
+    50% { transform: rotate(9deg); }
+  }
+  @keyframes pet-ear {
+    0%, 70%, 100% { transform: rotate(0); }
+    78% { transform: rotate(-12deg); }
+    86% { transform: rotate(6deg); }
+  }
+  @keyframes pet-blink {
+    0%, 90%, 100% { transform: scaleY(1); }
+    93%, 96% { transform: scaleY(0.08); }
+  }
+  @keyframes pet-look {
+    0%, 100% { transform: translate(0, 0); }
+    25% { transform: translate(2px, 0.5px); }
+    50% { transform: translate(-2px, 1px); }
+    75% { transform: translate(1px, -1px); }
+  }
+  @keyframes pet-whisk {
+    0%, 80%, 100% { transform: rotate(0); }
+    86% { transform: rotate(5deg); }
+    92% { transform: rotate(-4deg); }
+  }
+  @keyframes pet-zzz {
+    0% { transform: translate(0, 4px); opacity: 0; }
+    30% { opacity: 0.8; }
+    100% { transform: translate(6px, -12px); opacity: 0; }
+  }
+  @keyframes pet-shadow {
+    0%, 100% { transform: scaleX(1); opacity: 0.14; }
+    50% { transform: scaleX(0.84); opacity: 0.09; }
+  }
+  @keyframes pet-squish {
+    0% { transform: scale(1, 1); }
+    40% { transform: scale(1.08, 0.9) translateY(4px); }
+    100% { transform: scale(1, 1); }
+  }
+
+  /* ── 野怪（BugMon）与电路判定条 ─────────────────── */
+  .bug-root,
+  .bug-shadow,
+  .bug-antenna,
+  .bug-spark,
+  .bug-pupil { transform-box: fill-box; transform-origin: center bottom; }
+  .bug-shadow,
+  .bug-spark,
+  .bug-pupil { transform-origin: center; }
+  .bug-root { animation: bug-bob 1.6s ease-in-out infinite; }
+  .bug-shadow { animation: pet-shadow 1.6s ease-in-out infinite; }
+  .bug-antenna { animation: bug-twitch 2.4s ease-in-out infinite; }
+  .bug-spark { animation: bug-spark 1.1s ease-in-out infinite; }
+  .bug-spark.is-late { animation-delay: 0.45s; }
+  .bug-pupil { animation: pet-look 4s ease-in-out infinite; }
+
+  .chip-led { animation: chip-led-in 0.35s ease-out backwards; }
+  .power-win { animation: power-win 0.5s cubic-bezier(0.2, 1.4, 0.4, 1) both; }
+
+  @keyframes bug-bob {
+    0%, 100% { transform: translateY(0) rotate(-1.5deg); }
+    50% { transform: translateY(-6px) rotate(1.5deg); }
+  }
+  @keyframes bug-twitch {
+    0%, 78%, 100% { transform: rotate(0); }
+    84% { transform: rotate(-5deg); }
+    92% { transform: rotate(4deg); }
+  }
+  @keyframes bug-spark {
+    0%, 100% { transform: scale(1); filter: brightness(1); }
+    50% { transform: scale(1.3); filter: brightness(1.35); }
+  }
+  @keyframes chip-led-in {
+    0% { transform: scale(0.2); opacity: 0; }
+    70% { transform: scale(1.35); }
+    100% { transform: scale(1); opacity: 1; }
+  }
+  @keyframes power-win {
+    0% { transform: scale(0.5); opacity: 0; }
+    100% { transform: scale(1); opacity: 1; }
+  }
+
   .table-t { @apply w-full border-collapse text-sm; }
   .table-t th { @apply border-b border-line px-3 py-2 text-left font-mono text-[11px] font-normal uppercase text-faint; }
   .table-t td { @apply border-b border-line/60 px-3 py-2.5 align-middle; }
   .table-t tbody tr { @apply transition-colors hover:bg-panel-2/60; }
 
-  .editor { @apply relative grid max-h-[70vh] min-h-[460px] grid-cols-[44px_1fr] overflow-auto bg-[#080a09] font-mono text-[13.5px] leading-[1.65]; }
-  .editor .gutter { @apply border-r border-line py-3 pr-2 text-right text-faint select-none; }
+  .editor { @apply relative grid max-h-[70vh] min-h-[460px] grid-cols-[44px_1fr] overflow-auto rounded-xl bg-[#0f1613] font-mono text-[13.5px] leading-[1.65] text-[#ebe6d9]; }
+  .editor .gutter { @apply border-r border-[#2f4034] py-3 pr-2 text-right text-[#59625a] select-none; }
   .editor .gutter .err { @apply bg-danger/15 text-danger; }
-  .editor textarea { @apply min-h-full resize-none overflow-hidden border-0 bg-transparent px-3.5 py-3 whitespace-pre text-ink caret-copper outline-none; tab-size: 2; font: inherit; }
+  .editor textarea { @apply min-h-full resize-none overflow-hidden border-0 bg-transparent px-3.5 py-3 whitespace-pre text-[#ebe6d9] caret-copper outline-none; tab-size: 2; font: inherit; }
 }

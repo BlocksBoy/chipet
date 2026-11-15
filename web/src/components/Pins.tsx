@@ -1,4 +1,5 @@
 import type { Pin } from '@tapearena/netlist';
+import { tr } from '../i18n.ts';
 import { cn } from './ui.tsx';
 
 export function Bits({ width, value, onToggle, out }: { width: number; value: bigint; onToggle?: (bit: number) => void; out?: boolean }) {
@@ -7,7 +8,7 @@ export function Bits({ width, value, onToggle, out }: { width: number; value: bi
       {Array.from({ length: width }, (_, i) => {
         const on = ((value >> BigInt(i)) & 1n) === 1n;
         return (
-          <button key={i} type="button" title={`第 ${i} 位`} aria-label={`第 ${i} 位：${on ? 1 : 0}`}
+          <button key={i} type="button" title={tr(`第 ${i} 位`, `bit ${i}`)} aria-label={tr(`第 ${i} 位：${on ? 1 : 0}`, `bit ${i}: ${on ? 1 : 0}`)}
             onClick={onToggle ? () => onToggle(i) : undefined} disabled={!onToggle && !out}
             className={cn(
               'grid size-6 place-items-center rounded font-mono text-[11px] ring-1 ring-inset transition-colors duration-100',

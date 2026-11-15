@@ -1,0 +1,62 @@
+import { ArrowRight, Cpu, Zap } from 'lucide-react';
+import { cn } from '../components/ui.tsx';
+import { tr } from '../i18n.ts';
+
+/** 功率格：四格闪电，亮几格就是几点功率。 */
+export function PowerPips({ power, max = 4, className }: { power: number; max?: number; className?: string }) {
+  return (
+    <span className={cn('inline-flex items-center gap-0.5', className)} aria-label={tr(`功率 ${power}`, `power ${power}`)}>
+      {Array.from({ length: max }, (_, i) => (
+        <Zap
+          key={i}
+          className={cn('size-3.5', i < power ? 'fill-gold text-gold' : 'text-current opacity-25')}
+          strokeWidth={2.2}
+        />
+      ))}
+    </span>
+  );
+}
+
+/**
+ * 一次电路判定的全过程：输入位 → 心脏芯片 → 输出灯 → 功率。
+ * 对战里每一回合双方各有一条，让「胜负由电路算出来」看得见。
+ */
+export function ChipStrip({ who, chip, gates, inBits, outBits, power, className }: {
+  who: string;
+  chip: string;
+  gates: number;
+  inBits: number[];
+  outBits: number[];
+  power: number;
+  className?: string;
+}) {
+  return (
+    <div className={cn('chip-strip flex flex-wrap items-center gap-x-2.5 gap-y-1.5 rounded-2xl bg-[#14231f] px-3.5 py-2.5 font-mono text-[11px] text-[#b9d4c7]', className)}>
+      <span className="max-w-24 truncate font-sans text-xs font-semibold text-white">{who}</span>
+      <span className="flex items-center gap-[3px]" aria-label={tr(`输入 ${inBits.join('')}`, `inputs ${inBits.join('')}`)}>
+        {inBits.map((b, i) => (
+          <i key={i} className={cn('block size-2 rounded-[2px]', b ? 'bg-copper shadow-[0_0_6px_rgb(240_139_85/0.8)]' : 'bg-[#2c4039]')} />
+        ))}
+      </span>
+      <ArrowRight className="size-3 text-[#5f7d72]" />
+      <span className="flex items-center gap-1 rounded-md bg-[#20362f] px-1.5 py-0.5 text-[#e8f3ee] ring-1 ring-copper/50">
+        <Cpu className="size-3 text-copper-hi" />
+        {chip} · {gates} {tr('门', 'gates')}
+      </span>
+      <ArrowRight className="size-3 text-[#5f7d72]" />
+      <span className="flex items-center gap-1" aria-label={tr(`输出 ${outBits.join('')}`, `outputs ${outBits.join('')}`)}>
+        {outBits.map((b, i) => (
+          <i
+            key={i}
+            className={cn('chip-led block size-2.5 rounded-full', b ? 'bg-[#59e0c8] shadow-[0_0_8px_rgb(89_224_200/0.9)]' : 'bg-[#2c4039]')}
+            style={{ animationDelay: `${0.25 + i * 0.08}s` }}
+          />
+        ))}
+      </span>
+      <span className="ml-auto flex items-center gap-1.5 text-[#e8f3ee]">
+        {tr('功率', 'power')} <b className="font-display text-sm text-gold">{power}</b>
+        <PowerPips power={power} />
+      </span>
+    </div>
+  );
+}

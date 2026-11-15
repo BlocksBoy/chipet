@@ -2,7 +2,7 @@ import '@rainbow-me/rainbowkit/styles.css';
 import type { ReactNode } from 'react';
 import { http, createConfig, WagmiProvider } from 'wagmi';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { connectorsForWallets, darkTheme, RainbowKitProvider, type Theme, type WalletList } from '@rainbow-me/rainbowkit';
+import { connectorsForWallets, lightTheme, RainbowKitProvider, type Theme, type WalletList } from '@rainbow-me/rainbowkit';
 import {
   binanceWallet, bitgetWallet, coinbaseWallet, injectedWallet, metaMaskWallet, okxWallet, oneKeyWallet, rabbyWallet, tokenPocketWallet,
   trustWallet,
@@ -10,6 +10,7 @@ import {
 import type { Chain } from 'viem';
 import { CHAINS } from '@tapearena/chain';
 import { CHAIN_IDS } from './env.ts';
+import { both, tr, useLang, type Txt } from './i18n.ts';
 
 type CreateWallet = WalletList[number]['wallets'][number];
 
@@ -17,7 +18,7 @@ type CreateWallet = WalletList[number]['wallets'][number];
 const short = (create: CreateWallet, name: string): CreateWallet => (params) => ({ ...create(params), name });
 
 // 只用插件钱包，不走 WalletConnect，projectId 只是占位
-const walletParams = { appName: 'TapeArena', projectId: 'tapearena-local' };
+const walletParams = { appName: 'Chipet', projectId: 'chipet-local' };
 
 type Eth = { isCoinbaseWallet?: boolean; providers?: Eth[] };
 const win = () => window as { ethereum?: Eth; okxwallet?: unknown; coinbaseWalletExtension?: unknown };
@@ -46,16 +47,16 @@ const KNOWN: [CreateWallet, () => boolean][] = [
  */
 function installedWallets(): CreateWallet[] {
   const found = KNOWN.filter(([, detect]) => detect()).map(([create]) => create);
-  if (!found.length && win().ethereum) found.push(short(injectedWallet, '浏览器钱包'));
+  if (!found.length && win().ethereum) found.push(short(injectedWallet, tr('浏览器钱包', 'Browser Wallet')));
   return found;
 }
 
 const installed = installedWallets();
 const connectors = installed.length ? connectorsForWallets([{ groupName: 'Installed', wallets: installed }], walletParams) : [];
 
-export interface GuideWallet { id: string; name: string; note: string; url: string; background: string; icon: () => Promise<string> }
+export interface GuideWallet { id: string; name: string; note: Txt; url: string; background: string; icon: () => Promise<string> }
 
-const guide = (create: CreateWallet, name: string, note: string): GuideWallet => {
+const guide = (create: CreateWallet, name: string, note: Txt): GuideWallet => {
   const w = create(walletParams);
   const d = w.downloadUrls ?? {};
   return {
@@ -67,12 +68,12 @@ const guide = (create: CreateWallet, name: string, note: string): GuideWallet =>
 
 /** 一个钱包都没检测到时，引导用户安装的常用钱包。 */
 export const GUIDE_WALLETS: GuideWallet[] = [
-  guide(okxWallet, 'OKX Wallet', 'X Layer 官方钱包，推荐'),
-  guide(metaMaskWallet, 'MetaMask', '最常用的以太坊钱包'),
-  guide(rabbyWallet, 'Rabby', '多链插件，交易前预览'),
-  guide(binanceWallet, 'Binance Wallet', '币安 Web3 钱包'),
-  guide(bitgetWallet, 'Bitget Wallet', '多链 Web3 钱包'),
-  guide(coinbaseWallet, 'Coinbase Wallet', 'Coinbase 自托管钱包'),
+  guide(okxWallet, 'OKX Wallet', both('X Layer 官方钱包，推荐', 'Official X Layer wallet, recommended')),
+  guide(binanceWallet, 'Binance Wallet', both('币安 Web3 钱包，BSC 首选', 'Binance Web3 wallet, best for BSC')),
+  guide(metaMaskWallet, 'MetaMask', both('最常用的以太坊钱包', 'The most widely used EVM wallet')),
+  guide(rabbyWallet, 'Rabby', both('多链插件，交易前预览', 'Multi-chain, previews every transaction')),
+  guide(bitgetWallet, 'Bitget Wallet', both('多链 Web3 钱包', 'Multi-chain Web3 wallet')),
+  guide(coinbaseWallet, 'Coinbase Wallet', both('Coinbase 自托管钱包', 'Coinbase self-custody wallet')),
 ];
 
 const chains = CHAIN_IDS.map((id) => CHAINS[id as keyof typeof CHAINS]) as unknown as [Chain, ...Chain[]];
@@ -83,40 +84,42 @@ export const wagmiConfig = createConfig({
   transports: Object.fromEntries(chains.map((c) => [c.id, http((import.meta.env[`VITE_RPC_${c.id}`] as string | undefined) ?? c.rpcUrls.default.http[0])])),
 });
 
-const base = darkTheme({ accentColor: '#e08a4c', accentColorForeground: '#1a0f07', borderRadius: 'medium', overlayBlur: 'small' });
+const base = lightTheme({ accentColor: '#e07a45', accentColorForeground: '#ffffff', borderRadius: 'large', overlayBlur: 'small' });
 const theme: Theme = {
   ...base,
   colors: {
     ...base.colors,
-    modalBackground: '#111612',
-    modalBorder: '#233027',
-    modalText: '#ebe6d9',
-    modalTextSecondary: '#8a9389',
-    modalTextDim: '#59625a',
-    actionButtonSecondaryBackground: '#161d18',
-    generalBorder: '#233027',
-    generalBorderDim: '#1a231d',
-    menuItemBackground: '#161d18',
-    profileForeground: '#111612',
-    profileAction: '#161d18',
-    profileActionHover: '#1d2620',
-    closeButtonBackground: '#161d18',
-    closeButton: '#8a9389',
-    selectedOptionBorder: '#7a4a2a',
-    connectButtonBackground: '#111612',
-    connectButtonInnerBackground: '#161d18',
-    connectButtonText: '#ebe6d9',
+    modalBackground: '#ffffff',
+    modalBorder: '#d3e5dc',
+    modalText: '#1a2e28',
+    modalTextSecondary: '#5a736a',
+    modalTextDim: '#8aa399',
+    actionButtonSecondaryBackground: '#e8f3ee',
+    generalBorder: '#d3e5dc',
+    generalBorderDim: '#e8f3ee',
+    menuItemBackground: '#e8f3ee',
+    profileForeground: '#ffffff',
+    profileAction: '#e8f3ee',
+    profileActionHover: '#d3e5dc',
+    closeButtonBackground: '#e8f3ee',
+    closeButton: '#5a736a',
+    selectedOptionBorder: '#2a9d8f',
+    connectButtonBackground: '#ffffff',
+    connectButtonInnerBackground: '#e8f3ee',
+    connectButtonText: '#1a2e28',
   },
-  fonts: { body: "'Noto Sans SC', system-ui, -apple-system, 'PingFang SC', sans-serif" },
+  fonts: { body: "'Noto Sans SC', 'Outfit', system-ui, -apple-system, 'PingFang SC', sans-serif" },
 };
 
 const queryClient = new QueryClient();
 
 export function WalletProvider({ children }: { children: ReactNode }) {
+  const lang = useLang();
   return (
     <WagmiProvider config={wagmiConfig}>
       <QueryClientProvider client={queryClient}>
-        <RainbowKitProvider theme={theme} locale="zh-CN" modalSize="compact" appInfo={{ appName: 'TapeArena', learnMoreUrl: 'https://web3.okx.com/zh-hans/xlayer' }}>
+        <RainbowKitProvider theme={theme} locale={lang === 'zh' ? 'zh-CN' : 'en-US'} modalSize="compact"
+          appInfo={{ appName: 'Chipet', learnMoreUrl: lang === 'zh' ? 'https://web3.okx.com/zh-hans/xlayer' : 'https://web3.okx.com/xlayer' }}>
           {children}
         </RainbowKitProvider>
       </QueryClientProvider>

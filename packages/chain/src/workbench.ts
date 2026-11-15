@@ -2,7 +2,7 @@
 
 import {
   bitsToPins, checkVectors, compile, encodeVectors, findCounterexample, fromHex, generateVectors, packBits, pinsToBits,
-  resolveData, step, toHex, unpackBits,
+  L, resolveData, step, toHex, unpackBits,
   type CompileResult, type Library, type Pin, type Resolved, type Vector, type VectorReport,
 } from '@tapearena/netlist';
 import { ChainLibrary } from './reader.ts';
@@ -65,7 +65,7 @@ export function simulate(
 ) {
   const { compiled, circuit } = b;
   const seq = Array.isArray(inputs) ? inputs : Array.from({ length: Math.max(1, cycles) }, () => inputs);
-  if (seq.length > 1024) throw new Error('最多仿真 1024 拍');
+  if (seq.length > 1024) throw new Error(L('最多仿真 1024 拍', 'At most 1024 cycles can be simulated'));
   let state = stateHex ? fromHex(stateHex) : new Uint8Array(Math.ceil(circuit.nState / 8));
   const trace = seq.map((vals, cycle) => {
     const inBits = pinsToBits(compiled.inputs, pinValues(compiled.inputs, vals));
@@ -81,7 +81,7 @@ export function simulate(
 }
 
 export function vectorsFor(b: Built, lib: Library, count = 64, seed = 1) {
-  if (b.circuit.nState) throw new Error('含寄存器的电路不能当擂台参考（链上只比组合逻辑）');
+  if (b.circuit.nState) throw new Error(L('含寄存器的电路不能当擂台参考（链上只比组合逻辑）', 'A circuit with registers can\'t be a bounty reference (only combinational logic is compared on-chain)'));
   const vs = generateVectors(b.circuit, lib, { count, seed });
   return { count: vs.length, hex: toHex(encodeVectors(b.circuit.nIn, b.circuit.nOut, vs)), vectors: vs.map((v) => describe(b.compiled, v)) };
 }
@@ -105,13 +105,18 @@ export function precheck(
   bounty: { nIn: number; nOut: number; maxGates: number; vectors: Vector[]; submissions?: { gateCount: number; disqualified: boolean }[] },
 ): Precheck {
   const reasons: string[] = [];
-  if (cand.nIn !== bounty.nIn || cand.nOut !== bounty.nOut) reasons.push(`引脚不符：需要 ${bounty.nIn} 入 ${bounty.nOut} 出，实际 ${cand.nIn} 入 ${cand.nOut} 出`);
-  if (cand.nState) reasons.push('电路含寄存器，擂台只接受组合逻辑');
-  if (bounty.maxGates && cand.gateCount > bounty.maxGates) reasons.push(`门数 ${cand.gateCount} 超过上限 ${bounty.maxGates}`);
+  if (cand.nIn !== bounty.nIn || cand.nOut !== bounty.nOut) reasons.push(L(
+    `引脚不符：需要 ${bounty.nIn} 入 ${bounty.nOut} 出，实际 ${cand.nIn} 入 ${cand.nOut} 出`,
+    `Pin mismatch: needs ${bounty.nIn} in / ${bounty.nOut} out, got ${cand.nIn} in / ${cand.nOut} out`,
+  ));
+  if (cand.nState) reasons.push(L('电路含寄存器，擂台只接受组合逻辑', 'The circuit contains registers; bounties only accept combinational logic'));
+  if (bounty.maxGates && cand.gateCount > bounty.maxGates) {
+    reasons.push(L(`门数 ${cand.gateCount} 超过上限 ${bounty.maxGates}`, `${cand.gateCount} gates is over the limit of ${bounty.maxGates}`));
+  }
   let report: VectorReport = { passed: 0, total: bounty.vectors.length, failures: [] };
   if (!reasons.length) {
     report = checkVectors(cand, lib, bounty.vectors);
-    if (report.passed !== report.total) reasons.push(`测试向量未全过：${report.passed}/${report.total}`);
+    if (report.passed !== report.total) reasons.push(L(`测试向量未全过：${report.passed}/${report.total}`, `Test vectors failed: ${report.passed}/${report.total} passed`));
   }
   const live = (bounty.submissions ?? []).filter((s) => !s.disqualified);
   const rankIfSubmitted = 1 + live.filter((s) => s.gateCount <= cand.gateCount).length;

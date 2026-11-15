@@ -1,4 +1,5 @@
 import { useRef, type KeyboardEvent } from 'react';
+import { tr } from '../i18n.ts';
 
 export function Editor({ value, onChange, errLine }: { value: string; onChange: (v: string) => void; errLine?: number }) {
   const ta = useRef<HTMLTextAreaElement>(null);
@@ -20,7 +21,7 @@ export function Editor({ value, onChange, errLine }: { value: string; onChange: 
         {Array.from({ length: lines }, (_, i) => <div key={i} className={errLine === i + 1 ? 'err' : undefined}>{i + 1}</div>)}
       </div>
       <textarea ref={ta} value={value} spellCheck={false} onKeyDown={onKey} rows={lines + 1}
-        onChange={(e) => onChange(e.target.value)} aria-label="TapeHDL 源码" />
+        onChange={(e) => onChange(e.target.value)} aria-label={tr('TapeHDL 源码', 'TapeHDL source')} />
     </div>
   );
 }

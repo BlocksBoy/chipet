@@ -9,6 +9,14 @@ export const xlayer = defineChain({
   blockExplorers: { default: { name: 'OKLink', url: 'https://www.oklink.com/xlayer' } },
 });
 
+export const bsc = defineChain({
+  id: 56,
+  name: 'BNB Smart Chain',
+  nativeCurrency: { name: 'BNB', symbol: 'BNB', decimals: 18 },
+  rpcUrls: { default: { http: ['https://bsc-dataseed.bnbchain.org', 'https://bsc-dataseed1.binance.org', 'https://bsc-rpc.publicnode.com'] } },
+  blockExplorers: { default: { name: 'BscScan', url: 'https://bscscan.com' } },
+});
+
 export const localFork = defineChain({
   id: 31337,
   name: 'Local X Layer fork',
@@ -18,12 +26,14 @@ export const localFork = defineChain({
 
 export interface Deployment {
   chainId: number;
-  /** TapeOut 官方工厂（X Layer 主网 0x1f09…0761） */
-  factory: Address;
+  /** TapeOut 官方工厂（X Layer 主网 0x1f09…0761）。BSC 上没有官方工厂，部署 Chipet 时自己指定。 */
+  factory?: Address;
   arena?: Address;
   library?: Address;
   /** 演示/默认流片用的处理器 */
   cpu?: Address;
+  /** Chipet 芯宠合约 */
+  chipet?: Address;
   deployedAt?: string;
 }
 
@@ -36,7 +46,13 @@ export const DEPLOYMENTS: Record<number, Deployment> = {
   ...(deployments as Record<string, Deployment>),
 };
 
-export const CHAINS = { 196: xlayer, 31337: localFork } as const;
+export const CHAINS = { 196: xlayer, 56: bsc, 31337: localFork } as const;
+
+/** 面向用户的两条主网：X Layer 和 BSC。本地 fork 只在有部署记录时才出现在选择器里。 */
+export const MAINNET_IDS: readonly number[] = [196, 56];
+
+/** 网络选择器里用的短名 */
+export const CHAIN_LABEL: Record<number, string> = { 196: 'X Layer', 56: 'BSC', 31337: 'Local fork' };
 
 export function deploymentFor(chainId: number): Deployment | undefined {
   return DEPLOYMENTS[chainId];

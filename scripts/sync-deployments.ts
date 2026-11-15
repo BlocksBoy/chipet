@@ -19,9 +19,22 @@ if (existsSync(dir)) {
       arena: d.arena,
       library: d.library,
       ...(d.cpu && d.cpu !== zeroAddress ? { cpu: d.cpu } : {}),
+      ...(d.chipet && d.chipet !== zeroAddress ? { chipet: d.chipet } : {}),
       deployedAt: new Date().toISOString(),
     };
     console.log(`链 ${id}: arena ${d.arena} library ${d.library}`);
+  }
+  for (const f of readdirSync(dir).filter((x) => /^\d+-chipet\.json$/.test(x))) {
+    const d = JSON.parse(readFileSync(new URL(f, dir), 'utf8'));
+    const id = String(d.chainId);
+    all[id] = {
+      ...all[id],
+      chainId: Number(id),
+      ...(d.factory ? { factory: d.factory } : {}),
+      ...(d.chipet && d.chipet !== zeroAddress ? { chipet: d.chipet } : {}),
+      deployedAt: new Date().toISOString(),
+    };
+    console.log(`链 ${id}: chipet ${d.chipet}`);
   }
 }
 writeFileSync(target, JSON.stringify(all, null, 2) + '\n');

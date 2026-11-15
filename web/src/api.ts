@@ -1,6 +1,7 @@
 // AI 设计需要后端（持有模型密钥）；其余功能全部在浏览器里直接读链完成。
 
 import { DEWEB } from './env.ts';
+import { tr } from './i18n.ts';
 
 const BASE = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, '') ?? '';
 
@@ -28,7 +29,7 @@ export async function aiAvailable(): Promise<boolean> {
 
 export async function aiDesign(body: Record<string, unknown>, onEvent: (e: AiEvent) => void, signal?: AbortSignal) {
   const r = await fetch(`${BASE}/api/ai/design`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body), signal });
-  if (!r.ok || !r.body) throw new Error((await r.json().catch(() => ({}))).error ?? `AI 服务返回 ${r.status}`);
+  if (!r.ok || !r.body) throw new Error((await r.json().catch(() => ({}))).error ?? tr(`AI 服务返回 ${r.status}`, `AI service returned ${r.status}`));
   const reader = r.body.pipeThrough(new TextDecoderStream()).getReader();
   let buf = '';
   for (;;) {
