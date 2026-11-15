@@ -249,7 +249,7 @@ export function Home() {
               </Button>
             </div>
 
-            <div className="mt-8 max-w-md lg:mt-auto lg:mb-20 lg:pt-0">
+            <div className="mt-8 max-w-md lg:mt-auto lg:pt-6">
               <p className="text-sm text-pretty text-mute sm:text-base">
                 {t(
                   '像加密猫一样：每只芯喵都有独特毛色、瞳色与花纹。心脏是一枚 TapeOut 电路——给它通电、带它对战，每一步都是这枚电路算出来的。',
