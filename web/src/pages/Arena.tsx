@@ -9,7 +9,7 @@ import { Link } from '../router.tsx';
 import { useApp, useAsync } from '../state.tsx';
 import { amount, left, unit } from '../format.ts';
 import { both, getLang, tr, txt } from '../i18n.ts';
-import { btn, Empty, Loading, PhaseTag } from '../components/ui.tsx';
+import { btn, cn, Empty, Loading, PhaseTag } from '../components/ui.tsx';
 
 function HeroDie() {
   const c = useMemo(() => {
@@ -41,16 +41,16 @@ export function BountyCard({ b, i }: { b: Bounty; i: number }) {
     <Link to={`/lab/bounty/${b.id}`} style={{ animationDelay: `${i * 60}ms` }}
       className="group relative flex animate-rise flex-col overflow-hidden rounded-3xl border border-line/80 bg-panel shadow-sm shadow-si/5 p-5 text-inherit no-underline transition duration-150 hover:-translate-y-0.5 hover:border-copper-dim hover:shadow-md hover:shadow-copper/10">
       <CircuitBoard className="absolute -top-4 -right-4 size-28 text-line/70 transition-colors group-hover:text-copper-dim/40" strokeWidth={1} />
-      <div className="relative flex items-center gap-2">
+      <div className="relative flex min-w-0 flex-wrap items-center gap-2">
         <PhaseTag phase={phase} />
         <span className="font-mono text-xs text-faint">#{b.id}</span>
-        {b.royaltyBps > 0 && <span className="ml-auto flex items-center gap-1 font-mono text-[11px] text-gold"><Blocks className="size-3" />{tr('分润', 'royalty')} {b.royaltyBps / 100}%</span>}
+        {b.royaltyBps > 0 && <span className="ml-auto flex items-center gap-1 font-mono text-[11px] text-gold"><Blocks className="size-3 shrink-0" />{tr('分润', 'royalty')} {b.royaltyBps / 100}%</span>}
       </div>
-      <h3 className="relative mt-3 line-clamp-1 text-[19px] text-ink">{b.meta.title}</h3>
+      <h3 className="relative mt-3 line-clamp-1 break-words text-[19px] text-ink">{b.meta.title}</h3>
       {b.meta.description && <p className="relative mt-1 line-clamp-2 text-[13px] text-pretty text-mute">{b.meta.description}</p>}
-      <div className="relative mt-4 flex items-end justify-between">
-        <div className="flex items-baseline gap-1.5 font-display text-[32px] leading-none font-extrabold text-copper-hi tabular-nums">
-          <Coins className="size-5 self-center text-copper" />{amount(b.reward)}<small className="text-[13px] font-medium text-mute">{unit(b.token, chain.nativeCurrency.symbol)}</small>
+      <div className="relative mt-4 flex min-w-0 items-end justify-between gap-3">
+        <div className="flex min-w-0 items-baseline gap-1.5 font-display text-[clamp(24px,8vw,32px)] leading-none font-extrabold text-copper-hi tabular-nums">
+          <Coins className="size-5 shrink-0 self-center text-copper" />{amount(b.reward)}<small className="text-[13px] font-medium text-mute">{unit(b.token, chain.nativeCurrency.symbol)}</small>
         </div>
         <div className="text-right">
           <div className="font-mono text-[11px] text-faint">{tr('最优', 'Best')}</div>
@@ -102,15 +102,15 @@ export function Arena() {
   const subs = list.reduce((s, b) => s + b.submissions.length, 0);
 
   return (
-    <div className="w-full pb-16">
-      <section className="grid grid-cols-1 items-center gap-10 pt-10 pb-10 sm:pt-14 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
-        <div>
-          <div className="mb-5 inline-flex items-center gap-2 rounded-full bg-si/5 px-3 py-1 font-mono text-xs text-si ring-1 ring-si-dim">
-            <CircuitBoard className="size-3.5" />{tr('电路悬赏 · 链上评测', 'Circuit bounties · judged on-chain')}
+    <div className="min-w-0 w-full overflow-x-clip pb-16">
+      <section className="grid min-w-0 grid-cols-1 items-center gap-8 pt-8 pb-8 sm:gap-10 sm:pt-14 sm:pb-10 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
+        <div className="min-w-0">
+          <div className="mb-5 inline-flex max-w-full items-center gap-2 rounded-full bg-si/5 px-3 py-1 font-mono text-[11px] text-si ring-1 ring-si-dim sm:text-xs">
+            <CircuitBoard className="size-3.5 shrink-0" />{tr('电路悬赏 · 链上评测', 'Circuit bounties · judged on-chain')}
           </div>
           {getLang() === 'zh'
-            ? <h1 className="text-[clamp(38px,5vw,64px)] leading-[1.04]">门数最少的人<br />拿走<span className="text-copper">奖金</span>。</h1>
-            : <h1 className="text-[clamp(38px,5vw,64px)] leading-[1.04]">Fewest gates<br />takes the <span className="text-copper">prize</span>.</h1>}
+            ? <h1 className="text-[clamp(28px,8vw,64px)] leading-[1.08]">门数最少的人<br />拿走<span className="text-copper">奖金</span>。</h1>
+            : <h1 className="text-[clamp(28px,8vw,64px)] leading-[1.08]">Fewest gates<br />takes the <span className="text-copper">prize</span>.</h1>}
           <p className="mt-5 mb-7 max-w-[560px] text-[17px] text-pretty text-mute">
             {getLang() === 'zh' ? (
               <>
@@ -125,9 +125,9 @@ export function Arena() {
               </>
             )}
           </p>
-          <div className="flex flex-wrap gap-3">
-            <Link to="/lab/studio" className={btn('primary', 'lg')}><Sparkles />{tr('打开设计器', 'Open Studio')}</Link>
-            <Link to="/lab/new" className={btn('ghost', 'lg')}><Plus />{tr('发布悬赏', 'Post a bounty')}</Link>
+          <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:flex-wrap sm:gap-3">
+            <Link to="/lab/studio" className={cn(btn('primary', 'lg'), 'w-full justify-center sm:w-auto')}><Sparkles />{tr('打开设计器', 'Open Studio')}</Link>
+            <Link to="/lab/new" className={cn(btn('ghost', 'lg'), 'w-full justify-center sm:w-auto')}><Plus />{tr('发布悬赏', 'Post a bounty')}</Link>
           </div>
           {list.length > 0 && (
             <div className="mt-8 flex flex-wrap gap-x-8 gap-y-3 font-mono text-xs text-mute">
@@ -167,7 +167,7 @@ export function Arena() {
               ? <div className="rounded-3xl border border-line/80 bg-panel shadow-sm shadow-si/5"><Empty icon={Inbox} title={tr('读取失败', 'Failed to load')} action={<Link to="/lab/studio" className={btn('ghost')}><Sparkles />{tr('先去设计器', 'Open Studio meanwhile')}</Link>}>{tr(`擂台列表暂时读不出来，多半是 ${chain.name} 的节点连不上。可以在右上角切换网络后再试。`, `The bounty list can't be loaded right now, most likely because the ${chain.name} node is unreachable. Try switching networks in the top-right corner.`)}<span className="mt-2 block font-mono text-xs text-danger">{bounties.error.message.split('\n')[0]}</span></Empty></div>
               : sorted.length === 0
                 ? <div className="rounded-3xl border border-line/80 bg-panel shadow-sm shadow-si/5"><Empty icon={Inbox} title={tr('还没有擂台', 'No bounties yet')} action={<Link to="/lab/new" className={btn()}><Plus />{tr('发布悬赏', 'Post a bounty')}</Link>}>{tr('第一场由你来出？', 'Want to post the first one?')}</Empty></div>
-                : <div className="grid grid-cols-1 gap-4 sm:grid-cols-[repeat(auto-fill,minmax(340px,1fr))]">{sorted.map((b, i) => <BountyCard key={b.id} b={b} i={i} />)}</div>}
+                : <div className="grid grid-cols-1 gap-4 sm:grid-cols-[repeat(auto-fill,minmax(min(100%,280px),1fr))]">{sorted.map((b, i) => <BountyCard key={b.id} b={b} i={i} />)}</div>}
       </div>
     </div>
   );

@@ -67,7 +67,7 @@ export function NewBounty() {
   });
 
   return (
-    <div className="w-full pt-2 pb-16">
+    <div className="min-w-0 w-full overflow-x-clip pt-2 pb-16">
       <PageHeader
         eyebrow={tr('实验室 · Lab', 'Lab')} icon={Rocket}
         title={tr('发布悬赏', 'Post a bounty')}
@@ -90,17 +90,17 @@ export function NewBounty() {
         <Panel title={tr('擂台参数', 'Bounty settings')} icon={ScrollText} bodyClass="flex flex-col gap-4 p-5">
           <Field label={tr('标题', 'Title')} icon={Heading}><Input value={f.title} onChange={set('title')} /></Field>
           <Field label={tr('说明', 'Description')} icon={ScrollText}><Textarea rows={3} value={f.description} onChange={set('description')} /></Field>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <Field label={tr(`奖金 ${sym}`, `Prize (${sym})`)} icon={Coins}><Input mono value={f.reward} onChange={set('reward')} /></Field>
             <Field label={tr(`保证金 ${sym}`, `Bond (${sym})`)} icon={Lock}><Input mono value={f.bond} onChange={set('bond')} /></Field>
             <Field label={tr('上游分润 %', 'Royalty %')} icon={Blocks}><Input mono value={f.royalty} onChange={set('royalty')} /></Field>
           </div>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <Field label={tr('提交期（天）', 'Submit (days)')} icon={CalendarClock}><Input mono value={f.days} onChange={set('days')} /></Field>
             <Field label={tr('挑战期（天）', 'Challenge (days)')} icon={Swords}><Input mono value={f.challengeDays} onChange={set('challengeDays')} /></Field>
             <Field label={tr('门数上限', 'Gate limit')} icon={Gauge} hint={tr('0 = 不限', '0 = no limit')}><Input mono value={f.maxGates} onChange={set('maxGates')} /></Field>
           </div>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <Field label={tr('向量条数', 'Vectors')} icon={ListChecks}><Input mono value={f.count} onChange={set('count')} /></Field>
             <Field label={tr('随机种子', 'Random seed')} icon={Dice5}><Input mono value={f.seed} onChange={set('seed')} /></Field>
             <Field label={tr('抽检条数', 'Sample size')} icon={Shuffle} hint={tr('0 = 全量', '0 = all')}><Input mono value={f.sample} onChange={set('sample')} /></Field>

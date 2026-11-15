@@ -74,7 +74,7 @@ export function Library() {
     sort === 'uses' ? b.uses - a.uses : sort === 'gates' ? a.gateCount - b.gateCount : b.registeredAt - a.registeredAt);
 
   return (
-    <div className="w-full pt-2 pb-16">
+    <div className="min-w-0 w-full overflow-x-clip pt-2 pb-16">
       <PageHeader
         className="mb-6"
         eyebrow={tr('实验室 · Lab', 'Lab')} icon={BookOpen}

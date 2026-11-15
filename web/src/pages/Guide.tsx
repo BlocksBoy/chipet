@@ -111,22 +111,22 @@ export function Guide() {
       <div className="mt-6 grid items-start gap-6 lg:grid-cols-[220px_minmax(0,1fr)]">
         <nav
           aria-label={t('目录', 'Contents')}
-          className="sticky top-20 z-10 -mx-1 overflow-x-auto lg:mx-0 lg:overflow-visible"
+          className="sticky top-20 z-10 min-w-0 max-w-full lg:overflow-visible"
         >
-          <ul className="flex gap-1.5 px-1 lg:flex-col lg:rounded-3xl lg:border lg:border-line/80 lg:bg-panel lg:p-2 lg:shadow-sm lg:shadow-si/5">
+          <ul className="grid grid-cols-2 gap-1.5 sm:flex sm:flex-wrap lg:flex-col lg:rounded-3xl lg:border lg:border-line/80 lg:bg-panel lg:p-2 lg:shadow-sm lg:shadow-si/5">
             {TOC.map(({ id, label, icon: I }) => (
-              <li key={id} className="shrink-0">
+              <li key={id} className="min-w-0">
                 <button
                   type="button"
                   onClick={() => scrollTo(id)}
                   aria-current={here === id ? 'true' : undefined}
                   className={cn(
-                    'flex w-full items-center gap-2 rounded-full px-3 py-2 text-left text-[13px] whitespace-nowrap transition-colors lg:rounded-2xl',
+                    'flex w-full min-w-0 items-center justify-center gap-1.5 rounded-2xl px-2.5 py-2 text-[12px] transition-colors sm:justify-start sm:rounded-full sm:px-3 sm:text-[13px] lg:rounded-2xl',
                     here === id ? 'bg-si/15 font-semibold text-si-dim' : 'bg-panel text-mute ring-1 ring-line/70 lg:bg-transparent lg:ring-0 hover:text-ink',
                   )}
                 >
                   <I className="size-3.5 shrink-0" />
-                  {txt(label)}
+                  <span className="truncate">{txt(label)}</span>
                 </button>
               </li>
             ))}

@@ -10,7 +10,7 @@ export const cn = (...v: ClassValue[]) => twMerge(clsx(v));
 type Icon = ComponentType<LucideProps>;
 
 /** 全站统一的内容宽度与左右留白。 */
-export const PAGE = 'mx-auto w-full max-w-[1180px] px-4 sm:px-7';
+export const PAGE = 'mx-auto w-full min-w-0 max-w-[1180px] px-4 sm:px-7';
 
 /** 跟随媒体查询变化的布尔值，比如 useMedia('(min-width: 640px)')。 */
 export function useMedia(query: string) {

@@ -65,11 +65,11 @@ const NAV = [
 function LangSwitch() {
   const lang = useLang();
   return (
-    <div role="group" aria-label={lang === 'zh' ? '语言' : 'Language'} className="flex h-9 shrink-0 items-center rounded-full border border-line bg-panel p-0.5 font-mono text-xs">
+    <div role="group" aria-label={lang === 'zh' ? '语言' : 'Language'} className="flex h-8 shrink-0 items-center rounded-full border border-line bg-panel p-0.5 font-mono text-[11px] sm:h-9 sm:text-xs">
       {/* 两段都常驻：不认识当前语言的人也能一眼找到自己的那一段 */}
       {(['zh', 'en'] as const).map((l) => (
         <button key={l} type="button" aria-pressed={lang === l} onClick={() => setLang(l)} title={l === 'zh' ? '中文' : 'English'}
-          className={cn('h-full rounded-full px-2 transition-colors sm:px-2.5', lang === l ? 'bg-si text-white' : 'text-mute hover:text-ink')}>
+          className={cn('h-full rounded-full px-1.5 transition-colors sm:px-2.5', lang === l ? 'bg-si text-white' : 'text-mute hover:text-ink')}>
           {l === 'zh' ? '中' : 'EN'}
         </button>
       ))}
@@ -111,9 +111,9 @@ function NetworkSwitch() {
     <div ref={box} className="relative shrink-0" onKeyDown={move}>
       <button ref={trigger} type="button" aria-haspopup="listbox" aria-expanded={open} aria-label={`${t('网络', 'Network')}: ${chainLabel(chainId)}`}
         onClick={() => setOpen((o) => !o)}
-        className={cn('flex h-9 items-center gap-1.5 rounded-full border bg-panel pr-2 pl-1.5 font-mono text-xs text-ink transition-colors hover:border-si sm:pr-2.5', open ? 'border-si' : 'border-line')}>
-        <ChainIcon id={chainId} className="size-6" />
-        <span className="whitespace-nowrap">{chainLabel(chainId)}</span>
+        className={cn('flex h-8 items-center gap-1 rounded-full border bg-panel pr-1.5 pl-1 font-mono text-xs text-ink transition-colors hover:border-si sm:h-9 sm:gap-1.5 sm:pr-2.5 sm:pl-1.5', open ? 'border-si' : 'border-line')}>
+        <ChainIcon id={chainId} className="size-5 sm:size-6" />
+        <span className="hidden whitespace-nowrap sm:inline">{chainLabel(chainId)}</span>
         <ChevronDown className={cn('size-3.5 text-mute transition-transform', open && 'rotate-180')} />
       </button>
       {open && (
@@ -143,19 +143,31 @@ function WalletButton() {
   return (
     <ConnectButton.Custom>
       {({ account, chain, mounted, openAccountModal, openChainModal }) => {
-        if (!mounted) return <span className="h-8 w-28" aria-hidden />;
-        if (!account) return <Button size="sm" icon={Wallet} onClick={connect}>{t('连接钱包', 'Connect')}</Button>;
-        if (chain?.unsupported) return <Button size="sm" variant="danger" icon={TriangleAlert} onClick={openChainModal}>{t('切换网络', 'Switch network')}</Button>;
+        if (!mounted) return <span className="hidden h-8 w-28 sm:block" aria-hidden />;
+        if (!account) {
+          return (
+            <Button size="sm" icon={Wallet} onClick={connect} aria-label={t('连接钱包', 'Connect')}>
+              <span className="hidden sm:inline">{t('连接钱包', 'Connect')}</span>
+            </Button>
+          );
+        }
+        if (chain?.unsupported) {
+          return (
+            <Button size="sm" variant="danger" icon={TriangleAlert} onClick={openChainModal} aria-label={t('切换网络', 'Switch network')}>
+              <span className="hidden sm:inline">{t('切换网络', 'Switch network')}</span>
+            </Button>
+          );
+        }
         return (
-          <button type="button" onClick={openAccountModal} title={account.address}
-            className="flex h-9 shrink-0 items-center gap-2 rounded-full bg-panel pr-3 pl-1.5 font-mono text-xs text-ink shadow-sm ring-1 ring-line transition hover:ring-si">
+          <button type="button" onClick={openAccountModal} title={account.address} aria-label={account.displayName}
+            className="flex h-8 max-w-[42vw] shrink-0 items-center gap-1 rounded-full bg-panel pr-1.5 pl-1 font-mono text-xs text-ink shadow-sm ring-1 ring-line transition hover:ring-si sm:h-9 sm:gap-2 sm:pr-3 sm:pl-1.5">
             {connector?.icon
-              ? <img src={connector.icon} alt={connector.name} className="size-6 rounded-full" />
-              : <span className="grid size-6 place-items-center rounded-full bg-panel-2"><Wallet className="size-3.5 text-si" /></span>}
+              ? <img src={connector.icon} alt={connector.name} className="size-5 rounded-full sm:size-6" />
+              : <span className="grid size-5 place-items-center rounded-full bg-panel-2 sm:size-6"><Wallet className="size-3.5 text-si" /></span>}
             {account.displayBalance && <span className="hidden text-mute tabular-nums xl:inline">{account.displayBalance}</span>}
-            <span className="size-1.5 rounded-full bg-si" />
-            <span className="hidden sm:inline">{account.displayName}</span>
-            <ChevronDown className="size-3.5 text-mute" />
+            <span className="size-1.5 shrink-0 rounded-full bg-si" />
+            <span className="hidden truncate sm:inline">{account.displayName}</span>
+            <ChevronDown className="size-3.5 shrink-0 text-mute" />
           </button>
         );
       }}
@@ -176,17 +188,17 @@ function LabNav({ sub }: { sub: string }) {
   // 擂台详情页归在「擂台」下
   const at = sub === 'bounty' ? '' : sub;
   return (
-    <nav aria-label={t('实验室导航', 'Lab navigation')} className="lg:sticky lg:top-20 lg:self-start">
-      <div className="flex items-center gap-1.5 overflow-x-auto pb-1 lg:flex-col lg:items-stretch lg:overflow-visible lg:rounded-3xl lg:border lg:border-line/80 lg:bg-panel lg:p-2 lg:pb-2 lg:shadow-sm lg:shadow-si/5">
+    <nav aria-label={t('实验室导航', 'Lab navigation')} className="min-w-0 max-w-full lg:sticky lg:top-20 lg:self-start">
+      <div className="grid max-w-full grid-cols-2 gap-1.5 sm:flex sm:flex-wrap sm:items-center lg:mx-0 lg:flex-col lg:items-stretch lg:rounded-3xl lg:border lg:border-line/80 lg:bg-panel lg:p-2 lg:shadow-sm lg:shadow-si/5">
         <div className="mb-1 hidden items-center gap-1.5 px-2.5 py-2 font-mono text-[11px] text-faint lg:flex">
           <FlaskConical className="size-3.5" />TapeArena
         </div>
         {LAB_NAV.map(({ to, key, label, icon: I }) => (
           <Link key={key} to={to} aria-current={at === key ? 'page' : undefined} className={cn(
-            'flex shrink-0 items-center gap-2 rounded-full px-3 py-2 text-[13px] whitespace-nowrap no-underline transition-colors lg:rounded-2xl',
+            'flex min-w-0 items-center justify-center gap-1.5 rounded-2xl px-2.5 py-2 text-[12px] no-underline transition-colors sm:justify-start sm:rounded-full sm:px-3 sm:text-[13px] lg:rounded-2xl',
             at === key ? 'bg-si/15 font-semibold text-si-dim' : 'bg-panel text-mute ring-1 ring-line/70 lg:bg-transparent lg:ring-0 hover:bg-panel-2/70 hover:text-ink',
           )}>
-            <I className="size-3.5 shrink-0" />{txt(label)}
+            <I className="size-3.5 shrink-0" /><span className="truncate">{txt(label)}</span>
           </Link>
         ))}
       </div>
@@ -201,15 +213,15 @@ export function Shell({ children }: { children: ReactNode }) {
   const here = r.parts[0] ?? '';
 
   return (
-    <div className="flex min-h-dvh flex-col">
+    <div className="flex min-h-dvh min-w-0 flex-col overflow-x-clip">
       <header className="sticky top-0 z-20 border-b border-line/70 bg-panel/75 backdrop-blur-xl">
-        <div className="mx-auto flex h-16 max-w-[1180px] items-center gap-2 px-4 sm:gap-3 sm:px-7">
-          <Link to="/" aria-label="Chipet" className="flex shrink-0 items-center gap-2.5 font-display text-[20px] font-bold text-ink no-underline">
+        <div className="mx-auto flex h-14 min-w-0 max-w-[1180px] items-center gap-1.5 px-3 sm:h-16 sm:gap-3 sm:px-7">
+          <Link to="/" aria-label="Chipet" className="flex shrink-0 items-center gap-2 font-display text-[20px] font-bold text-ink no-underline">
             <Logo className="size-7 sm:size-[34px]" /><span className="hidden sm:inline">Chipet</span>
             <span className="hidden rounded-full bg-si/10 px-2 py-0.5 font-sans text-[11px] font-medium text-si-dim xl:inline">{t('芯宠', 'chip pets')}</span>
           </Link>
           {/* 桌面端导航在页头；手机上五个入口放到底部标签栏 */}
-          <nav className="hidden gap-0.5 rounded-full bg-panel-2/70 p-1 md:flex">
+          <nav className="hidden min-w-0 gap-0.5 rounded-full bg-panel-2/70 p-1 md:flex">
             {NAV.map(({ to, key, label, icon: I }) => (
               <Link key={key} to={to} title={txt(label)} aria-label={txt(label)} className={cn(
                 'flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-sm whitespace-nowrap no-underline transition-colors xl:px-3',
@@ -219,46 +231,48 @@ export function Shell({ children }: { children: ReactNode }) {
               </Link>
             ))}
           </nav>
-          <div className="flex-1" />
-          <Link
-            to="/guide"
-            title={t('玩法手册', 'Playbook')}
-            aria-label={t('玩法手册', 'Playbook')}
-            aria-current={here === 'guide' ? 'page' : undefined}
-            className={cn(
-              'grid size-9 shrink-0 place-items-center rounded-full border transition-colors',
-              here === 'guide' ? 'border-si bg-si/10 text-si' : 'border-line bg-panel text-mute hover:border-si hover:text-ink',
-            )}
-          >
-            <BookMarked className="size-4" />
-          </Link>
-          <Link
-            to="/shop"
-            title={t('BEM 商店', 'BEM Shop')}
-            aria-label={t('BEM 商店', 'BEM Shop')}
-            aria-current={here === 'shop' ? 'page' : undefined}
-            className={cn(
-              'flex h-9 shrink-0 items-center gap-1.5 rounded-full border px-2.5 font-mono text-xs transition-colors',
-              here === 'shop' ? 'border-copper bg-copper/10 text-copper' : 'border-line bg-panel text-mute hover:border-copper hover:text-ink',
-            )}
-          >
-            <Coins className="size-3.5" />
-            <span className="tabular-nums">{bem.demoBal()}</span>
-            <span className="hidden sm:inline">BEM</span>
-          </Link>
-          <NetworkSwitch />
-          <LangSwitch />
-          <WalletButton />
+          <div className="min-w-0 flex-1" />
+          <div className="flex min-w-0 shrink items-center gap-0.5 sm:gap-2">
+            <Link
+              to="/guide"
+              title={t('玩法手册', 'Playbook')}
+              aria-label={t('玩法手册', 'Playbook')}
+              aria-current={here === 'guide' ? 'page' : undefined}
+              className={cn(
+                'grid size-8 shrink-0 place-items-center rounded-full border transition-colors sm:size-9',
+                here === 'guide' ? 'border-si bg-si/10 text-si' : 'border-line bg-panel text-mute hover:border-si hover:text-ink',
+              )}
+            >
+              <BookMarked className="size-4" />
+            </Link>
+            <Link
+              to="/shop"
+              title={t('BEM 商店', 'BEM Shop')}
+              aria-label={t('BEM 商店', 'BEM Shop')}
+              aria-current={here === 'shop' ? 'page' : undefined}
+              className={cn(
+                'flex h-8 max-w-[4.5rem] shrink items-center gap-1 rounded-full border px-1.5 font-mono text-[11px] transition-colors sm:h-9 sm:max-w-none sm:gap-1.5 sm:px-2.5 sm:text-xs',
+                here === 'shop' ? 'border-copper bg-copper/10 text-copper' : 'border-line bg-panel text-mute hover:border-copper hover:text-ink',
+              )}
+            >
+              <Coins className="size-3.5 shrink-0" />
+              <span className="truncate tabular-nums">{bem.demoBal()}</span>
+              <span className="hidden sm:inline">BEM</span>
+            </Link>
+            <NetworkSwitch />
+            <LangSwitch />
+            <WalletButton />
+          </div>
         </div>
       </header>
 
       {here === 'lab' ? (
-        <div className="mx-auto grid w-full max-w-[1180px] flex-1 grid-cols-1 items-start gap-5 px-4 pt-4 sm:px-7 lg:grid-cols-[200px_minmax(0,1fr)] lg:gap-6 lg:pt-6">
+        <div className="mx-auto grid w-full min-w-0 max-w-[1180px] flex-1 grid-cols-1 items-start gap-5 overflow-x-clip px-3 pt-4 sm:px-7 lg:grid-cols-[200px_minmax(0,1fr)] lg:gap-6 lg:pt-6">
           <LabNav sub={r.parts[1] ?? ''} />
-          <main className="min-w-0">{children}</main>
+          <main className="min-w-0 overflow-x-clip">{children}</main>
         </div>
       ) : (
-        <main className="flex-1">{children}</main>
+        <main className="min-w-0 w-full flex-1 overflow-x-clip">{children}</main>
       )}
 
       <nav aria-label={t('主导航', 'Main')} className="fixed inset-x-0 bottom-0 z-20 flex border-t border-line/70 bg-panel/90 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl md:hidden">

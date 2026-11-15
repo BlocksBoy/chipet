@@ -72,14 +72,14 @@ export function Studio() {
   ];
 
   return (
-    <div className="w-full pb-16">
-      <div className="flex flex-wrap items-center gap-3.5 pt-6">
-        <h2 className="flex items-center gap-2.5 text-[26px]"><Microchip className="size-6 text-copper" />{tr('设计器', 'Studio')}</h2>
+    <div className="min-w-0 w-full overflow-x-clip pb-16">
+      <div className="flex min-w-0 flex-wrap items-center gap-3 pt-6">
+        <h2 className="flex min-w-0 items-center gap-2.5 text-[22px] sm:text-[26px]"><Microchip className="size-6 shrink-0 text-copper" />{tr('设计器', 'Studio')}</h2>
         {bounty
-          ? <Link to={`/lab/bounty/${bounty.id}`} className="no-underline"><Tag tone="si" icon={Target}>{tr(`正在为擂台 #${bounty.id}「${bounty.meta.title}」设计`, `Designing for bounty #${bounty.id} "${bounty.meta.title}"`)}</Tag></Link>
-          : <span className="text-[13px] text-mute">{tr('写 TapeHDL，实时编译成 NAND 网表；所有计算都在你的浏览器里完成。', 'Write TapeHDL and it compiles to a NAND netlist as you type. Everything runs in your browser.')}</span>}
-        <div className="flex-1" />
-        <Select aria-label={tr('载入示例', 'Load an example')} icon={FileCode2} className="w-64" value="" onChange={(e) => e.target.value && setSrc(TEMPLATES[e.target.value as keyof typeof TEMPLATES].src)}>
+          ? <Link to={`/lab/bounty/${bounty.id}`} className="min-w-0 no-underline"><Tag tone="si" icon={Target}>{tr(`正在为擂台 #${bounty.id}「${bounty.meta.title}」设计`, `Designing for bounty #${bounty.id} "${bounty.meta.title}"`)}</Tag></Link>
+          : <span className="min-w-0 text-[13px] text-pretty text-mute">{tr('写 TapeHDL，实时编译成 NAND 网表；所有计算都在你的浏览器里完成。', 'Write TapeHDL and it compiles to a NAND netlist as you type. Everything runs in your browser.')}</span>}
+        <div className="hidden flex-1 sm:block" />
+        <Select aria-label={tr('载入示例', 'Load an example')} icon={FileCode2} className="w-full max-w-full sm:w-64" value="" onChange={(e) => e.target.value && setSrc(TEMPLATES[e.target.value as keyof typeof TEMPLATES].src)}>
           <option value="">{tr('载入示例…', 'Load an example…')}</option>
           {Object.entries(TEMPLATES).map(([k, v]) => <option key={k} value={k}>{v.title}</option>)}
         </Select>
@@ -108,7 +108,7 @@ export function Studio() {
                 { icon: Clock, label: tr('寄存器', 'Registers'), value: built.circuit.nState, tone: 'text-si' },
                 { icon: Gauge, label: tr('关键路径', 'Critical path'), value: depth, tone: 'text-ink' },
               ] as const).map(({ icon: I, label, value, tone }) => (
-                <div key={label} className="flex min-w-[7.5rem] flex-1 items-center gap-3 rounded-2xl bg-panel px-3.5 py-3 ring-1 ring-line/70 sm:rounded-none sm:bg-transparent sm:px-5 sm:py-1 sm:ring-0">
+                <div key={label} className="flex min-w-0 basis-[calc(50%-0.375rem)] flex-1 items-center gap-3 rounded-2xl bg-panel px-3.5 py-3 ring-1 ring-line/70 sm:basis-0 sm:rounded-none sm:bg-transparent sm:px-5 sm:py-1 sm:ring-0">
                   <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-panel-2 text-mute"><I className="size-4" /></span>
                   <div className="min-w-0">
                     <dd className={cn('m-0 font-display text-2xl leading-none font-bold tabular-nums', tone)}>{value}</dd>

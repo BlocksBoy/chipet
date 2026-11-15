@@ -16,6 +16,8 @@ export default defineConfig(({ mode }) => ({
   server: {
     port: 5288,
     proxy: { '/api': 'http://localhost:8787' },
+    watch: { ignored: ['**/dist/**', '**/dist-deweb/**'] },
+    fs: { deny: ['**/dist-deweb/**'] },
   },
   build: { target: 'es2022', chunkSizeWarningLimit: 1500 },
 }));

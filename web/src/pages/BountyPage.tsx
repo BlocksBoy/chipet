@@ -52,24 +52,24 @@ export function BountyPage({ id }: { id: number }) {
   const pinText = b.meta.inputs && `${b.meta.inputs.map((p) => p.name + (p.width > 1 ? `[${p.width}]` : '')).join(', ')} → ${b.meta.outputs?.map((p) => p.name + (p.width > 1 ? `[${p.width}]` : '')).join(', ')}`;
 
   return (
-    <div className="w-full pb-16">
-      <div className="grid grid-cols-1 gap-5 pt-6 pb-16 lg:grid-cols-[minmax(0,1fr)_360px]">
-        <div className="flex flex-col gap-5">
-          <div>
-            <div className="flex items-center gap-2.5">
+    <div className="min-w-0 w-full overflow-x-clip pb-16">
+      <div className="grid min-w-0 grid-cols-1 gap-5 pt-6 pb-16 lg:grid-cols-[minmax(0,1fr)_minmax(0,360px)]">
+        <div className="flex min-w-0 flex-col gap-5">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2.5">
               <Link to="/lab" className="flex items-center gap-1 font-mono text-xs text-mute no-underline hover:text-ink"><ArrowLeft className="size-3.5" />{tr('擂台', 'Arena')}</Link>
               <ChevronRight className="size-3.5 text-faint" />
               <PhaseTag phase={phase} />
               <span className="font-mono text-xs text-faint">#{b.id}</span>
             </div>
-            <h1 className="mt-3 mb-1.5 text-[40px] leading-tight">{b.meta.title}</h1>
+            <h1 className="mt-3 mb-1.5 text-[clamp(26px,8vw,40px)] leading-tight break-words">{b.meta.title}</h1>
             {b.meta.description && <p className="m-0 max-w-[720px] text-pretty text-mute">{b.meta.description}</p>}
-            <ol className="mt-5 grid grid-cols-4 gap-2">
+            <ol className="mt-5 grid grid-cols-2 gap-x-3 gap-y-3 sm:grid-cols-4 sm:gap-2">
               {stages.map((st, k) => {
                 const I = STAGE_ICON[st];
                 return (
-                  <li key={st} className={cn('border-t-2 pt-2 font-mono text-[11px]', k === at ? 'border-copper text-ink' : k < at ? 'border-copper-dim text-mute' : 'border-line-2 text-faint')}>
-                    <span className="flex items-center gap-1.5"><I className={cn('size-3.5', k === at && 'text-copper')} />{phaseText(st)}</span>
+                  <li key={st} className={cn('min-w-0 border-t-2 pt-2 font-mono text-[11px]', k === at ? 'border-copper text-ink' : k < at ? 'border-copper-dim text-mute' : 'border-line-2 text-faint')}>
+                    <span className="flex items-center gap-1.5"><I className={cn('size-3.5 shrink-0', k === at && 'text-copper')} /><span className="truncate">{phaseText(st)}</span></span>
                     {st === 'open' && <span className="mt-0.5 block text-faint">{left(b.deadline)}</span>}
                     {st === 'challenge' && <span className="mt-0.5 block text-faint">{left(b.challengeEnd)}</span>}
                   </li>

@@ -48,14 +48,18 @@
 
 @layer base {
   :root { color-scheme: light; }
-  html, body { @apply bg-substrate font-sans text-[15px] leading-relaxed text-ink antialiased; }
+  html { @apply overflow-x-clip; }
+  html, body { @apply max-w-[100%] overflow-x-clip bg-substrate font-sans text-[15px] leading-relaxed text-ink antialiased; }
+  img, video, canvas { max-width: 100%; height: auto; }
   body {
+    @apply overflow-x-clip;
     background-image:
       radial-gradient(ellipse 80% 50% at 10% -10%, rgb(42 157 143 / 0.14), transparent 55%),
       radial-gradient(ellipse 70% 45% at 90% 0%, rgb(224 122 69 / 0.12), transparent 50%),
       radial-gradient(ellipse 60% 40% at 50% 100%, rgb(42 157 143 / 0.08), transparent 55%);
     background-attachment: fixed;
   }
+  #root { @apply min-w-0 max-w-[100%] overflow-x-clip; }
   h1, h2, h3 { @apply font-display font-bold text-balance tracking-normal; }
   code { @apply rounded-md bg-panel-2 px-1.5 py-0.5 font-mono text-[0.9em] text-si-dim; }
   a { @apply text-si-dim; }
@@ -535,7 +539,7 @@
   .table-t td { @apply border-b border-line/60 px-3 py-2.5 align-middle; }
   .table-t tbody tr { @apply transition-colors hover:bg-panel-2/60; }
 
-  .editor { @apply relative grid max-h-[70vh] min-h-[460px] grid-cols-[44px_1fr] overflow-auto rounded-xl bg-[#0f1613] font-mono text-[13.5px] leading-[1.65] text-[#ebe6d9]; }
+  .editor { @apply relative grid max-h-[70vh] min-h-[320px] grid-cols-[44px_minmax(0,1fr)] overflow-auto rounded-xl bg-[#0f1613] font-mono text-[13.5px] leading-[1.65] text-[#ebe6d9] sm:min-h-[460px]; }
   .editor .gutter { @apply border-r border-[#2f4034] py-3 pr-2 text-right text-[#59625a] select-none; }
   .editor .gutter .err { @apply bg-danger/15 text-danger; }
   .editor textarea { @apply min-h-full resize-none overflow-hidden border-0 bg-transparent px-3.5 py-3 whitespace-pre text-[#ebe6d9] caret-copper outline-none; tab-size: 2; font: inherit; }

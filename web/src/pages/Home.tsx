@@ -201,14 +201,14 @@ export function Home() {
 
   return (
     <div className={cn(PAGE, 'py-8 sm:py-10')}>
-      <section className="relative overflow-hidden rounded-[2rem] border border-line/80 bg-panel px-6 py-12 shadow-sm shadow-si/5 sm:px-12 sm:py-14">
+      <section className="relative overflow-hidden rounded-[2rem] border border-line/80 bg-panel px-4 py-10 shadow-sm shadow-si/5 sm:px-12 sm:py-14">
         <div className="pointer-events-none absolute -top-24 right-0 size-72 rounded-full bg-[#f7d6df]/80 blur-3xl" />
         <div className="pointer-events-none absolute -bottom-28 left-10 size-64 rounded-full bg-si/10 blur-3xl" />
 
         <div className="relative grid grid-cols-1 items-center gap-10 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
           <div>
             <Tag tone="si" icon={Egg}>{t('Chipet · 芯宠', 'Chipet · chip pets')}</Tag>
-            <h1 className="mt-5 max-w-xl text-4xl leading-[1.15] text-ink sm:text-5xl">
+            <h1 className="mt-5 max-w-xl text-[2rem] leading-[1.15] text-ink sm:text-5xl">
               {t('敲开彩蛋', 'Crack the egg,')}<br />
               <span className="text-si">{t('遇见你的芯喵', 'meet your chip kitty')}</span>
             </h1>
@@ -237,21 +237,23 @@ export function Home() {
 
             <div className="mt-8 max-w-md">
               <span className="mb-1.5 block font-mono text-xs text-mute">{t('给它起名', 'Name it')}</span>
-              <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-                <Input id={NAME_INPUT_ID} className="min-w-0 flex-1 basis-40" value={name} maxLength={32} placeholder={t('例如：青豆', 'e.g. Mochi')}
+              <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
+                <Input id={NAME_INPUT_ID} className="min-w-0 w-full sm:flex-1 sm:basis-40" value={name} maxLength={32} placeholder={t('例如：青豆', 'e.g. Mochi')}
                   onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && void hatch()} />
-                <Button icon={Sparkles} disabled={!name.trim()} onClick={() => void hatch()}>{t('免费敲蛋', 'Free hatch')}</Button>
-                <Button
-                  variant="ghost"
-                  icon={Coins}
-                  disabled={!name.trim()}
-                  onClick={() => void hatch(true)}
-                  title={t(`限定彩蛋 · ${BEM_SKUS.egg_fancy.price} BEM（保底珍奇）`, `Premium egg · ${BEM_SKUS.egg_fancy.price} BEM (guaranteed Fancy)`)}
-                >
-                  {bem.eggCredits() > 0
-                    ? t(`限定彩蛋 ×${bem.eggCredits()}`, `Premium ×${bem.eggCredits()}`)
-                    : t(`限定 · ${BEM_SKUS.egg_fancy.price} BEM`, `Premium · ${BEM_SKUS.egg_fancy.price} BEM`)}
-                </Button>
+                <div className="flex min-w-0 flex-wrap gap-2">
+                  <Button icon={Sparkles} disabled={!name.trim()} onClick={() => void hatch()}>{t('免费敲蛋', 'Free hatch')}</Button>
+                  <Button
+                    variant="ghost"
+                    icon={Coins}
+                    disabled={!name.trim()}
+                    onClick={() => void hatch(true)}
+                    title={t(`限定彩蛋 · ${BEM_SKUS.egg_fancy.price} BEM（保底珍奇）`, `Premium egg · ${BEM_SKUS.egg_fancy.price} BEM (guaranteed Fancy)`)}
+                  >
+                    {bem.eggCredits() > 0
+                      ? t(`限定彩蛋 ×${bem.eggCredits()}`, `Premium ×${bem.eggCredits()}`)
+                      : t(`限定 · ${BEM_SKUS.egg_fancy.price} BEM`, `Premium · ${BEM_SKUS.egg_fancy.price} BEM`)}
+                  </Button>
+                </div>
               </div>
               <p className="mt-2 text-[11px] text-faint">
                 {t('普通孵化永远免费。限定彩蛋保底珍奇，可在商店预购。', 'Normal hatch stays free. Premium eggs guarantee Fancy and can be pre-bought in the Shop.')}
@@ -260,7 +262,7 @@ export function Home() {
           </div>
 
           <SceneStage
-            className="max-w-[360px] sm:max-w-[380px]"
+            className="mx-auto w-full max-w-[min(100%,360px)] sm:max-w-[380px]"
             bg={showKitty && ph ? ph.bg : undefined}
             hint={hint}
           >

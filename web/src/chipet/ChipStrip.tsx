@@ -31,17 +31,17 @@ export function ChipStrip({ who, chip, gates, inBits, outBits, power, className 
   className?: string;
 }) {
   return (
-    <div className={cn('chip-strip flex flex-wrap items-center gap-x-2.5 gap-y-1.5 rounded-2xl bg-[#14231f] px-3.5 py-2.5 font-mono text-[11px] text-[#b9d4c7]', className)}>
-      <span className="max-w-24 truncate font-sans text-xs font-semibold text-white">{who}</span>
+    <div className={cn('chip-strip flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1.5 rounded-2xl bg-[#14231f] px-3 py-2.5 font-mono text-[11px] text-[#b9d4c7] sm:px-3.5', className)}>
+      <span className="max-w-20 truncate font-sans text-xs font-semibold text-white sm:max-w-24">{who}</span>
       <span className="flex items-center gap-[3px]" aria-label={tr(`输入 ${inBits.join('')}`, `inputs ${inBits.join('')}`)}>
         {inBits.map((b, i) => (
           <i key={i} className={cn('block size-2 rounded-[2px]', b ? 'bg-copper shadow-[0_0_6px_rgb(240_139_85/0.8)]' : 'bg-[#2c4039]')} />
         ))}
       </span>
-      <ArrowRight className="size-3 text-[#5f7d72]" />
-      <span className="flex items-center gap-1 rounded-md bg-[#20362f] px-1.5 py-0.5 text-[#e8f3ee] ring-1 ring-copper/50">
-        <Cpu className="size-3 text-copper-hi" />
-        {chip} · {gates} {tr('门', 'gates')}
+      <ArrowRight className="size-3 shrink-0 text-[#5f7d72]" />
+      <span className="flex min-w-0 max-w-full items-center gap-1 truncate rounded-md bg-[#20362f] px-1.5 py-0.5 text-[#e8f3ee] ring-1 ring-copper/50">
+        <Cpu className="size-3 shrink-0 text-copper-hi" />
+        <span className="truncate">{chip} · {gates} {tr('门', 'gates')}</span>
       </span>
       <ArrowRight className="size-3 text-[#5f7d72]" />
       <span className="flex items-center gap-1" aria-label={tr(`输出 ${outBits.join('')}`, `outputs ${outBits.join('')}`)}>

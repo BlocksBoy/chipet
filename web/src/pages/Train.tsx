@@ -536,7 +536,7 @@ export function Train() {
         : end.result === 'lose' ? { text: t('落败', 'DEFEAT'), color: '#7a8b84' }
           : { text: t('平手', 'DRAW'), color: '#2aa6b8' };
     return (
-      <div className={cn(PAGE, 'max-w-[920px] py-6 sm:py-8')}>
+      <div className={cn(PAGE, 'max-w-[920px] overflow-x-clip py-6 sm:py-8')}>
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <Tag tone="copper" icon={Swords}>{end ? t('对战结束', 'Battle over') : t(`第 ${fight.round} 回合`, `Round ${fight.round}`)}</Tag>
@@ -650,9 +650,9 @@ export function Train() {
                       )}
                     >
                       <span className={cn('grid size-10 place-items-center rounded-2xl transition', picked ? 'bg-copper text-white' : 'bg-copper/10 text-copper group-hover:bg-copper group-hover:text-white')}><I className="size-5" /></span>
-                      <span className="font-display text-base font-bold text-ink">{m.name}</span>
+                      <span className="max-w-full truncate font-display text-sm font-bold text-ink sm:text-base">{m.name}</span>
                       <PowerPips power={p} className="text-mute" />
-                      <span className="text-[11px] text-faint">{m.tip}</span>
+                      <span className="line-clamp-2 text-center text-[10px] text-faint sm:text-[11px]">{m.tip}</span>
                     </motion.button>
                   );
                 })}
