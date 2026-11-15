@@ -240,23 +240,10 @@ export function Home() {
               <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
                 <Input id={NAME_INPUT_ID} className="min-w-0 w-full sm:flex-1 sm:basis-40" value={name} maxLength={32} placeholder={t('例如：青豆', 'e.g. Mochi')}
                   onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && void hatch()} />
-                <div className="flex min-w-0 flex-wrap gap-2">
-                  <Button icon={Sparkles} disabled={!name.trim()} onClick={() => void hatch()}>{t('免费敲蛋', 'Free hatch')}</Button>
-                  <Button
-                    variant="ghost"
-                    icon={Coins}
-                    disabled={!name.trim()}
-                    onClick={() => void hatch(true)}
-                    title={t(`限定彩蛋 · ${BEM_SKUS.egg_fancy.price} BEM（保底珍奇）`, `Premium egg · ${BEM_SKUS.egg_fancy.price} BEM (guaranteed Fancy)`)}
-                  >
-                    {bem.eggCredits() > 0
-                      ? t(`限定彩蛋 ×${bem.eggCredits()}`, `Premium ×${bem.eggCredits()}`)
-                      : t(`限定 · ${BEM_SKUS.egg_fancy.price} BEM`, `Premium · ${BEM_SKUS.egg_fancy.price} BEM`)}
-                  </Button>
-                </div>
+                <Button icon={Sparkles} disabled={!name.trim()} onClick={() => void hatch()}>{t('免费敲蛋', 'Free hatch')}</Button>
               </div>
               <p className="mt-2 text-[11px] text-faint">
-                {t('普通孵化永远免费。限定彩蛋保底珍奇，可在商店预购。', 'Normal hatch stays free. Premium eggs guarantee Fancy and can be pre-bought in the Shop.')}
+                {t('孵化永远免费。想要保底珍奇，可去商店买限定彩蛋。', 'Hatching stays free. For a guaranteed Fancy, buy a premium egg in the Shop.')}
               </p>
             </div>
           </div>

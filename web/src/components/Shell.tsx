@@ -300,23 +300,25 @@ export function Shell({ children }: { children: ReactNode }) {
               ))}
             </div>
           </div>
-          <div>
-            <div className="font-mono text-[11px] text-faint">{t('玩法', 'Play')}</div>
-            <ul className="mt-3 space-y-2 text-sm">
-              {NAV.map(({ to, key, label }) => (
-                <li key={key}><Link to={to} className="text-mute no-underline transition-colors hover:text-ink">{txt(label)}</Link></li>
-              ))}
-            </ul>
-          </div>
-          <div>
-            <div className="font-mono text-[11px] text-faint">{t('资源', 'Resources')}</div>
-            <ul className="mt-3 space-y-2 text-sm">
-              <li><Link to="/guide" className="inline-flex items-center gap-1.5 text-mute no-underline transition-colors hover:text-ink"><BookMarked className="size-3.5" />{t('玩法手册', 'Playbook')}</Link></li>
-              <li><Link to="/shop" className="inline-flex items-center gap-1.5 text-mute no-underline transition-colors hover:text-ink"><Coins className="size-3.5" />{t('BEM 商店', 'BEM Shop')}</Link></li>
-              <li><a href={t('https://web3.okx.com/zh-hans/xlayer/build-x-series', 'https://web3.okx.com/xlayer/build-x-series')} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-mute no-underline transition-colors hover:text-ink">X Layer TapeOut<ExternalLink className="size-3.5" /></a></li>
-              <li><a href="https://github.com/TapeOutProtocol/TapeKit" target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-mute no-underline transition-colors hover:text-ink"><Code2 className="size-3.5" />TapeKit</a></li>
-              <li><Link to="/lab/studio" className="inline-flex items-center gap-1.5 text-mute no-underline transition-colors hover:text-ink"><PenTool className="size-3.5" />{t('电路设计器', 'Circuit Studio')}</Link></li>
-            </ul>
+          <div className="grid grid-cols-2 gap-6 md:contents">
+            <div className="min-w-0">
+              <div className="font-mono text-[11px] text-faint">{t('玩法', 'Play')}</div>
+              <ul className="mt-3 space-y-2 text-sm">
+                {NAV.map(({ to, key, label }) => (
+                  <li key={key}><Link to={to} className="text-mute no-underline transition-colors hover:text-ink">{txt(label)}</Link></li>
+                ))}
+              </ul>
+            </div>
+            <div className="min-w-0">
+              <div className="font-mono text-[11px] text-faint">{t('资源', 'Resources')}</div>
+              <ul className="mt-3 space-y-2 text-sm">
+                <li><Link to="/guide" className="inline-flex items-center gap-1.5 text-mute no-underline transition-colors hover:text-ink"><BookMarked className="size-3.5 shrink-0" />{t('玩法手册', 'Playbook')}</Link></li>
+                <li><Link to="/shop" className="inline-flex items-center gap-1.5 text-mute no-underline transition-colors hover:text-ink"><Coins className="size-3.5 shrink-0" />{t('BEM 商店', 'BEM Shop')}</Link></li>
+                <li><a href={t('https://web3.okx.com/zh-hans/xlayer/build-x-series', 'https://web3.okx.com/xlayer/build-x-series')} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-mute no-underline transition-colors hover:text-ink">X Layer TapeOut<ExternalLink className="size-3.5 shrink-0" /></a></li>
+                <li><a href="https://github.com/TapeOutProtocol/TapeKit" target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-mute no-underline transition-colors hover:text-ink"><Code2 className="size-3.5 shrink-0" />TapeKit</a></li>
+                <li><Link to="/lab/studio" className="inline-flex items-center gap-1.5 text-mute no-underline transition-colors hover:text-ink"><PenTool className="size-3.5 shrink-0" />{t('电路设计器', 'Circuit Studio')}</Link></li>
+              </ul>
+            </div>
           </div>
         </div>
         <div className="border-t border-line/60">
