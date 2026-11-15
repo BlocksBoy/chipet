@@ -269,6 +269,25 @@ export function KittyEgg({
         </>
       )}
 
+      {/* 每次敲击挥下一记锤子，key 换新以重播动画 */}
+      {idle && taps > 0 && (
+        <svg key={taps} className="egg-hammer" viewBox="0 0 96 96" aria-hidden>
+          <g className="egg-hammer-swing">
+            <g transform="translate(58 22) rotate(-18)">
+              <rect x="-5" y="14" width="10" height="48" rx="4" fill="#c48a52" stroke={O} strokeWidth="3.2" strokeLinejoin="round" />
+              <rect x="-3.2" y="18" width="3" height="40" rx="1.5" fill="#e8c08a" opacity=".7" />
+              <rect x="-18" y="-2" width="36" height="22" rx="6" fill="#8b6a4a" stroke={O} strokeWidth="3.2" strokeLinejoin="round" />
+              <rect x="-14" y="1" width="28" height="8" rx="3" fill="#d4b08a" opacity=".55" />
+              <circle cx="0" cy="62" r="4.5" fill="#5a3a2e" />
+            </g>
+          </g>
+          <g className="egg-hammer-spark">
+            <path d="M28 58 l4 -10 M34 52 l10 -2 M32 56 l8 6" fill="none" stroke="#ffd24d" strokeWidth="3" strokeLinecap="round" />
+            <circle cx="30" cy="54" r="2.2" fill="#fff" />
+          </g>
+        </svg>
+      )}
+
       <div className="egg-slot">{children}</div>
 
       {phase === 'open' && (

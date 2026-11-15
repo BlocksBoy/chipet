@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { formatUnits } from 'viem';
-import { transferErc20 } from '@tapearena/chain';
+import { CHAIN_LABEL, transferErc20 } from '@tapearena/chain';
 import {
   Cable, Coins, Egg, Fish, History, Sparkles, Zap,
 } from 'lucide-react';
@@ -9,7 +9,7 @@ import { Link, go } from '../router.tsx';
 import { useApp } from '../state.tsx';
 import { txt, useT } from '../i18n.ts';
 import {
-  BEM_DECIMALS, BEM_SKUS, BEM_SKU_LIST, BOND_SLOTS_MAX, FAUCET_AMOUNT,
+  BEM_SKUS, BEM_SKU_LIST, BOND_SLOTS_MAX, FAUCET_AMOUNT,
   bem, bemAmount, type BemSku,
 } from '../chipet/bem.ts';
 import { localChipet } from '../chipet/store.ts';
@@ -31,15 +31,16 @@ export function Shop() {
 
   const st = useMemo(() => bem.state(), [tick, refreshKey]);
   const pets = useMemo(() => localChipet.list(), [tick, refreshKey]);
-  const onX = chainId === 196;
-  const useChainPay = onX && !!account;
+  const bemNet = bem.forChain(chainId);
+  const chainLabel = CHAIN_LABEL[chainId] ?? String(chainId);
+  const useChainPay = !!bemNet && !!account;
 
   useEffect(() => {
-    if (!account || !onX) { setChainBal(null); return; }
+    if (!account || !bemNet) { setChainBal(null); return; }
     let live = true;
-    bem.readBalance(pub, account).then((b) => { if (live) setChainBal(b); }).catch(() => { if (live) setChainBal(null); });
+    bem.readBalance(pub, account, chainId).then((b) => { if (live) setChainBal(b); }).catch(() => { if (live) setChainBal(null); });
     return () => { live = false; };
-  }, [account, onX, pub, refreshKey, tick]);
+  }, [account, bemNet, chainId, pub, refreshKey, tick]);
 
   const bump = () => setTick((n) => n + 1);
 
@@ -79,16 +80,16 @@ export function Shop() {
     }
     setBusy(sku);
     try {
-      if (useChainPay) {
+      if (useChainPay && bemNet) {
         const bal = chainBal ?? 0n;
-        const need = bemAmount(info.price);
+        const need = bemAmount(info.price, bemNet.decimals);
         if (bal < need) {
           notify('err', t('链上 BEM 不足，可先切本地 fork 用演示余额', 'Not enough on-chain BEM. Switch to the local fork to use demo balance'));
           return;
         }
         const ok = await run(t(`支付 ${info.price} BEM`, `Pay ${info.price} BEM`), async (step) => {
           const s = await signer();
-          await transferErc20(s, bem.token, bem.treasury, need, step);
+          await transferErc20(s, bemNet.token, bemNet.treasury, need, step);
           bem.recordChainSpend(sku);
           applySku(sku);
           return true;
@@ -146,23 +147,35 @@ export function Shop() {
             <Button size="sm" icon={Sparkles} disabled={busy !== null || !bem.canFaucet()} onClick={claimFaucet}>
               {bem.canFaucet() ? t(`领取 ${FAUCET_AMOUNT} 演示 BEM`, `Claim ${FAUCET_AMOUNT} demo BEM`) : t('今日已领', 'Claimed today')}
             </Button>
-            {!account && onX && (
+            {!account && bemNet && (
               <Button size="sm" variant="ghost" onClick={connect}>{t('连接钱包看链上余额', 'Connect to see on-chain balance')}</Button>
             )}
           </div>
         </Panel>
         <Panel className="p-5">
-          <div className="font-mono text-[11px] text-faint">{t('X Layer 链上 BEM', 'X Layer on-chain BEM')}</div>
+          <div className="font-mono text-[11px] text-faint">
+            {bemNet
+              ? t(`${chainLabel} 链上 BEM`, `${chainLabel} on-chain BEM`)
+              : t('链上 BEM', 'On-chain BEM')}
+          </div>
           <div className="mt-1 flex items-end gap-2">
             <span className="font-display text-3xl font-bold tabular-nums text-ink">
-              {!onX ? '—' : !account ? '—' : chainBal === null ? '…' : Number(formatUnits(chainBal, BEM_DECIMALS)).toLocaleString(undefined, { maximumFractionDigits: 2 })}
+              {!bemNet
+                ? '—'
+                : !account
+                  ? '—'
+                  : chainBal === null
+                    ? '…'
+                    : Number(formatUnits(chainBal, bemNet.decimals)).toLocaleString(undefined, { maximumFractionDigits: 2 })}
             </span>
             <span className="mb-1 font-mono text-sm text-mute">BEM</span>
           </div>
           <p className="mt-2 text-xs text-mute">
             {useChainPay
-              ? t('当前购买会从钱包转账真实 BEM。', 'Purchases will transfer real BEM from your wallet.')
-              : t('切到 X Layer 并连接钱包后，可用真实 BEM 支付。', 'Switch to X Layer and connect a wallet to pay with real BEM.')}
+              ? t(`当前购买会从钱包转账 ${chainLabel} 上的真实 BEM。`, `Purchases will transfer real BEM on ${chainLabel} from your wallet.`)
+              : bemNet
+                ? t(`在 ${chainLabel} 连接钱包后，可用真实 BEM 支付。`, `Connect a wallet on ${chainLabel} to pay with real BEM.`)
+                : t('切到 X Layer 或 BSC 并连接钱包后，可用真实 BEM 支付。', 'Switch to X Layer or BSC and connect a wallet to pay with real BEM.')}
           </p>
           <div className="mt-4 flex flex-wrap gap-2">
             <Tag tone="si">{t('线友位', 'Bond slots')} {st.bondSlots}/{BOND_SLOTS_MAX}</Tag>

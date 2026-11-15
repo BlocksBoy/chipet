@@ -382,7 +382,7 @@ export function Guide() {
                 {t(`演示余额：本地 fork / 未连钱包时可每日领取 ${FAUCET_AMOUNT} 演示 BEM。`, `Demo balance: on the local fork or without a wallet, claim ${FAUCET_AMOUNT} demo BEM once per day.`)}
               </Bullet>
               <Bullet>
-                {t('X Layer 连上钱包后，商店会读真实 BEM 余额，购买优先走链上转账。', 'On X Layer with a wallet connected, the Shop reads real BEM and prefers on-chain transfers.')}
+                {t('切到 X Layer 或 BSC 并连上钱包后，商店会读该链真实 BEM 余额，购买优先走链上转账。', 'On X Layer or BSC with a wallet connected, the Shop reads that chain’s real BEM and prefers on-chain transfers.')}
               </Bullet>
               <Bullet>
                 {t('不对战门票、不强制连钱包才能养成。', 'No battle tickets, and raising never requires a wallet.')}

@@ -1,19 +1,19 @@
 /**
  * Chipet 的 BEM 经济：免费闭环之外，用 BEM 买「更快 / 更稀有 / 多一个坑」。
- * 本地演示走 localStorage 余额；X Layer 连钱包后可读真实余额并 transfer 支付。
+ * 本地演示走 localStorage；切到 X Layer / BSC 并连钱包后读该链真实余额并 transfer 支付。
  */
 import { parseUnits, type Address, type PublicClient } from 'viem';
-import { erc20Abi, XLAYER_BEM } from '@tapearena/chain';
+import { bemNetwork, BEM_DECIMALS as CHAIN_BEM_DECIMALS, erc20Abi, XLAYER_BEM } from '@tapearena/chain';
 import { both, tr, txt, type Txt } from '../i18n.ts';
 
 const KEY = 'chipet.bem.v1';
-/** 演示/链上标价共用；单位是整枚 BEM（链上按 18 位小数转） */
-export const BEM_DECIMALS = 18;
+/** 演示/链上标价共用；单位是整枚 BEM（链上 X Layer / BSC 均为 8 位小数） */
+export const BEM_DECIMALS = CHAIN_BEM_DECIMALS;
 export const BOND_SLOTS_DEFAULT = 3;
 export const BOND_SLOTS_MAX = 5;
 export const FAUCET_AMOUNT = 20;
-/** 商店收款：暂用 X Layer TapeOut 工厂地址作金库，后续可换成 Chipet treasury */
-export const BEM_SHOP_TREASURY = '0x1f09daefa827f02cbb40967cc91b259763760761' as Address;
+/** @deprecated 用 bem.forChain(chainId)；保留默认指向 X Layer 以免旧引用炸 */
+export const BEM_SHOP_TREASURY = bemNetwork(196)!.treasury;
 export const BEM_TOKEN = XLAYER_BEM;
 
 export type BemSku = 'egg_fancy' | 'energy' | 'fish5' | 'bond_slot';
@@ -95,14 +95,19 @@ function save(s: BemState) {
   localStorage.setItem(KEY, JSON.stringify({ ...s, log: s.log.slice(0, 40) }));
 }
 
-export function bemAmount(units: number): bigint {
-  return parseUnits(String(units), BEM_DECIMALS);
+export function bemAmount(units: number, decimals = BEM_DECIMALS): bigint {
+  return parseUnits(String(units), decimals);
 }
 
 export const bem = {
+  /** 默认 X Layer（兼容旧调用） */
   token: BEM_TOKEN,
   treasury: BEM_SHOP_TREASURY,
   skus: BEM_SKU_LIST,
+
+  forChain(chainId: number) {
+    return bemNetwork(chainId);
+  },
 
   state(): BemState {
     return load();
@@ -180,7 +185,9 @@ export const bem = {
     save(s);
     return s.bondSlots;
   },
-  async readBalance(pub: PublicClient, account: Address): Promise<bigint> {
-    return pub.readContract({ address: BEM_TOKEN, abi: erc20Abi, functionName: 'balanceOf', args: [account] });
+  async readBalance(pub: PublicClient, account: Address, chainId?: number): Promise<bigint> {
+    const net = chainId != null ? bemNetwork(chainId) : undefined;
+    const token = net?.token ?? BEM_TOKEN;
+    return pub.readContract({ address: token, abi: erc20Abi, functionName: 'balanceOf', args: [account] });
   },
 };

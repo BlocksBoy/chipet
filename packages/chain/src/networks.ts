@@ -43,6 +43,26 @@ export const XLAYER_BEM = '0x60e62efa9405d6873c5deabd4e6cc91c25363952' as Addres
 /** TapeOut 在 BSC 主网的工厂（Genesis Circuits 见 BSC_GENESIS_CPU）。 */
 export const BSC_TAPEOUT_FACTORY = '0x68224f668083c29e9800be2a646d42d18cedf7e2' as Address;
 export const BSC_GENESIS_CPU = '0x50a994e71615474b55559ff4f500928fbc339dd9' as Address;
+/** BSC 主网 BEM（与工厂 `bem()` 一致；8 位小数）。 */
+export const BSC_BEM = '0x5ce033b2bfca3af30b3e8c8457deaf776a8b695a' as Address;
+/** X Layer / BSC 上 BEM 均为 8 位小数。 */
+export const BEM_DECIMALS = 8;
+
+export interface BemNetwork {
+  token: Address;
+  /** 商店收款地址：暂用该链 TapeOut 工厂 */
+  treasury: Address;
+  decimals: number;
+}
+
+export const BEM_BY_CHAIN: Partial<Record<number, BemNetwork>> = {
+  196: { token: XLAYER_BEM, treasury: XLAYER_TAPEOUT_FACTORY, decimals: BEM_DECIMALS },
+  56: { token: BSC_BEM, treasury: BSC_TAPEOUT_FACTORY, decimals: BEM_DECIMALS },
+};
+
+export function bemNetwork(chainId: number): BemNetwork | undefined {
+  return BEM_BY_CHAIN[chainId];
+}
 
 export const DEPLOYMENTS: Record<number, Deployment> = {
   196: { chainId: 196, factory: XLAYER_TAPEOUT_FACTORY },
