@@ -170,25 +170,27 @@ const LAB_NAV = [
   { to: '/lab/new', key: 'new', label: both('发布悬赏', 'Post a bounty'), icon: Plus },
 ];
 
-/** 实验室的二级导航：擂台 / 设计器 / 组件库 / 发布悬赏。 */
+/** 实验室二级导航：桌面左侧栏，手机顶部横滑。 */
 function LabNav({ sub }: { sub: string }) {
   const t = useT();
   // 擂台详情页归在「擂台」下
   const at = sub === 'bounty' ? '' : sub;
   return (
-    <div className="border-b border-line/60 bg-panel/50">
-      <nav aria-label={t('实验室导航', 'Lab navigation')} className="mx-auto flex max-w-[1180px] items-center gap-1 overflow-x-auto px-4 py-2 sm:px-7">
-        <span className="mr-2 hidden shrink-0 items-center gap-1.5 font-mono text-[11px] text-faint sm:flex"><FlaskConical className="size-3.5" />TapeArena</span>
+    <nav aria-label={t('实验室导航', 'Lab navigation')} className="lg:sticky lg:top-20 lg:self-start">
+      <div className="flex items-center gap-1.5 overflow-x-auto pb-1 lg:flex-col lg:items-stretch lg:overflow-visible lg:rounded-3xl lg:border lg:border-line/80 lg:bg-panel lg:p-2 lg:pb-2 lg:shadow-sm lg:shadow-si/5">
+        <div className="mb-1 hidden items-center gap-1.5 px-2.5 py-2 font-mono text-[11px] text-faint lg:flex">
+          <FlaskConical className="size-3.5" />TapeArena
+        </div>
         {LAB_NAV.map(({ to, key, label, icon: I }) => (
           <Link key={key} to={to} aria-current={at === key ? 'page' : undefined} className={cn(
-            'flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-[13px] whitespace-nowrap no-underline transition-colors',
-            at === key ? 'bg-si/10 font-semibold text-si-dim' : 'text-mute hover:bg-panel-2/70 hover:text-ink',
+            'flex shrink-0 items-center gap-2 rounded-full px-3 py-2 text-[13px] whitespace-nowrap no-underline transition-colors lg:rounded-2xl',
+            at === key ? 'bg-si/15 font-semibold text-si-dim' : 'bg-panel text-mute ring-1 ring-line/70 lg:bg-transparent lg:ring-0 hover:bg-panel-2/70 hover:text-ink',
           )}>
-            <I className="size-3.5" />{txt(label)}
+            <I className="size-3.5 shrink-0" />{txt(label)}
           </Link>
         ))}
-      </nav>
-    </div>
+      </div>
+    </nav>
   );
 }
 
@@ -250,9 +252,14 @@ export function Shell({ children }: { children: ReactNode }) {
         </div>
       </header>
 
-      {here === 'lab' && <LabNav sub={r.parts[1] ?? ''} />}
-
-      <main className="flex-1">{children}</main>
+      {here === 'lab' ? (
+        <div className="mx-auto grid w-full max-w-[1180px] flex-1 grid-cols-1 items-start gap-5 px-4 pt-4 sm:px-7 lg:grid-cols-[200px_minmax(0,1fr)] lg:gap-6 lg:pt-6">
+          <LabNav sub={r.parts[1] ?? ''} />
+          <main className="min-w-0">{children}</main>
+        </div>
+      ) : (
+        <main className="flex-1">{children}</main>
+      )}
 
       <nav aria-label={t('主导航', 'Main')} className="fixed inset-x-0 bottom-0 z-20 flex border-t border-line/70 bg-panel/90 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl md:hidden">
         {NAV.map(({ to, key, label, icon: I }) => (

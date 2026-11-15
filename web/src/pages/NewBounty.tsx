@@ -67,7 +67,7 @@ export function NewBounty() {
   });
 
   return (
-    <div className="mx-auto w-full max-w-[1180px] px-4 pt-8 pb-16 sm:px-7">
+    <div className="w-full pt-2 pb-16">
       <PageHeader
         eyebrow={tr('实验室 · Lab', 'Lab')} icon={Rocket}
         title={tr('发布悬赏', 'Post a bounty')}

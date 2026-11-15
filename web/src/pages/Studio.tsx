@@ -16,7 +16,7 @@ import { Link, useRoute } from '../router.tsx';
 import { aiAvailable, aiDesign, type AiEvent } from '../api.ts';
 import { short } from '../format.ts';
 import { getLang, tr, useLang } from '../i18n.ts';
-import { Button, cn, Empty, ErrBar, Input, KV, Panel, Select, Stat, Tag, Textarea } from '../components/ui.tsx';
+import { Button, cn, Empty, ErrBar, Input, KV, Panel, Select, Tag, Textarea } from '../components/ui.tsx';
 
 const TEMPLATES = { ...EXAMPLES, nand9: { get title() { return tr('9 门全加器（NAND 手写）', '9-gate full adder (hand-written NAND)'); }, src: FULL_ADDER_NAND9 } };
 const DRAFT = 'tapearena.draft';
@@ -72,7 +72,7 @@ export function Studio() {
   ];
 
   return (
-    <div className="mx-auto w-full max-w-[1180px] px-4 sm:px-7">
+    <div className="w-full pb-16">
       <div className="flex flex-wrap items-center gap-3.5 pt-6">
         <h2 className="flex items-center gap-2.5 text-[26px]"><Microchip className="size-6 text-copper" />{tr('设计器', 'Studio')}</h2>
         {bounty
@@ -101,12 +101,22 @@ export function Studio() {
               )}
           </Panel>
           {built && (
-            <div className="grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-line bg-line sm:grid-cols-4">
-              <Stat label={tr('总门数', 'Total gates')} icon={Cpu} value={built.circuit.gateCount} tone="copper" />
-              <Stat label={tr('本层 NAND', 'NAND (this level)')} icon={Square} value={built.compiled.nNand} />
-              <Stat label={tr('寄存器', 'Registers')} icon={Clock} value={built.circuit.nState} tone="si" />
-              <Stat label={tr('关键路径', 'Critical path')} icon={Gauge} value={depth} />
-            </div>
+            <dl className="flex flex-wrap items-stretch gap-3 sm:gap-0 sm:divide-x sm:divide-line/80">
+              {([
+                { icon: Cpu, label: tr('总门数', 'Total gates'), value: built.circuit.gateCount, tone: 'text-copper' },
+                { icon: Square, label: tr('本层 NAND', 'NAND (this level)'), value: built.compiled.nNand, tone: 'text-ink' },
+                { icon: Clock, label: tr('寄存器', 'Registers'), value: built.circuit.nState, tone: 'text-si' },
+                { icon: Gauge, label: tr('关键路径', 'Critical path'), value: depth, tone: 'text-ink' },
+              ] as const).map(({ icon: I, label, value, tone }) => (
+                <div key={label} className="flex min-w-[7.5rem] flex-1 items-center gap-3 rounded-2xl bg-panel px-3.5 py-3 ring-1 ring-line/70 sm:rounded-none sm:bg-transparent sm:px-5 sm:py-1 sm:ring-0">
+                  <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-panel-2 text-mute"><I className="size-4" /></span>
+                  <div className="min-w-0">
+                    <dd className={cn('m-0 font-display text-2xl leading-none font-bold tabular-nums', tone)}>{value}</dd>
+                    <dt className="mt-1 truncate text-[11px] text-mute">{label}</dt>
+                  </div>
+                </div>
+              ))}
+            </dl>
           )}
         </div>
 

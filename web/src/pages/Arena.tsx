@@ -102,7 +102,7 @@ export function Arena() {
   const subs = list.reduce((s, b) => s + b.submissions.length, 0);
 
   return (
-    <div className="mx-auto w-full max-w-[1180px] px-4 sm:px-7">
+    <div className="w-full pb-16">
       <section className="grid grid-cols-1 items-center gap-10 pt-10 pb-10 sm:pt-14 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
         <div>
           <div className="mb-5 inline-flex items-center gap-2 rounded-full bg-si/5 px-3 py-1 font-mono text-xs text-si ring-1 ring-si-dim">

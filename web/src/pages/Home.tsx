@@ -377,17 +377,46 @@ export function Home() {
         </ul>
       </Panel>
 
-      <Panel className="mt-10 flex flex-wrap items-center gap-4 bg-copper/5 p-5 ring-1 ring-copper/15">
-        <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-copper/15 text-copper"><Coins className="size-5" /></span>
-        <div className="min-w-0 flex-1">
-          <div className="font-display text-base font-bold text-ink">{t('免费玩上头了？用 BEM 开限定', 'Hooked? Unlock more with BEM')}</div>
-          <p className="mt-1 text-sm text-pretty text-mute">
-            {t('核心养成永远免费。限定彩蛋、能量快充、鱼干包、扩线友位才消耗 BEM。', 'Core raising stays free. Only premium eggs, energy refills, fish packs and extra bond slots spend BEM.')}
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Button size="sm" icon={Coins} onClick={() => go('/shop')}>{t('打开商店', 'Open Shop')}</Button>
-          <Button size="sm" variant="ghost" onClick={() => go('/guide/shop')}>{t('看说明', 'Playbook')}</Button>
+      <Panel className="mt-10 overflow-hidden bg-gradient-to-br from-copper/10 via-panel to-si/5 p-0 ring-1 ring-copper/20">
+        <div className="grid lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
+          <div className="flex flex-col justify-between gap-5 p-5 sm:p-6">
+            <div>
+              <div className="inline-flex items-center gap-2 rounded-full bg-copper/15 px-2.5 py-1 text-[11px] font-semibold tracking-wide text-copper-dim">
+                <Coins className="size-3.5" />
+                BEM
+              </div>
+              <h3 className="mt-3 font-display text-xl font-bold text-balance text-ink sm:text-2xl">
+                {t('免费玩上头了？用 BEM 开限定', 'Hooked? Unlock more with BEM')}
+              </h3>
+              <p className="mt-2 max-w-md text-sm text-pretty text-mute">
+                {t('核心养成永远免费。右边四样才花 BEM——买的是更快、更稀有、多一个坑。', 'Core raising stays free. Only the four on the right spend BEM — faster, rarer, one more slot.')}
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button size="sm" icon={Coins} onClick={() => go('/shop')}>{t('打开商店', 'Open Shop')}</Button>
+              <Button size="sm" variant="ghost" onClick={() => go('/guide/shop')}>{t('看说明', 'Playbook')}</Button>
+            </div>
+          </div>
+          <ul className="grid grid-cols-2 gap-px border-t border-copper/15 bg-copper/10 lg:border-t-0 lg:border-l">
+            {([
+              { sku: BEM_SKUS.egg_fancy, icon: Egg },
+              { sku: BEM_SKUS.energy, icon: Zap },
+              { sku: BEM_SKUS.fish5, icon: Fish },
+              { sku: BEM_SKUS.bond_slot, icon: Users },
+            ] as const).map(({ sku, icon: I }) => (
+              <li key={sku.id}>
+                <button
+                  type="button"
+                  onClick={() => go('/shop')}
+                  className="flex h-full w-full flex-col gap-2 bg-panel/90 p-4 text-left transition-colors hover:bg-copper/10"
+                >
+                  <span className="grid size-8 place-items-center rounded-xl bg-copper/12 text-copper"><I className="size-4" /></span>
+                  <span className="font-display text-sm font-semibold text-ink">{txt(sku.title)}</span>
+                  <span className="mt-auto font-mono text-xs tabular-nums text-copper-dim">{sku.price} BEM</span>
+                </button>
+              </li>
+            ))}
+          </ul>
         </div>
       </Panel>
 

@@ -3,6 +3,8 @@ dist/
 .env
 .env.*
 !.env.example
+!deploy/.env.deploy.example
+deploy/.env.deploy.local
 contracts/out/
 contracts/cache/
 contracts/broadcast/*/31337/

@@ -41,7 +41,7 @@ export function BountyPage({ id }: { id: number }) {
   }, [q.data, app.deployment?.library]);
 
   if (q.loading && !q.data) return <Loading>{tr('读取擂台…', 'Loading bounty…')}</Loading>;
-  if (!q.data) return <div className="mx-auto w-full max-w-[1180px] px-7"><Empty icon={ShieldAlert} title={tr(`找不到擂台 #${id}`, `Bounty #${id} not found`)} action={<Link to="/lab" className={btn('ghost')}><ArrowLeft />{tr('回到擂台', 'Back to the Arena')}</Link>}><span className="text-danger">{q.error?.message}</span></Empty></div>;
+  if (!q.data) return <div className="w-full"><Empty icon={ShieldAlert} title={tr(`找不到擂台 #${id}`, `Bounty #${id} not found`)} action={<Link to="/lab" className={btn('ghost')}><ArrowLeft />{tr('回到擂台', 'Back to the Arena')}</Link>}><span className="text-danger">{q.error?.message}</span></Empty></div>;
   const b = q.data;
   const phase = bountyPhase(b);
   const ranked = b.submissions.map((s, i) => ({ s, i })).sort((x, y) =>
@@ -52,7 +52,7 @@ export function BountyPage({ id }: { id: number }) {
   const pinText = b.meta.inputs && `${b.meta.inputs.map((p) => p.name + (p.width > 1 ? `[${p.width}]` : '')).join(', ')} → ${b.meta.outputs?.map((p) => p.name + (p.width > 1 ? `[${p.width}]` : '')).join(', ')}`;
 
   return (
-    <div className="mx-auto w-full max-w-[1180px] px-4 sm:px-7">
+    <div className="w-full pb-16">
       <div className="grid grid-cols-1 gap-5 pt-6 pb-16 lg:grid-cols-[minmax(0,1fr)_360px]">
         <div className="flex flex-col gap-5">
           <div>

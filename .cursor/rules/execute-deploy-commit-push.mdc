@@ -1,0 +1,33 @@
+---
+description: 用户说「执行」时：部署前后端、提交代码、push 远程
+alwaysApply: true
+---
+
+# 「执行」三连
+
+当用户只说 **执行**（或明确说按「执行」约定来）时，按顺序做完下面三步，不要再确认：
+
+## 1. 部署前后端
+
+本仓库 Chipet 线上为弗吉尼亚静态站（`chipet.web3book.io`）：
+
+```bash
+./deploy/ssh-deploy-frontend.sh
+```
+
+配置在 `deploy/.env.deploy.local`（弗吉尼亚 `43.165.64.16`，密钥 `virginia_bot.pem`）。
+
+- 若 Caddy/证书异常，再跑 `./deploy/ssh-deploy-caddy.sh`。
+- 若本次改动包含需单独发布的后端服务且已有对应脚本，一并部署；当前主站无独立后端容器时，以前端部署为准。
+
+## 2. 提交代码
+
+按用户 git 提交规则：先 `status` / `diff` / `log`，再暂存、用 HEREDOC 写 commit message、提交。不要提交密钥、`.env.deploy.local`、证书私钥。
+
+## 3. Push 到远程
+
+```bash
+git push -u origin HEAD
+```
+
+需要时申请 `all` / 网络权限。Push 成功后回报 commit 与远程结果；若仅缺 Cloudflare DNS 等非代码项，可顺带提醒一句。

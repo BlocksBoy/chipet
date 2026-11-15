@@ -1,0 +1,21 @@
+# Chipet 静态站（弗吉尼亚）。与 S-UI VPN 并存：宿主机映射 8443→443。
+#   docker compose --env-file .env.deploy up -d
+services:
+  caddy:
+    image: caddy:2.10-alpine
+    restart: unless-stopped
+    environment:
+      SITE_DOMAIN: ${SITE_DOMAIN:-chipet.web3book.io}
+    ports:
+      - "${CADDY_HTTPS_PORT:-8443}:443"
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./certs:/etc/caddy/certs:ro
+      - ./frontend-dist:/srv/frontend:ro
+      - caddy-data:/data
+      - caddy-config:/config
+
+volumes:
+  caddy-data:
+  caddy-config:
