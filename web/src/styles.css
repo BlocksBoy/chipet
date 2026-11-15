@@ -69,6 +69,35 @@
   }
 }
 
+/* Chipet 列表滚动条：细、圆角，硅绿轨道 + 铜色滑块 */
+.chip-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--color-copper) 55%, transparent) color-mix(in srgb, var(--color-line) 70%, transparent);
+}
+.chip-scroll::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.chip-scroll::-webkit-scrollbar-track {
+  margin: 6px 0;
+  background: color-mix(in srgb, var(--color-panel-2) 80%, transparent);
+  border-radius: 999px;
+}
+.chip-scroll::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--color-copper) 70%, #fff), var(--color-copper-dim));
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background-clip: padding-box;
+}
+.chip-scroll::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, var(--color-copper-hi), var(--color-copper-dim));
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+.chip-scroll::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
 /* RainbowKit 紧凑弹窗把高度锁在 468px，中文下「获取钱包」页会被截断 */
 [data-rk] div[style*='max-height: 468px'] {
   max-height: min(580px, calc(100dvh - 32px)) !important;

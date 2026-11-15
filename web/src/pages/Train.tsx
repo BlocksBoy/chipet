@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from 'react';
-import { motion } from 'motion/react';
+import { useEffect, useMemo, useRef, useState, type ComponentType, type ReactElement, type ReactNode } from 'react';
+import { AnimatePresence, motion } from 'motion/react';
 import {
-  ArrowRight, Cable, Cpu, Egg, Fish, Flag, RotateCcw, Shield, Swords, Trophy, WandSparkles, Zap, type LucideProps,
+  ArrowRight, Cable, Cpu, Egg, Fish, Flag, RotateCcw, Shield, Swords, Trophy, WandSparkles, X, Zap, type LucideProps,
 } from 'lucide-react';
 import { Button, Empty, ErrBar, PAGE, PageHeader, Panel, Tag, cn } from '../components/ui.tsx';
 import { Link, go, useRoute } from '../router.tsx';
@@ -9,7 +9,7 @@ import { PetAvatar } from '../chipet/PetAvatar.tsx';
 import { BugMon } from '../chipet/BugMon.tsx';
 import { ChipStrip, PowerPips } from '../chipet/ChipStrip.tsx';
 import {
-  ArenaFx, Banner, BEAT, Confetti, DizzyStars, MOVE_FX, Twinkles, type Strike,
+  ArenaFx, Banner, BEAT, Confetti, DizzyStars, MOVE_FX, OUTLINE, Twinkles, type Strike,
 } from '../chipet/BattleFx.tsx';
 import { fuse, heartByKey, heartOf, type Fusion, type Heart } from '../chipet/heart.ts';
 import {
@@ -26,6 +26,345 @@ const MOVE_ICON: ComponentType<LucideProps>[] = [Swords, Shield, WandSparkles];
 const FUSION = 3;
 /** 一回合揭晓动画的时长：跟 BattleFx 的节拍对齐，再留一点余量看清伤害数字 */
 const REVEAL_MS = Math.round(BEAT.total * 1000) + 200;
+
+/** 结算弹框：冲击波 + 星屑 + 标题砸入；胜利再加金光与彩带 */
+function BattleResultModal({
+  end, petName, canRematch, seed, onRematch, onPick, onVisit, onClose,
+}: {
+  end: { result: 'win' | 'lose' | 'draw'; xp: number; ups: number; fish: number; level: number };
+  petName: string;
+  canRematch: boolean;
+  seed: number;
+  onRematch: () => void;
+  onPick: () => void;
+  onVisit: () => void;
+  onClose: () => void;
+}) {
+  const t = useT();
+  const win = end.result === 'win';
+  const lose = end.result === 'lose';
+  const accent = win ? '#e8ae14' : lose ? '#7a8b84' : '#2aa6b8';
+  const accentHi = win ? '#ffe78f' : lose ? '#c5d0cb' : '#a5e8f1';
+  const title = win
+    ? t(`「${petName}」赢了！`, `${petName} wins!`)
+    : lose
+      ? t('这次没打过…', 'Not this time…')
+      : t('打成平手', "It's a draw");
+  const headline = win ? t('胜利', 'VICTORY') : lose ? t('落败', 'DEFEAT') : t('平手', 'DRAW');
+  const tone = win ? 'text-gold-dim' : lose ? 'text-mute' : 'text-si';
+  const badge = win ? 'bg-gold/20' : lose ? 'bg-panel-2' : 'bg-si/15';
+
+  const bits = useMemo(() => {
+    let a = (seed ^ 0x9e3779b9) | 0;
+    const rnd = () => {
+      a = (a + 0x6d2b79f5) | 0;
+      let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+    return Array.from({ length: win ? 28 : 16 }, (_, i) => {
+      const ang = (Math.PI * 2 * i) / (win ? 28 : 16) + rnd() * 0.35;
+      const dist = 70 + rnd() * (win ? 110 : 70);
+      return {
+        id: i,
+        kind: i % 5 === 0 ? 'star' : i % 3 === 0 ? 'spark' : 'dot',
+        c: [accent, accentHi, '#ffffff', '#e07a45', '#2a9d8f'][i % 5]!,
+        s: 3 + rnd() * (win ? 10 : 6),
+        dx: Math.cos(ang) * dist,
+        dy: Math.sin(ang) * dist * 0.85 - (win ? 24 : 10),
+        rot: (rnd() - 0.5) * 420,
+        d: rnd() * 0.18,
+      };
+    });
+  }, [seed, win, accent, accentHi]);
+
+  const [xpShown, setXpShown] = useState(0);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    let raf = 0;
+    const start = performance.now();
+    const tick = (now: number) => {
+      const p = Math.min(1, (now - start - 280) / 700);
+      setXpShown(p <= 0 ? 0 : Math.round(end.xp * (1 - (1 - p) ** 3)));
+      if (p < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      document.body.style.overflow = prev;
+      cancelAnimationFrame(raf);
+    };
+  }, [onClose, end.xp]);
+
+  return (
+    <motion.div
+      className="fixed inset-0 z-50 grid place-items-center overflow-hidden p-4"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.28 }}
+      onClick={onClose}
+    >
+      <motion.div
+        aria-hidden
+        className="absolute inset-0 bg-[#1a2e28]/45 backdrop-blur-[6px]"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+      />
+      <motion.div
+        aria-hidden
+        className="pointer-events-none absolute inset-0"
+        style={{ background: `radial-gradient(circle at 50% 42%, ${accent}55, transparent 42%)` }}
+        initial={{ opacity: 0, scale: 0.6 }}
+        animate={{ opacity: [0, 1, 0.35], scale: [0.6, 1.15, 1.4] }}
+        transition={{ duration: 0.9, times: [0, 0.35, 1], ease: 'easeOut' }}
+      />
+      {[0, 1, 2].map((i) => (
+        <motion.span
+          key={i}
+          aria-hidden
+          className="pointer-events-none absolute top-[42%] left-1/2 size-[min(70vw,420px)] -translate-x-1/2 -translate-y-1/2 rounded-full border-2"
+          style={{ borderColor: accent }}
+          initial={{ opacity: 0.85, scale: 0.15 }}
+          animate={{ opacity: 0, scale: 1.55 + i * 0.35 }}
+          transition={{ duration: 0.85 + i * 0.12, delay: 0.04 * i, ease: 'easeOut' }}
+        />
+      ))}
+
+      <motion.div
+        role="dialog"
+        aria-modal
+        aria-labelledby="battle-result-title"
+        onClick={(e) => e.stopPropagation()}
+        className={cn(
+          'relative w-full max-w-[420px] overflow-hidden rounded-[1.75rem] border bg-panel/95 px-6 pt-8 pb-5 shadow-2xl',
+          win ? 'border-gold/50 shadow-gold/20' : lose ? 'border-line shadow-si/15' : 'border-si/40 shadow-si/20',
+        )}
+        initial={{ opacity: 0, scale: 0.55, y: 48, rotate: -4 }}
+        animate={{ opacity: 1, scale: [0.55, 1.06, 1], y: [48, -8, 0], rotate: [-4, 2, 0] }}
+        exit={{ opacity: 0, scale: 0.88, y: 18 }}
+        transition={{ duration: 0.55, times: [0, 0.7, 1], ease: 'easeOut' }}
+      >
+        <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden>
+          {win && (
+            <>
+              <Confetti seed={seed ^ 0x51} />
+              <motion.div
+                className="absolute top-1/2 left-1/2 h-[140%] w-[140%] -translate-x-1/2 -translate-y-1/2"
+                style={{
+                  background: `conic-gradient(from 0deg, transparent 0deg, ${accent}33 18deg, transparent 36deg, transparent 72deg, ${accentHi}28 90deg, transparent 108deg)`,
+                }}
+                initial={{ opacity: 0, rotate: -30 }}
+                animate={{ opacity: [0, 0.9, 0.55], rotate: 360 }}
+                transition={{ opacity: { duration: 0.6 }, rotate: { duration: 14, ease: 'linear', repeat: Infinity } }}
+              />
+            </>
+          )}
+          {!win && (
+            <motion.div
+              className="absolute inset-0"
+              style={{ background: `radial-gradient(circle at 50% 30%, ${accent}22, transparent 60%)` }}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: [0, 1, 0.5] }}
+              transition={{ duration: 0.8 }}
+            />
+          )}
+          {bits.map((b) => (
+            <motion.i
+              key={b.id}
+              className={cn('absolute top-[38%] left-1/2 block', b.kind === 'star' ? 'font-display leading-none font-bold' : 'rounded-full')}
+              style={b.kind === 'star'
+                ? { color: b.c, fontSize: b.s * 1.5, textShadow: `0 0 10px ${b.c}`, marginLeft: -b.s / 2, marginTop: -b.s / 2 }
+                : b.kind === 'spark'
+                  ? { width: b.s * 2.2, height: 2, background: `linear-gradient(90deg, transparent, ${b.c}, transparent)`, boxShadow: `0 0 8px ${b.c}`, marginLeft: -b.s, marginTop: -1 }
+                  : { width: b.s, height: b.s, background: b.c, boxShadow: `0 0 8px ${b.c}`, marginLeft: -b.s / 2, marginTop: -b.s / 2 }}
+              initial={{ opacity: 1, x: 0, y: 0, scale: 0.3, rotate: 0 }}
+              animate={{ opacity: 0, x: b.dx, y: b.dy, scale: b.kind === 'star' ? 1.35 : 1, rotate: b.rot }}
+              transition={{ duration: win ? 0.95 : 0.7, delay: 0.12 + b.d, ease: 'easeOut' }}
+            >
+              {b.kind === 'star' ? '✦' : null}
+            </motion.i>
+          ))}
+          {[0, 1].map((i) => (
+            <motion.span
+              key={`ring-${i}`}
+              className="absolute top-[36%] left-1/2 size-24 -translate-x-1/2 -translate-y-1/2 rounded-full border-2"
+              style={{ borderColor: accent }}
+              initial={{ opacity: 0.9, scale: 0.2 }}
+              animate={{ opacity: 0, scale: 2.8 + i * 0.6 }}
+              transition={{ duration: 0.75, delay: 0.08 + i * 0.08, ease: 'easeOut' }}
+            />
+          ))}
+        </div>
+
+        <button
+          type="button"
+          aria-label={t('关闭', 'Close')}
+          onClick={onClose}
+          className="absolute top-3 right-3 z-10 rounded-lg p-1.5 text-faint transition-colors hover:bg-panel-2 hover:text-ink"
+        >
+          <X className="size-4" />
+        </button>
+
+        <div className="relative flex flex-col items-center text-center">
+          <motion.p
+            className={cn('font-display text-[11px] font-bold tracking-[0.28em] uppercase', tone)}
+            initial={{ opacity: 0, letterSpacing: '0.6em', y: -8 }}
+            animate={{ opacity: 1, letterSpacing: '0.28em', y: 0 }}
+            transition={{ delay: 0.2, duration: 0.4 }}
+          >
+            {t('决斗结果', 'DUEL RESULT')}
+          </motion.p>
+
+          <motion.span
+            className={cn('relative mt-3 grid size-[4.5rem] place-items-center rounded-[1.35rem]', badge, tone)}
+            initial={{ scale: 0.2, rotate: -28, y: 20 }}
+            animate={{ scale: [0.2, 1.22, 1], rotate: [-28, 12, 0], y: [20, -6, 0] }}
+            transition={{ duration: 0.65, times: [0, 0.65, 1], ease: 'easeOut', delay: 0.1 }}
+          >
+            <motion.span
+              aria-hidden
+              className="absolute -inset-1 rounded-[1.45rem]"
+              animate={{
+                boxShadow: [
+                  `0 0 0 0 ${accent}00`,
+                  `0 0 0 14px ${accent}00`,
+                  `0 0 28px 4px ${accent}55`,
+                  `0 0 0 0 ${accent}00`,
+                ],
+              }}
+              transition={{ duration: 1.6, delay: 0.25, repeat: Infinity, repeatDelay: 0.8 }}
+            />
+            <motion.span
+              animate={win ? { y: [0, -3, 0], rotate: [0, -6, 6, 0] } : { y: [0, 1, 0] }}
+              transition={{ duration: win ? 1.8 : 2.4, repeat: Infinity, ease: 'easeInOut' }}
+            >
+              {win ? <Trophy className="relative size-9" /> : lose ? <Flag className="relative size-8" /> : <Swords className="relative size-8" />}
+            </motion.span>
+          </motion.span>
+
+          <motion.h2
+            className={cn('mt-3 font-display text-4xl leading-none font-black italic sm:text-5xl', OUTLINE)}
+            style={{ color: accent }}
+            initial={{ opacity: 0, scale: 2.4, rotate: -12 }}
+            animate={{ opacity: [0, 1, 1], scale: [2.4, 0.92, 1], rotate: [-12, 4, 0] }}
+            transition={{ duration: 0.55, delay: 0.22, times: [0, 0.55, 1], ease: 'easeOut' }}
+          >
+            {headline}
+          </motion.h2>
+
+          <motion.h3
+            id="battle-result-title"
+            className="mt-2 text-lg font-bold text-balance text-ink sm:text-xl"
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.38, duration: 0.3 }}
+          >
+            {title}
+          </motion.h3>
+
+          <motion.div
+            className="mt-4 flex flex-wrap justify-center gap-1.5"
+            initial="hidden"
+            animate="show"
+            variants={{
+              hidden: {},
+              show: { transition: { staggerChildren: 0.08, delayChildren: 0.42 } },
+            }}
+          >
+            {([
+              <Tag key="xp" tone="si">{t('经验', 'XP')} +{xpShown}</Tag>,
+              end.ups > 0 ? <Tag key="lv" tone="gold">{t(`升级到 Lv.${end.level}，体力更厚了`, `Leveled up to Lv.${end.level}: more HP`)}</Tag> : null,
+              end.fish > 0 ? <Tag key="fish" tone="copper" icon={Fish}>{t('今日首胜 · 鱼干 +1', 'First win today · +1 fish treat')}</Tag> : null,
+              lose ? <Tag key="tip" tone="faint">{t('喂饱、通通电，再来', 'Feed it, power it up, try again')}</Tag> : null,
+            ].filter(Boolean) as ReactElement[]).map((node) => (
+              <motion.span
+                key={node.key}
+                variants={{
+                  hidden: { opacity: 0, y: 14, scale: 0.85 },
+                  show: { opacity: 1, y: 0, scale: 1, transition: { type: 'spring', stiffness: 420, damping: 22 } },
+                }}
+              >
+                {node}
+              </motion.span>
+            ))}
+          </motion.div>
+
+          <motion.div
+            className="mt-6 flex w-full flex-wrap justify-center gap-2"
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.55, duration: 0.3 }}
+          >
+            <Button icon={RotateCcw} disabled={!canRematch} onClick={onRematch}>
+              {canRematch ? t('再来一场', 'Rematch') : t('能量不够了', 'Out of energy')}
+            </Button>
+            <Button variant="ghost" onClick={onPick}>{t('换个对手', 'Pick another opponent')}</Button>
+            <Button variant="ghost" icon={ArrowRight} onClick={onVisit}>{t('去看望它', 'Visit it')}</Button>
+          </motion.div>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+}
+
+/** 点击处的光电爆发：光晕 + 电弧环 + 火花 */
+function PhotoBurst({ x, y, color, hi, onDone }: { x: number; y: number; color: string; hi: string; onDone: () => void }) {
+  const sparks = useMemo(() => Array.from({ length: 10 }, (_, i) => {
+    const a = (Math.PI * 2 * i) / 10 + (i % 2 ? 0.12 : 0);
+    const r = i % 2 ? 28 : 42;
+    return { a, r, s: 1.5 + (i % 3) };
+  }), []);
+  return (
+    <span className="pointer-events-none absolute inset-0 z-10 overflow-hidden rounded-[inherit]" aria-hidden>
+      <motion.span
+        className="absolute size-28 -translate-x-1/2 -translate-y-1/2 rounded-full"
+        style={{ left: x, top: y, background: `radial-gradient(circle, ${hi}dd 0%, ${color}66 38%, transparent 72%)` }}
+        initial={{ opacity: 1, scale: 0.15 }}
+        animate={{ opacity: 0, scale: 2.4 }}
+        transition={{ duration: 0.42, ease: 'easeOut' }}
+        onAnimationComplete={onDone}
+      />
+      <motion.span
+        className="absolute size-9 -translate-x-1/2 -translate-y-1/2 rounded-full border-2"
+        style={{ left: x, top: y, borderColor: hi, boxShadow: `0 0 14px ${color}, inset 0 0 8px ${hi}` }}
+        initial={{ opacity: 1, scale: 0.2 }}
+        animate={{ opacity: 0, scale: 3 }}
+        transition={{ duration: 0.38, ease: 'easeOut' }}
+      />
+      <motion.span
+        className="absolute size-2 -translate-x-1/2 -translate-y-1/2 rounded-full"
+        style={{ left: x, top: y, background: hi, boxShadow: `0 0 10px 3px ${color}` }}
+        initial={{ opacity: 1, scale: 1 }}
+        animate={{ opacity: 0, scale: 0.2 }}
+        transition={{ duration: 0.28, ease: 'easeOut' }}
+      />
+      {sparks.map((s, i) => (
+        <motion.i
+          key={i}
+          className="absolute block rounded-full"
+          style={{
+            left: x,
+            top: y,
+            width: s.s,
+            height: s.s,
+            marginLeft: -s.s / 2,
+            marginTop: -s.s / 2,
+            background: i % 2 ? hi : color,
+            boxShadow: `0 0 6px ${hi}`,
+          }}
+          initial={{ opacity: 1, x: 0, y: 0 }}
+          animate={{ opacity: 0, x: Math.cos(s.a) * s.r, y: Math.sin(s.a) * s.r }}
+          transition={{ duration: 0.4, ease: 'easeOut' }}
+        />
+      ))}
+    </span>
+  );
+}
 
 function strikeOf(kind: 0 | 1 | 2 | 3, roll: Roll, dmg: number, edge: 1 | 0 | -1): Strike {
   return { kind, power: roll.power, dmg, edge, bits: roll.outBits };
@@ -380,6 +719,26 @@ export function Train() {
   const [myId, setMyId] = useState<number | null>(() => (r.query.get('me') ? Number(r.query.get('me')) : null));
   const [partnerKey, setPartnerKey] = useState('');
   const timers = useRef<number[]>([]);
+  /** 动画播放中再点一招时排队，揭晓结束后自动打出 */
+  const pendingMove = useRef<Move | typeof FUSION | null>(null);
+  const flashSeq = useRef(0);
+  const [flashes, setFlashes] = useState<{ id: number; slot: number; x: number; y: number }[]>([]);
+  const [showResult, setShowResult] = useState(false);
+
+  const sparkAt = (slot: number, e: { currentTarget: HTMLElement; clientX: number; clientY: number }) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const id = ++flashSeq.current;
+    setFlashes((list) => [...list.slice(-8), { id, slot, x: e.clientX - rect.left, y: e.clientY - rect.top }]);
+  };
+
+  useEffect(() => {
+    if (!fight?.end) {
+      setShowResult(false);
+      return;
+    }
+    const id = window.setTimeout(() => setShowResult(true), 720);
+    return () => window.clearTimeout(id);
+  }, [fight?.end]);
 
   const pets = useMemo(() => localChipet.list(), [tick]);
   const neighbors = useMemo(() => social.neighbors(), [tick]);
@@ -407,6 +766,7 @@ export function Train() {
       return;
     }
     setErr('');
+    pendingMove.current = null;
     const seed = Math.floor(Math.random() * 0xffffffff) >>> 0;
     const f = partner ? fuse(myHeart, heartOf(partner.circuitId, partner.rarity)) : undefined;
     const myMax = maxHpOf(me.level, me.rarity, me.mood);
@@ -431,6 +791,7 @@ export function Train() {
   };
 
   const finish = (f: Fight, forced?: 'lose') => {
+    pendingMove.current = null;
     const result = forced ?? (f.myHp <= 0 && f.opHp <= 0 ? 'draw' : f.opHp <= 0 ? 'win' : 'lose');
     const xp = xpFor(result, f.opp.level);
     const { pet, ups } = localChipet.finishBattle(f.petId, result, xp);
@@ -446,25 +807,25 @@ export function Train() {
     setTick((t) => t + 1);
   };
 
-  const play = (move: Move | typeof FUSION) => {
-    if (!fight || fight.busy || fight.end) return;
-    const opMove = aiPick(fight.opRolls, fight.opp.fav);
-    const opRoll = fight.opRolls[opMove];
+  const resolveMove = (f: Fight, move: Move | typeof FUSION): Fight | null => {
+    if (f.end) return null;
+    const opMove = aiPick(f.opRolls, f.opp.fav);
+    const opRoll = f.opRolls[opMove];
     let myRoll: Roll;
     let c: Clash;
     let say: () => string;
     if (move === FUSION) {
-      if (!fight.fusion || fight.fusion.used) return;
-      const { partner, f } = fight.fusion;
-      myRoll = fight.fusion.roll;
+      if (!f.fusion || f.fusion.used) return null;
+      const { partner: pal, f: fused } = f.fusion;
+      myRoll = f.fusion.roll;
       const hit = fusionClash(myRoll.power, opRoll.power);
       c = hit;
       say = () => tr(
-        `合体技！和「${partner.name}」串成的 ${f.gates} 门电路打出 ${hit.myDmg}，挨了 ${hit.opDmg}`,
-        `Fusion move! The ${f.gates}-gate circuit wired with ${partner.name} dealt ${hit.myDmg} and took ${hit.opDmg}`,
+        `合体技！和「${pal.name}」串成的 ${fused.gates} 门电路打出 ${hit.myDmg}，挨了 ${hit.opDmg}`,
+        `Fusion move! The ${fused.gates}-gate circuit wired with ${pal.name} dealt ${hit.myDmg} and took ${hit.opDmg}`,
       );
     } else {
-      myRoll = fight.myRolls[move];
+      myRoll = f.myRolls[move];
       const hit = clash({ move, power: myRoll.power }, { move: opMove, power: opRoll.power });
       c = hit;
       const a = MOVES[move]!;
@@ -475,31 +836,54 @@ export function Train() {
           ? tr(`你的${a.name}被对手的${b.name}克制：只打出 ${hit.myDmg}，挨了 ${hit.opDmg}`, `Your ${a.name} got countered by their ${b.name}: dealt only ${hit.myDmg}, took ${hit.opDmg}`)
           : tr(`双方都出${a.name}，硬碰硬：打出 ${hit.myDmg}，挨了 ${hit.opDmg}`, `Both played ${a.name}, head-on: dealt ${hit.myDmg}, took ${hit.opDmg}`));
     }
-    const next: Fight = {
-      ...fight,
-      myHp: Math.max(0, fight.myHp - c.opDmg),
-      opHp: Math.max(0, fight.opHp - c.myDmg),
+    return {
+      ...f,
+      myHp: Math.max(0, f.myHp - c.opDmg),
+      opHp: Math.max(0, f.opHp - c.myDmg),
       busy: true,
-      reveal: { n: fight.round, myMove: move, opMove, myRoll, opRoll, c },
-      log: [{ n: fight.round, say }, ...fight.log].slice(0, 4),
-      fusion: fight.fusion && move === FUSION ? { ...fight.fusion, used: true } : fight.fusion,
+      reveal: { n: f.round, myMove: move, opMove, myRoll, opRoll, c },
+      log: [{ n: f.round, say }, ...f.log].slice(0, 4),
+      fusion: f.fusion && move === FUSION ? { ...f.fusion, used: true } : f.fusion,
     };
-    setFight(next);
-    later(() => {
-      if (next.myHp <= 0 || next.opHp <= 0) {
-        finish(next);
+  };
+
+  const advanceAfterReveal = (done: Fight) => {
+    if (done.myHp <= 0 || done.opHp <= 0) {
+      finish(done);
+      return;
+    }
+    const round = done.round + 1;
+    const advanced: Fight = {
+      ...done,
+      busy: false,
+      round,
+      myRolls: rollAll(done.heart, done.seed, 'me', round),
+      opRolls: rollAll(done.opp.heart, done.seed, 'op', round),
+      fusion: done.fusion && { ...done.fusion, roll: roll(done.fusion.f, done.seed, 'fuse', round, FUSION) },
+    };
+    const queued = pendingMove.current;
+    pendingMove.current = null;
+    if (queued !== null) {
+      const next = resolveMove(advanced, queued);
+      if (next) {
+        setFight(next);
+        later(() => advanceAfterReveal(next), REVEAL_MS);
         return;
       }
-      const round = next.round + 1;
-      setFight({
-        ...next,
-        busy: false,
-        round,
-        myRolls: rollAll(next.heart, next.seed, 'me', round),
-        opRolls: rollAll(next.opp.heart, next.seed, 'op', round),
-        fusion: next.fusion && { ...next.fusion, roll: roll(next.fusion.f, next.seed, 'fuse', round, FUSION) },
-      });
-    }, REVEAL_MS);
+    }
+    setFight(advanced);
+  };
+
+  const play = (move: Move | typeof FUSION) => {
+    if (!fight || fight.end) return;
+    if (fight.busy) {
+      pendingMove.current = move;
+      return;
+    }
+    const next = resolveMove(fight, move);
+    if (!next) return;
+    setFight(next);
+    later(() => advanceAfterReveal(next), REVEAL_MS);
   };
 
   if (pets.length === 0) {
@@ -599,32 +983,17 @@ export function Train() {
             </motion.div>
           )}
 
-          {end ? (
-            <motion.div
-              className={cn('mt-4 flex flex-col items-center rounded-3xl px-5 py-6 text-center', end.result === 'win' ? 'bg-gold/10' : 'bg-panel-2/70')}
-              initial={{ opacity: 0, scale: 0.94 }} animate={{ opacity: 1, scale: 1 }} transition={{ type: 'spring', stiffness: 260, damping: 20 }}
-            >
-              <span className={cn('grid size-12 place-items-center rounded-2xl', end.result === 'win' ? 'bg-gold/20 text-gold-dim' : 'bg-panel text-mute')}>
-                <Trophy className="size-6" />
-              </span>
-              <h2 className="mt-3 text-2xl">
-                {end.result === 'win' ? t(`「${fight.petName}」赢了！`, `${fight.petName} wins!`) : end.result === 'lose' ? t('这次没打过…', 'Not this time…') : t('打成平手', 'It\'s a draw')}
-              </h2>
-              <div className="mt-3 flex flex-wrap justify-center gap-1.5">
-                <Tag tone="si">{t('经验', 'XP')} +{end.xp}</Tag>
-                {end.ups > 0 && <Tag tone="gold">{t(`升级到 Lv.${end.level}，体力更厚了`, `Leveled up to Lv.${end.level}: more HP`)}</Tag>}
-                {end.fish > 0 && <Tag tone="copper" icon={Fish}>{t('今日首胜 · 鱼干 +1', 'First win today · +1 fish treat')}</Tag>}
-                {end.result === 'lose' && <Tag tone="faint">{t('喂饱、通通电，再来', 'Feed it, power it up, try again')}</Tag>}
-              </div>
-              <div className="mt-5 flex flex-wrap justify-center gap-2">
-                <Button icon={RotateCcw} disabled={!localChipet.canBattle(myPet)} onClick={() => start(opp)}>
-                  {localChipet.canBattle(myPet) ? t('再来一场', 'Rematch') : t('能量不够了', 'Out of energy')}
-                </Button>
-                <Button variant="ghost" onClick={() => setFight(null)}>{t('换个对手', 'Pick another opponent')}</Button>
-                <Button variant="ghost" icon={ArrowRight} onClick={() => go(`/pet/${fight.petId}`)}>{t('去看望它', 'Visit it')}</Button>
-              </div>
-            </motion.div>
-          ) : (
+          {end && !showResult && (
+            <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+              <Button size="sm" onClick={() => setShowResult(true)}>{t('查看结果', 'View result')}</Button>
+              <Button size="sm" variant="ghost" icon={RotateCcw} disabled={!localChipet.canBattle(myPet)} onClick={() => start(opp)}>
+                {localChipet.canBattle(myPet) ? t('再来一场', 'Rematch') : t('能量不够了', 'Out of energy')}
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => setFight(null)}>{t('换个对手', 'Pick another opponent')}</Button>
+            </div>
+          )}
+
+          {!end && (
             <>
               <p className="mt-4 text-center text-xs text-mute">
                 {lang === 'zh'
@@ -636,23 +1005,42 @@ export function Train() {
                   const I = MOVE_ICON[i]!;
                   const p = fight.myRolls[i]!.power;
                   const picked = fight.busy && reveal?.myMove === i;
+                  const fx = MOVE_FX[i]!;
                   return (
                     <motion.button
                       key={i}
                       type="button"
-                      disabled={fight.busy}
-                      onClick={() => play(i as Move)}
+                      onClick={(e) => { sparkAt(i, e); play(i as Move); }}
+                      onMouseDown={(e) => e.preventDefault()}
+                      aria-label={t(`出招：${m.name}，功率 ${p}`, `Play ${m.name}, power ${p}`)}
                       animate={picked ? { scale: [1, 1.06, 1], y: [0, -4, 0] } : { scale: 1, y: 0 }}
                       transition={picked ? { duration: 0.45, ease: 'easeOut' } : undefined}
                       className={cn(
-                        'move-btn group flex flex-col items-center gap-1 rounded-3xl border bg-panel px-2 py-3 shadow-sm transition hover:-translate-y-0.5 hover:border-copper/60 hover:shadow-md active:translate-y-px disabled:pointer-events-none',
-                        picked ? 'border-copper ring-2 ring-copper/30 opacity-100' : 'border-line/80 disabled:opacity-45',
+                        'move-btn group relative isolate flex h-full w-full cursor-pointer select-none flex-col items-center gap-1 overflow-hidden rounded-3xl border bg-panel px-2 py-3 pt-3.5 shadow-sm transition-[transform,box-shadow,border-color,background-color] duration-150 hover:-translate-y-0.5 hover:border-copper/55 hover:bg-panel-2 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-copper/40 active:translate-y-px active:shadow-sm [&_*]:pointer-events-none',
+                        picked ? 'border-copper ring-2 ring-copper/30' : 'border-line/80',
                       )}
                     >
-                      <span className={cn('grid size-10 place-items-center rounded-2xl transition', picked ? 'bg-copper text-white' : 'bg-copper/10 text-copper group-hover:bg-copper group-hover:text-white')}><I className="size-5" /></span>
-                      <span className="max-w-full truncate font-display text-sm font-bold text-ink sm:text-base">{m.name}</span>
-                      <PowerPips power={p} className="text-mute" />
-                      <span className="line-clamp-2 text-center text-[10px] text-faint sm:text-[11px]">{m.tip}</span>
+                      {flashes.filter((f) => f.slot === i).map((f) => (
+                        <PhotoBurst
+                          key={f.id}
+                          x={f.x}
+                          y={f.y}
+                          color={fx.color}
+                          hi={fx.hi}
+                          onDone={() => setFlashes((list) => list.filter((x) => x.id !== f.id))}
+                        />
+                      ))}
+                      <span
+                        aria-hidden
+                        className="absolute top-2 right-2 size-1.5 rounded-full bg-copper/35 opacity-70 transition group-hover:bg-copper group-hover:opacity-100 group-focus-visible:bg-copper"
+                      />
+                      <span className={cn('relative grid size-10 place-items-center rounded-2xl transition', picked ? 'bg-copper text-white' : 'bg-copper/10 text-copper group-hover:bg-copper group-hover:text-white')}><I className="size-5" /></span>
+                      <span className="relative max-w-full truncate font-display text-sm font-bold text-ink sm:text-base">{m.name}</span>
+                      <PowerPips power={p} className="relative text-mute" />
+                      <span className="relative line-clamp-2 text-center text-[10px] text-faint sm:text-[11px]">{m.tip}</span>
+                      <span className="relative mt-0.5 text-[10px] font-medium text-copper/45 transition group-hover:text-copper sm:text-[11px]">
+                        {picked ? t('已选', 'Picked') : t('点选出招', 'Tap to play')}
+                      </span>
                     </motion.button>
                   );
                 })}
@@ -660,18 +1048,29 @@ export function Train() {
               {fight.fusion && (
                 <motion.button
                   type="button"
-                  disabled={fight.busy || fight.fusion.used}
-                  onClick={() => play(FUSION)}
+                  disabled={fight.fusion.used}
+                  onClick={(e) => { if (!fight.fusion?.used) { sparkAt(FUSION, e); play(FUSION); } }}
+                  onMouseDown={(e) => e.preventDefault()}
                   animate={fight.busy && reveal?.myMove === FUSION ? { scale: [1, 1.03, 1], boxShadow: ['0 0 0 0 rgba(232,174,20,0)', '0 0 0 8px rgba(232,174,20,0.25)', '0 0 0 0 rgba(232,174,20,0)'] } : undefined}
                   className={cn(
-                    'mt-2 flex w-full flex-wrap items-center justify-center gap-x-2 gap-y-1 rounded-3xl border border-gold/50 bg-gold/10 px-4 py-2.5 text-sm font-semibold text-gold-dim transition hover:-translate-y-0.5 hover:bg-gold/20 disabled:pointer-events-none disabled:opacity-45',
+                    'relative isolate mt-2 flex w-full cursor-pointer select-none flex-wrap items-center justify-center gap-x-2 gap-y-1 overflow-hidden rounded-3xl border border-gold/50 bg-gold/10 px-4 py-2.5 text-sm font-semibold text-gold-dim transition hover:-translate-y-0.5 hover:bg-gold/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold/40 disabled:cursor-not-allowed disabled:opacity-45 [&_*]:pointer-events-none',
                     fight.busy && reveal?.myMove === FUSION && 'ring-2 ring-gold/40',
                   )}
                 >
-                  <Cable className="size-4" />
-                  {fight.fusion.used ? t('合体技已用过', 'Fusion move used') : t(`合体技 · 接上线友「${fight.fusion.partner.name}」`, `Fusion move · wire in ${fight.fusion.partner.name}`)}
+                  {flashes.filter((f) => f.slot === FUSION).map((f) => (
+                    <PhotoBurst
+                      key={f.id}
+                      x={f.x}
+                      y={f.y}
+                      color={MOVE_FX[FUSION]!.color}
+                      hi={MOVE_FX[FUSION]!.hi}
+                      onDone={() => setFlashes((list) => list.filter((x) => x.id !== f.id))}
+                    />
+                  ))}
+                  <Cable className="relative size-4" />
+                  <span className="relative">{fight.fusion.used ? t('合体技已用过', 'Fusion move used') : t(`合体技 · 接上线友「${fight.fusion.partner.name}」`, `Fusion move · wire in ${fight.fusion.partner.name}`)}</span>
                   {!fight.fusion.used && (
-                    <span className="flex items-center gap-1 font-mono text-[11px] font-normal">
+                    <span className="relative flex items-center gap-1 font-mono text-[11px] font-normal">
                       <PowerPips power={fight.fusion.roll.power} /> {t('+2 · 无视克制 · 每场 1 次', '+2 · ignores the triangle · once per battle')}
                     </span>
                   )}
@@ -689,10 +1088,26 @@ export function Train() {
 
         <p className="mt-3 text-center text-[11px] text-faint">
           {t(
-            '本地演示：浏览器按 TapeOut 网表规则逐门仿真（与链上 eval 同一套规则）。上链后由合约求值并用区块随机数出题。',
-            'Local demo: the browser simulates the TapeOut netlist gate by gate (the same rules as on-chain eval). On-chain, the contract will evaluate it and draw the inputs from block randomness.',
+            '浏览器按 TapeOut 网表规则逐门仿真（与链上 eval 同一套规则）。上链后由合约求值并用区块随机数出题。',
+            'The browser simulates the TapeOut netlist gate by gate (the same rules as on-chain eval). On-chain, the contract will evaluate it and draw the inputs from block randomness.',
           )}
         </p>
+
+        <AnimatePresence>
+          {end && showResult && (
+            <BattleResultModal
+              key="battle-result"
+              end={end}
+              petName={fight.petName}
+              canRematch={localChipet.canBattle(myPet)}
+              seed={fight.seed}
+              onRematch={() => start(opp)}
+              onPick={() => setFight(null)}
+              onVisit={() => go(`/pet/${fight.petId}`)}
+              onClose={() => setShowResult(false)}
+            />
+          )}
+        </AnimatePresence>
       </div>
     );
   }

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Cable, CalendarCheck, Check, Fish, Flame, Hand, Pencil, Sparkles, Swords, ThumbsUp, Trophy, Users } from 'lucide-react';
 import { Button, Input, PAGE, PageHeader, Panel, Segmented, StatBand, Tag, cn } from '../components/ui.tsx';
 import { go } from '../router.tsx';
@@ -9,6 +9,9 @@ import { heartOf } from '../chipet/heart.ts';
 import { maxBonds, social } from '../chipet/social.ts';
 import { plural, txt, useLang, useT } from '../i18n.ts';
 
+/** 广场动态每页条数；滚到底加载下一页 */
+const FEED_PAGE = 12;
+
 export function Plaza() {
   const t = useT();
   const lang = useLang();
@@ -18,13 +21,27 @@ export function Plaza() {
   const [name, setName] = useState(social.profile().displayName);
   const [editing, setEditing] = useState(false);
   const [tick, setTick] = useState(0);
+  const [feedShown, setFeedShown] = useState(FEED_PAGE);
+  const feedScroll = useRef<HTMLDivElement>(null);
   const profile = useMemo(() => social.profile(), [tick, lang]);
   const activities = useMemo(() => social.activities(), [tick]);
+  const feed = useMemo(() => activities.slice(0, feedShown), [activities, feedShown]);
+  const feedMore = feedShown < activities.length;
   const hot = useMemo(() => social.leaderboard('pats').slice(0, 6), [tick]);
   const ranks = useMemo(() => social.leaderboard(rankKind), [tick, rankKind]);
   const bonds = useMemo(() => social.bonds(), [tick]);
   const neighbors = useMemo(() => social.neighbors(), [tick]);
   const top = ranks[0]?.score || 1;
+
+  useEffect(() => { setFeedShown(FEED_PAGE); }, [tick, tab]);
+
+  const onFeedScroll = () => {
+    const el = feedScroll.current;
+    if (!el || !feedMore) return;
+    if (el.scrollTop + el.clientHeight >= el.scrollHeight - 48) {
+      setFeedShown((n) => Math.min(n + FEED_PAGE, activities.length));
+    }
+  };
 
   const saveName = () => {
     social.setName(name);
@@ -85,8 +102,12 @@ export function Plaza() {
               {activities.length === 0 ? (
                 <p className="p-10 text-center text-sm text-mute">{t('还没有动态，去孵化或摸摸邻居吧。', 'Nothing here yet. Hatch a kitty or go pat a neighbor.')}</p>
               ) : (
-                <div className="max-h-[calc(20*4.75rem)] divide-y divide-line/70 overflow-y-auto overscroll-contain [scrollbar-gutter:stable]">
-                  {activities.map((a) => {
+                <div
+                  ref={feedScroll}
+                  onScroll={onFeedScroll}
+                  className="chip-scroll max-h-[calc(12*4.75rem)] divide-y divide-line/70 overflow-y-auto overscroll-contain [scrollbar-gutter:stable]"
+                >
+                  {feed.map((a) => {
                     const I = ACT_ICON[a.kind] ?? Sparkles;
                     return (
                       <div key={a.id} className="flex min-h-[4.75rem] items-center gap-2 pr-4 transition hover:bg-panel-2/50">
@@ -108,6 +129,11 @@ export function Plaza() {
                       </div>
                     );
                   })}
+                  {feedMore && (
+                    <p className="py-3 text-center text-[11px] text-faint">
+                      {t(`已显示 ${feed.length} / ${activities.length} · 继续下滑加载`, `Showing ${feed.length} / ${activities.length} · scroll for more`)}
+                    </p>
+                  )}
                 </div>
               )}
             </Panel>
