@@ -25,7 +25,8 @@ function App() {
   useLang();
   const [a, b] = r.parts;
   let page;
-  if (a === 'pet' && b) page = <PetPage id={Number(b)} />;
+  if (a === 'pet' && b === 's' && r.parts[2]) page = <PetPage share={r.parts[2]} />;
+  else if (a === 'pet' && b) page = <PetPage id={Number(b)} />;
   else if (a === 'plaza') page = <Plaza />;
   else if (a === 'dex') page = <Dex />;
   else if (a === 'train') page = <Train />;

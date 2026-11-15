@@ -28,7 +28,7 @@ function fmtCd(ms: number) {
   return s >= 60 ? tr(`${Math.ceil(s / 60)} 分钟`, `${Math.ceil(s / 60)} min`) : tr(`${s} 秒`, `${s}s`);
 }
 
-export function PetPage({ id }: { id: number }) {
+export function PetPage({ id, share: shareToken }: { id?: number; share?: string }) {
   const t = useT();
   const lang = useLang();
   const { deployment, signer, run, notify } = useApp();
@@ -41,9 +41,12 @@ export function PetPage({ id }: { id: number }) {
   const [tick, setTick] = useState(0);
   const [impulse, setImpulse] = useState<ChipImpulse>('idle');
 
-  const pet = useMemo(() => social.getByRouteId(id), [id, tick, now]);
+  const pet = useMemo(
+    () => (shareToken ? social.fromShareToken(shareToken) : id != null ? social.getByRouteId(id) : undefined),
+    [id, shareToken, tick, now],
+  );
   const key = pet?.key ?? '';
-  const local = pet?.mine ? localChipet.get(id) : undefined;
+  const local = pet?.mine ? localChipet.get(pet.id) : undefined;
   const chainCare = !!(chipet && local && isChainPet(local));
   const bubble = txt(useMemo(() => (key ? social.bubble(key) : ''), [key, tick]));
   const notes = useMemo(() => (key ? social.notes(key) : []), [key, tick]);
@@ -101,10 +104,12 @@ export function PetPage({ id }: { id: number }) {
     window.setTimeout(() => setImpulse('idle'), 900);
   };
 
+  const petId = pet.id;
+
   const refreshFromChain = async () => {
     if (!chipet) return;
     const s = await signer();
-    const on = await readPet(s.pub, chipet, id);
+    const on = await readPet(s.pub, chipet, petId);
     localChipet.upsertChain(on);
     setNow(Date.now());
     setTick((n) => n + 1);
@@ -114,7 +119,7 @@ export function PetPage({ id }: { id: number }) {
     if (chainCare && chipet) {
       void run(t('喂食', 'Feed'), async (step) => {
         const s = await signer();
-        await feedChipet(s, chipet, id, step);
+        await feedChipet(s, chipet, petId, step);
         await refreshFromChain();
         pulse('gift');
         flash(t('吃饱啦，呼噜呼噜~', 'All full. Purr purr~'));
@@ -122,7 +127,7 @@ export function PetPage({ id }: { id: number }) {
       return;
     }
     try {
-      localChipet.feed(id);
+      localChipet.feed(petId);
       setNow(Date.now());
       setTick((n) => n + 1);
       pulse('gift');
@@ -137,7 +142,7 @@ export function PetPage({ id }: { id: number }) {
         return;
       }
       bem.spendDemo('energy');
-      localChipet.refillEnergy(id);
+      localChipet.refillEnergy(petId);
       setNow(Date.now());
       setTick((t) => t + 1);
       pulse('happy');
@@ -148,7 +153,7 @@ export function PetPage({ id }: { id: number }) {
   /** 通电小游戏打完三关后结算，返回给小游戏展示的奖励文案。 */
   const settlePower = (stars: number, max: number) => {
     const finishLocal = () => {
-      const r = localChipet.powerUp(id, stars);
+      const r = localChipet.powerUp(petId, stars);
       const { fish } = social.recordPower(r.pet, stars, max);
       setNow(Date.now());
       setTick((n) => n + 1);
@@ -162,10 +167,10 @@ export function PetPage({ id }: { id: number }) {
       // 链上 play 写心情/亲密；经验仍记在本地缓存
       void run(t('通电玩耍', 'Power Play'), async (step) => {
         const s = await signer();
-        await playChipet(s, chipet, id, step);
+        await playChipet(s, chipet, petId, step);
         await refreshFromChain();
         const xp = 4 + stars * 2;
-        const { pet: cur } = localChipet.grantXp(id, xp);
+        const { pet: cur } = localChipet.grantXp(petId, xp);
         social.recordPower(cur, stars, max);
         pulse('happy');
         notify('ok', t('通电完成', 'Power Play done'));
@@ -241,7 +246,9 @@ export function PetPage({ id }: { id: number }) {
     }
   };
 
-  const idText = `${pet.mine ? '#' : 'N-'}${String(Math.abs(pet.id)).padStart(4, '0')}`;
+  const idText = pet.key.startsWith('share:')
+    ? `S-${String(Math.abs(pet.id) % 10000).padStart(4, '0')}`
+    : `${pet.mine ? '#' : 'N-'}${String(Math.abs(pet.id)).padStart(4, '0')}`;
   const hp = maxHpOf(level, pet.rarity, mood);
   const genes = [
     ...traits.map((g) => ({ ...g, swatch: g.label === 'base' ? ph.body : g.label === 'eyes' ? ph.eye : undefined })),
@@ -345,7 +352,7 @@ export function PetPage({ id }: { id: number }) {
                   <Button size="lg" variant="si" icon={Zap} disabled={playLeft > 0 || gameOpen} onClick={() => setGameOpen(true)}>
                     {playLeft > 0 ? t(`通电玩耍（${fmtCd(playLeft)}）`, `Power Play (${fmtCd(playLeft)})`) : t('通电玩耍', 'Power Play')}
                   </Button>
-                  <Button size="lg" variant="ghost" icon={Swords} onClick={() => go(`/train?me=${id}`)}>{t('去对战', 'Battle')}</Button>
+                  <Button size="lg" variant="ghost" icon={Swords} onClick={() => go(`/train?me=${petId}`)}>{t('去对战', 'Battle')}</Button>
                 </>
               ) : (
                 <>
@@ -466,10 +473,31 @@ export function PetPage({ id }: { id: number }) {
           <Panel title={t('访客留言板', 'Guestbook')} icon={MessageCircle} bodyClass="p-5 sm:p-6"
             right={<span className="font-mono text-[11px] text-mute">{t(`${notes.length} 条`, plural(notes.length, 'note'))}</span>}>
             <div className="flex gap-2">
-              <Input className="min-w-0 flex-1" value={note} maxLength={60} placeholder={t('夸一句、约对战、求摸头…', 'Say something nice, ask for a battle, beg for a pat…')}
-                onChange={(e) => setNote(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && sendNote()} />
+              <Input
+                className="min-w-0 flex-1"
+                value={note}
+                maxLength={60}
+                autoComplete="off"
+                autoCorrect="off"
+                spellCheck={false}
+                inputMode="text"
+                placeholder={t('夸一句、约对战、求摸头…', 'Say something nice, ask for a battle, beg for a pat…')}
+                onChange={(e) => setNote(e.target.value.slice(0, 60))}
+                onPaste={(e) => {
+                  // 粘贴也裁到上限，避免一次塞入超长载荷
+                  const clip = e.clipboardData.getData('text/plain');
+                  if (!clip) return;
+                  e.preventDefault();
+                  const next = `${note}${clip}`.slice(0, 60);
+                  setNote(next);
+                }}
+                onKeyDown={(e) => e.key === 'Enter' && sendNote()}
+              />
               <Button disabled={!note.trim()} onClick={sendNote}>{t('留言', 'Post')}</Button>
             </div>
+            <p className="mt-2 text-[11px] text-faint">
+              {t('禁止链接与敏感词；发送有频率限制。', 'No links or blocked words; posting is rate-limited.')}
+            </p>
             <ul className="mt-4 space-y-2.5">
               {notes.length === 0 ? (
                 <li className="rounded-2xl bg-panel-2/50 py-8 text-center text-sm text-mute">{t('还没有留言，来做第一个访客吧。', 'No notes yet. Be the first visitor.')}</li>

@@ -3,6 +3,7 @@ import { both, tr, txt, type Text, type Txt } from '../i18n.ts';
 import { WILDS } from './battle.ts';
 import type { Rarity } from './phenotype.ts';
 import { bem } from './bem.ts';
+import { prepareNote, scrubNoteText } from './noteGuard.ts';
 import { localChipet, type LocalPet } from './store.ts';
 
 const MOCK_CPU = '0x000000000000000000000000000000000000c111' as Address;
@@ -394,15 +395,19 @@ export const social = {
     return s.fish;
   },
   notes(key: string) {
-    return load().notes[key] ?? [];
+    return (load().notes[key] ?? []).map((n) => ({
+      ...n,
+      // 读出时再洗一遍，防旧数据或被改过的 localStorage
+      text: typeof n.text === 'string' ? scrubNoteText(n.text) : n.text,
+    }));
   },
   leaveNote(key: string, text: string) {
     const s = load();
     const pet = this.getPet(key);
     if (!pet) throw noPet();
-    const t = text.trim().slice(0, 60);
-    if (!t) throw new Error(tr('写点什么再发送吧', 'Write something before sending'));
-    const note: GuestNote = { id: `n${Date.now()}`, from: me(s), text: t, at: Date.now() };
+    // 清洗、禁链、敏感词、限流；只入库纯文本
+    const t = prepareNote(key, text);
+    const note: GuestNote = { id: `n${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`, from: me(s), text: t, at: Date.now() };
     s.notes[key] = [note, ...(s.notes[key] ?? [])].slice(0, 20);
     const who = namesOf(pet);
     pushAct(s, { kind: 'note', actor: me(s), petKey: key, petName: pet.name, text: both(`在「${who.zh}」家留言：${t}`, `Left a note for ${who.en}: ${t}`) });
@@ -579,9 +584,102 @@ export const social = {
       .sort((a, b) => b.score - a.score || b.pet.rarity - a.pet.rarity)
       .slice(0, 10);
   },
+  /**
+   * 分享拜访链接：用电路身份等字段编码，任何人打开都能还原「这一只」猫，
+   * 不再依赖本机 `/pet/{本地id}`（别人浏览器里对不上）。
+   */
   shareUrl(key: string) {
     const pet = this.getPet(key);
     if (!pet) return location.href;
-    return `${location.origin}/pet/${pet.id}`;
+    return `${location.origin}/pet/s/${encodeSharePet(pet)}`;
+  },
+  /** 解析 `/pet/s/<token>`；若本机已有同一只（同 circuit+cpu），优先显示自己的那只。 */
+  fromShareToken(token: string): PublicPet | undefined {
+    const data = decodeSharePet(token);
+    if (!data) return undefined;
+    const s = load();
+    const cid = BigInt(data.c);
+    const cpu = data.u.toLowerCase() as Address;
+    const mine = localChipet.list().find((p) => p.circuitId === cid && p.cpu.toLowerCase() === cpu);
+    if (mine) return toPublic(mine, me(s));
+    const rarity = (data.r === 1 || data.r === 2 ? data.r : 0) as Rarity;
+    return {
+      key: shareKeyOf(data.c, data.u),
+      id: shareDisplayId(data.c),
+      name: data.n.slice(0, 32) || tr('芯喵', 'Chipet'),
+      owner: data.o.slice(0, 24) || tr('旅行者', 'Traveler'),
+      cpu: (data.u || MOCK_CPU) as Address,
+      circuitId: cid,
+      rarity,
+      energy: clampStat(data.e, 80),
+      mood: clampStat(data.m, 70),
+      intimacy: Math.max(0, Math.floor(data.i ?? 0)),
+      level: Math.max(1, Math.floor(data.lv ?? 1)),
+      wins: Math.max(0, Math.floor(data.w ?? 0)),
+      mine: false,
+    };
   },
 };
+
+/** 分享载荷：足以唯一还原外形与档案的最小字段集 */
+type SharePayload = {
+  n: string;
+  o: string;
+  c: string;
+  u: string;
+  r: number;
+  lv?: number;
+  w?: number;
+  m?: number;
+  e?: number;
+  i?: number;
+};
+
+function clampStat(n: number | undefined, fallback: number) {
+  if (n == null || !Number.isFinite(n)) return fallback;
+  return Math.max(0, Math.min(100, Math.floor(n)));
+}
+
+function shareKeyOf(circuitId: string, cpu: string) {
+  return `share:${circuitId}:${cpu.toLowerCase()}`;
+}
+
+/** 展示用伪 id（负数），避免和本机正数 id / NPC 撞车时误路由 */
+function shareDisplayId(circuitId: string) {
+  let h = 0;
+  for (let i = 0; i < circuitId.length; i++) h = (h * 31 + circuitId.charCodeAt(i)) | 0;
+  return -1_000_000 - (Math.abs(h) % 900_000);
+}
+
+function encodeSharePet(pet: PublicPet): string {
+  const payload: SharePayload = {
+    n: pet.name,
+    o: pet.owner,
+    c: pet.circuitId.toString(),
+    u: pet.cpu,
+    r: pet.rarity,
+    lv: pet.level,
+    w: pet.wins,
+    m: pet.mood,
+    e: pet.energy,
+    i: pet.intimacy,
+  };
+  const bytes = new TextEncoder().encode(JSON.stringify(payload));
+  let bin = '';
+  for (const b of bytes) bin += String.fromCharCode(b);
+  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+function decodeSharePet(token: string): SharePayload | null {
+  try {
+    const b64 = token.replace(/-/g, '+').replace(/_/g, '/');
+    const pad = b64.length % 4 === 0 ? '' : '='.repeat(4 - (b64.length % 4));
+    const bin = atob(b64 + pad);
+    const bytes = Uint8Array.from(bin, (ch) => ch.charCodeAt(0));
+    const data = JSON.parse(new TextDecoder().decode(bytes)) as SharePayload;
+    if (!data?.c || !data?.u || typeof data.n !== 'string') return null;
+    return data;
+  } catch {
+    return null;
+  }
+}
