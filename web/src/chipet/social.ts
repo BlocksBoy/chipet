@@ -582,6 +582,6 @@ export const social = {
   shareUrl(key: string) {
     const pet = this.getPet(key);
     if (!pet) return location.href;
-    return `${location.origin}${location.pathname}#/pet/${pet.id}`;
+    return `${location.origin}/pet/${pet.id}`;
   },
 };

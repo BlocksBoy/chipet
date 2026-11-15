@@ -14,11 +14,13 @@ import { LiveDie } from '../chipet/LiveDie.tsx';
 import { PowerUpGame } from '../chipet/PowerUpGame.tsx';
 import { fuse, heartOf } from '../chipet/heart.ts';
 import { maxHpOf, MOOD_HP, MOVES, favOf } from '../chipet/battle.ts';
-import { localChipet, xpNeed } from '../chipet/store.ts';
+import { feedChipet, playChipet, readPet } from '@tapearena/chain';
+import { isChainPet, localChipet, xpNeed } from '../chipet/store.ts';
 import { cattributes, geneStory, phenotypeOf, typeLabel } from '../chipet/phenotype.ts';
 import { maxBonds, social } from '../chipet/social.ts';
 import { BEM_SKUS, bem } from '../chipet/bem.ts';
 import { plural, tr, txt, useLang, useT } from '../i18n.ts';
+import { useApp } from '../state.tsx';
 
 function fmtCd(ms: number) {
   if (ms <= 0) return '';
@@ -29,6 +31,8 @@ function fmtCd(ms: number) {
 export function PetPage({ id }: { id: number }) {
   const t = useT();
   const lang = useLang();
+  const { deployment, signer, run, notify } = useApp();
+  const chipet = deployment?.chipet;
   const [err, setErr] = useState('');
   const [ok, setOk] = useState('');
   const [gameOpen, setGameOpen] = useState(false);
@@ -40,6 +44,7 @@ export function PetPage({ id }: { id: number }) {
   const pet = useMemo(() => social.getByRouteId(id), [id, tick, now]);
   const key = pet?.key ?? '';
   const local = pet?.mine ? localChipet.get(id) : undefined;
+  const chainCare = !!(chipet && local && isChainPet(local));
   const bubble = txt(useMemo(() => (key ? social.bubble(key) : ''), [key, tick]));
   const notes = useMemo(() => (key ? social.notes(key) : []), [key, tick]);
   const bonds = useMemo(() => social.bonds(), [tick]);
@@ -96,11 +101,30 @@ export function PetPage({ id }: { id: number }) {
     window.setTimeout(() => setImpulse('idle'), 900);
   };
 
+  const refreshFromChain = async () => {
+    if (!chipet) return;
+    const s = await signer();
+    const on = await readPet(s.pub, chipet, id);
+    localChipet.upsertChain(on);
+    setNow(Date.now());
+    setTick((n) => n + 1);
+  };
+
   const feed = () => {
+    if (chainCare && chipet) {
+      void run(t('喂食', 'Feed'), async (step) => {
+        const s = await signer();
+        await feedChipet(s, chipet, id, step);
+        await refreshFromChain();
+        pulse('gift');
+        flash(t('吃饱啦，呼噜呼噜~', 'All full. Purr purr~'));
+      }).catch(fail);
+      return;
+    }
     try {
       localChipet.feed(id);
       setNow(Date.now());
-      setTick((t) => t + 1);
+      setTick((n) => n + 1);
       pulse('gift');
       flash(t('吃饱啦，呼噜呼噜~', 'All full. Purr purr~'));
     } catch (e) { fail(e); }
@@ -123,16 +147,33 @@ export function PetPage({ id }: { id: number }) {
 
   /** 通电小游戏打完三关后结算，返回给小游戏展示的奖励文案。 */
   const settlePower = (stars: number, max: number) => {
-    try {
+    const finishLocal = () => {
       const r = localChipet.powerUp(id, stars);
       const { fish } = social.recordPower(r.pet, stars, max);
       setNow(Date.now());
-      setTick((t) => t + 1);
+      setTick((n) => n + 1);
       pulse('happy');
       return t(
         `心情 +${r.mood} · 经验 +${r.xp}${r.ups ? ` · 升到 Lv.${r.pet.level}` : ''}${fish ? ' · 满星奖励鱼干 +1' : ''}`,
         `Mood +${r.mood} · XP +${r.xp}${r.ups ? ` · leveled up to Lv.${r.pet.level}` : ''}${fish ? ' · perfect bonus: +1 fish treat' : ''}`,
       );
+    };
+    if (chainCare && chipet) {
+      // 链上 play 写心情/亲密；经验仍记在本地缓存
+      void run(t('通电玩耍', 'Power Play'), async (step) => {
+        const s = await signer();
+        await playChipet(s, chipet, id, step);
+        await refreshFromChain();
+        const xp = 4 + stars * 2;
+        const { pet: cur } = localChipet.grantXp(id, xp);
+        social.recordPower(cur, stars, max);
+        pulse('happy');
+        notify('ok', t('通电完成', 'Power Play done'));
+      });
+      return t('链上结算中…', 'Settling on-chain…');
+    }
+    try {
+      return finishLocal();
     } catch (e) {
       return e instanceof Error ? e.message : String(e);
     }

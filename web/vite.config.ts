@@ -2,9 +2,10 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 
-// base: './' 让构建产物可以挂在 DeWEB / IPFS 任意路径下；路由走 hash。
+// 主站用绝对根路径 + History 路由（Caddy try_files → index.html，刷新不 404）。
+// DeWEB / IPFS 仍用相对 base，可挂在任意目录。
 export default defineConfig(({ mode }) => ({
-  base: './',
+  base: mode === 'deweb' ? './' : '/',
   plugins: [
     react(),
     tailwindcss(),

@@ -2,7 +2,7 @@
 
 import { decodeEventLog, maxUint256, zeroAddress, type Account, type Address, type Chain, type Hex, type PublicClient, type WalletClient } from 'viem';
 import { L, stats, toHex } from '@tapearena/netlist';
-import { arenaAbi, cpuAbi, erc20Abi, libraryAbi, transistorsAbi } from './abi.ts';
+import { arenaAbi, chipetAbi, cpuAbi, erc20Abi, libraryAbi, transistorsAbi } from './abi.ts';
 
 export interface Signer {
   pub: PublicClient;
@@ -146,3 +146,37 @@ export const registerComponent = (s: Signer, library: Address, cpu: Address, cir
 
 export const tipComponent = (s: Signer, library: Address, key: Hex, amount: bigint, onStep?: Progress) =>
   send(s, { address: library, abi: libraryAbi, functionName: 'tip', args: [key], value: amount } as never, L('打赏作者', 'Tip the author'), onStep);
+
+/** 孵化芯宠；返回 petId 与 Hatched 事件字段。value 默认读 hatchPrice。 */
+export async function hatchChipet(s: Signer, chipet: Address, name: string, value?: bigint, onStep?: Progress) {
+  const price = value ?? await s.pub.readContract({ address: chipet, abi: chipetAbi, functionName: 'hatchPrice' });
+  const receipt = await send(s, {
+    address: chipet, abi: chipetAbi, functionName: 'hatch', args: [name], value: price,
+  } as never, L('孵化芯宠', 'Hatch Chipet'), onStep);
+  for (const log of receipt.logs) {
+    if (log.address.toLowerCase() !== chipet.toLowerCase()) continue;
+    try {
+      const ev = decodeEventLog({ abi: chipetAbi, data: log.data, topics: log.topics });
+      if (ev.eventName === 'Hatched') {
+        return {
+          petId: Number(ev.args.petId),
+          cpu: ev.args.cpu as Address,
+          circuitId: ev.args.circuitId,
+          rarity: Number(ev.args.rarity) as 0 | 1 | 2,
+          name: ev.args.name as string,
+          hash: receipt.transactionHash,
+        };
+      }
+    } catch { /* 其他事件 */ }
+  }
+  throw new Error(L('孵化成功但没解析到宠物号', 'Hatch succeeded, but the pet ID could not be read from the receipt'));
+}
+
+export const feedChipet = (s: Signer, chipet: Address, petId: number, onStep?: Progress) =>
+  send(s, { address: chipet, abi: chipetAbi, functionName: 'feed', args: [BigInt(petId)] } as never, L('喂食', 'Feed'), onStep);
+
+export const playChipet = (s: Signer, chipet: Address, petId: number, onStep?: Progress) =>
+  send(s, { address: chipet, abi: chipetAbi, functionName: 'play', args: [BigInt(petId)] } as never, L('通电玩耍', 'Power Play'), onStep);
+
+export const renameChipet = (s: Signer, chipet: Address, petId: number, name: string, onStep?: Progress) =>
+  send(s, { address: chipet, abi: chipetAbi, functionName: 'rename', args: [BigInt(petId), name] } as never, L('改名', 'Rename'), onStep);

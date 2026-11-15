@@ -27,7 +27,10 @@ const PLAY_CD = 3 * 60 * 1000;
 /** 对战一场消耗的能量 */
 export const BATTLE_ENERGY = 15;
 
-const MOCK_CPU = '0x000000000000000000000000000000000000c111' as Address;
+export const MOCK_CPU = '0x000000000000000000000000000000000000c111' as Address;
+
+/** 链上宠物：cpu 不是本地占位地址 */
+export const isChainPet = (p: { cpu: Address }) => p.cpu.toLowerCase() !== MOCK_CPU.toLowerCase();
 
 type Stored = Omit<LocalPet, 'circuitId' | 'xp' | 'wins' | 'losses'> & {
   circuitId: string;
@@ -114,6 +117,77 @@ export const localChipet = {
     save(pets);
     return pet;
   },
+  /** 把链上宠物写入本地缓存（按 id 覆盖），供广场/图鉴/详情共用。 */
+  upsertChain(input: {
+    id: number;
+    name: string;
+    cpu: Address;
+    circuitId: bigint;
+    rarity: Rarity;
+    energy: number;
+    mood: number;
+    intimacy: number;
+    level: number;
+    lastFeed: number;
+    lastPlay: number;
+  }): LocalPet {
+    const pets = load();
+    const i = pets.findIndex((p) => p.id === input.id);
+    const prev = i >= 0 ? pets[i]! : undefined;
+    const pet: LocalPet = {
+      id: input.id,
+      name: input.name,
+      cpu: input.cpu,
+      circuitId: input.circuitId,
+      rarity: input.rarity,
+      energy: input.energy,
+      mood: input.mood,
+      intimacy: input.intimacy,
+      // 合约 level 仅对战改；本地通电也会涨级，取较大值
+      level: Math.max(prev?.level ?? 1, input.level),
+      xp: prev?.xp ?? 0,
+      wins: prev?.wins ?? 0,
+      losses: prev?.losses ?? 0,
+      // 合约存的是秒；本地冷却用毫秒
+      lastFeed: input.lastFeed ? input.lastFeed * 1000 : 0,
+      lastPlay: input.lastPlay ? input.lastPlay * 1000 : 0,
+      hatchedAt: prev?.hatchedAt ?? Date.now(),
+    };
+    if (i >= 0) pets[i] = pet;
+    else pets.push(pet);
+    save(pets);
+    return pet;
+  },
+  /** 批量同步链上宠物；保留纯本地（MOCK_CPU）的演示宠。 */
+  syncChainPets(chainPets: {
+    id: number; name: string; cpu: Address; circuitId: bigint; rarity: Rarity;
+    energy: number; mood: number; intimacy: number; level: number; lastFeed: number; lastPlay: number;
+  }[]) {
+    const prevAll = load();
+    const keep = prevAll.filter((p) => !isChainPet(p));
+    const mapped = chainPets.map((c) => {
+      const prev = prevAll.find((p) => p.id === c.id);
+      return {
+        id: c.id,
+        name: c.name,
+        cpu: c.cpu,
+        circuitId: c.circuitId,
+        rarity: c.rarity,
+        energy: c.energy,
+        mood: c.mood,
+        intimacy: c.intimacy,
+        level: Math.max(prev?.level ?? 1, c.level),
+        xp: prev?.xp ?? 0,
+        wins: prev?.wins ?? 0,
+        losses: prev?.losses ?? 0,
+        lastFeed: c.lastFeed ? c.lastFeed * 1000 : 0,
+        lastPlay: c.lastPlay ? c.lastPlay * 1000 : 0,
+        hatchedAt: prev?.hatchedAt ?? Date.now(),
+      } satisfies LocalPet;
+    });
+    save([...keep, ...mapped]);
+    return mapped;
+  },
   feed(id: number) {
     const pets = load();
     const p = mustFind(pets, id);
@@ -181,6 +255,14 @@ export const localChipet = {
     const ups = gainXp(p, xp);
     save(pets);
     return { pet: p, ups };
+  },
+  /** 链上玩耍后补本地经验（合约不存 XP）。 */
+  grantXp(id: number, xp: number) {
+    const pets = load();
+    const p = mustFind(pets, id);
+    const ups = gainXp(p, xp);
+    save(pets);
+    return { pet: p, ups, xp };
   },
   /** 被摸头 / 收礼物时的轻量心情加成 */
   cheer(id: number, mood = 8, intimacy = 1) {

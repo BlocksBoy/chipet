@@ -9,6 +9,7 @@ import { PetAvatar } from '../chipet/PetAvatar.tsx';
 import { KittyEgg } from '../chipet/KittyEgg.tsx';
 import { FxOverlay, type ChipImpulse } from '../chipet/FxOverlay.tsx';
 import { SceneStage } from '../chipet/SceneStage.tsx';
+import { hatchChipet, petsOfOwner } from '@tapearena/chain';
 import { localChipet } from '../chipet/store.ts';
 import { cattributes, phenotypeOf, SPECIES_COUNT, typeLabel } from '../chipet/phenotype.ts';
 import { heartOf } from '../chipet/heart.ts';
@@ -49,10 +50,11 @@ const QUEST_ICON: Record<QuestId, ComponentType<LucideProps>> = {
 };
 
 export function Home() {
-  const { deployment, chain, account, connect, run, notify } = useApp();
+  const { deployment, chain, account, connect, run, notify, signer, pub, refreshKey } = useApp();
   const t = useT();
   const lang = useLang();
-  const onChain = !!deployment?.chipet;
+  const chipet = deployment?.chipet;
+  const onChain = !!chipet;
   const [name, setName] = useState('');
   const [hatched, setHatched] = useState<ReturnType<typeof localChipet.hatch> | null>(null);
   const [phase, setPhase] = useState<'egg' | 'cracking' | 'kitty'>('egg');
@@ -64,7 +66,7 @@ export function Home() {
   const [fxNonce, setFxNonce] = useState(0);
   const pulseSeq = useRef(0);
   const timers = useRef<number[]>([]);
-  const pets = useMemo(() => localChipet.list(), [tick]);
+  const pets = useMemo(() => localChipet.list(), [tick, refreshKey]);
   const profile = useMemo(() => social.profile(), [tick]);
   const quests = useMemo(() => social.quests(), [tick]);
   const feed = useMemo(() => social.activities().slice(0, 5), [tick]);
@@ -78,6 +80,18 @@ export function Home() {
   const showKitty = phase === 'kitty' && !!hatched;
 
   useEffect(() => () => timers.current.forEach((t) => window.clearTimeout(t)), []);
+
+  /** 钱包连上且合约已部署时，把链上宠物拉进本地缓存。 */
+  useEffect(() => {
+    if (!chipet || !account) return;
+    let live = true;
+    petsOfOwner(pub, chipet, account).then((list) => {
+      if (!live) return;
+      localChipet.syncChainPets(list);
+      setTick((n) => n + 1);
+    }).catch(() => { /* 读失败时保留本地缓存 */ });
+    return () => { live = false; };
+  }, [chipet, account, pub, refreshKey]);
   const later = (fn: () => void, ms: number) => {
     timers.current.push(window.setTimeout(fn, ms));
   };
@@ -120,16 +134,29 @@ export function Home() {
           return;
         }
       }
-      const make = () => localChipet.hatch(n, fancy ? { guarantee: 'fancy' } : undefined);
-      if (onChain) {
-        await run(t(fancy ? '限定孵化' : '孵化芯宠', fancy ? 'Premium hatch' : 'Hatch'), async () => {
-          const p = make();
+      if (onChain && chipet) {
+        await run(t('孵化芯宠', 'Hatch'), async (step) => {
+          const s = await signer();
+          const hatchedOn = await hatchChipet(s, chipet, n, undefined, step);
+          const p = localChipet.upsertChain({
+            id: hatchedOn.petId,
+            name: hatchedOn.name || n,
+            cpu: hatchedOn.cpu,
+            circuitId: hatchedOn.circuitId,
+            rarity: hatchedOn.rarity,
+            energy: 80,
+            mood: 70,
+            intimacy: 0,
+            level: 1,
+            lastFeed: 0,
+            lastPlay: 0,
+          });
           reveal(p);
           return p;
         });
         return;
       }
-      reveal(make());
+      reveal(localChipet.hatch(n, fancy ? { guarantee: 'fancy' } : undefined));
     } catch (e) {
       notify('err', e instanceof Error ? e.message : String(e));
     }

@@ -7,7 +7,7 @@ dist/
 deploy/.env.deploy.local
 contracts/out/
 contracts/cache/
-contracts/broadcast/*/31337/
+contracts/broadcast/
 *.log
 .DS_Store
 server/data/

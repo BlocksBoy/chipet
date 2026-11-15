@@ -116,6 +116,7 @@ export const chipetAbi = parseAbi([
   'function playCooldown() view returns (uint64)',
   'function nextId() view returns (uint256)',
   'function templateCount() view returns (uint256)',
+  'function addTemplate(address cpu, uint64 circuitId, uint8 rarity, uint16 weight) returns (uint256 index)',
   `function petOf(uint256 petId) view returns (${chipetPetTuple})`,
   'function petsOfOwner(address owner) view returns (uint256[])',
   'function geneHint(uint256 petId) view returns (address cpu, uint64 circuitId, uint8 rarity, uint32 gates, uint32 nIn, uint32 nOut)',

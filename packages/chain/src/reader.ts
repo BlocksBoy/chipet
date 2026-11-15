@@ -1,6 +1,6 @@
 import type { Address, PublicClient } from 'viem';
 import { decodeVectors, fromHex, Library, loadRefTree, resolveData, type CircuitData, type Pin, type Resolved, type Vector } from '@tapearena/netlist';
-import { arenaAbi, cpuAbi, libraryAbi } from './abi.ts';
+import { arenaAbi, chipetAbi, cpuAbi, libraryAbi } from './abi.ts';
 
 export interface ChainCircuit extends CircuitData {
   cpu: Address;
@@ -185,6 +185,66 @@ export interface ComponentInfo {
   verifiedBounty: number; // -1 = 未认证
   name: string;
   meta: Record<string, unknown>;
+}
+
+// ------------------------------------------------------------------ 芯宠
+
+export interface ChipetPet {
+  id: number;
+  cpu: Address;
+  circuitId: bigint;
+  rarity: 0 | 1 | 2;
+  energy: number;
+  mood: number;
+  intimacy: number;
+  level: number;
+  lastFeed: number;
+  lastPlay: number;
+  name: string;
+}
+
+function mapPet(id: number, p: {
+  cpu: Address;
+  circuitId: bigint | number;
+  rarity: number;
+  energy: number;
+  mood: number;
+  intimacy: number;
+  level: number;
+  lastFeed: bigint | number;
+  lastPlay: bigint | number;
+  name: string;
+}): ChipetPet {
+  return {
+    id,
+    cpu: p.cpu,
+    circuitId: BigInt(p.circuitId),
+    rarity: p.rarity as 0 | 1 | 2,
+    energy: p.energy,
+    mood: p.mood,
+    intimacy: p.intimacy,
+    level: p.level,
+    lastFeed: Number(p.lastFeed),
+    lastPlay: Number(p.lastPlay),
+    name: p.name,
+  };
+}
+
+export async function hatchPrice(client: PublicClient, chipet: Address): Promise<bigint> {
+  return client.readContract({ address: chipet, abi: chipetAbi, functionName: 'hatchPrice' });
+}
+
+export async function readPet(client: PublicClient, chipet: Address, petId: number): Promise<ChipetPet> {
+  const p = await client.readContract({ address: chipet, abi: chipetAbi, functionName: 'petOf', args: [BigInt(petId)] });
+  return mapPet(petId, p);
+}
+
+export async function petsOfOwner(client: PublicClient, chipet: Address, owner: Address): Promise<ChipetPet[]> {
+  const ids = await client.readContract({ address: chipet, abi: chipetAbi, functionName: 'petsOfOwner', args: [owner] });
+  return Promise.all(ids.map(async (id) => {
+    const p = await client.readContract({ address: chipet, abi: chipetAbi, functionName: 'petOf', args: [id] });
+    return mapPet(Number(id), p);
+  }));
 }
 
 export async function listComponents(client: PublicClient, library: Address): Promise<ComponentInfo[]> {

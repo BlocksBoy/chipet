@@ -26,7 +26,7 @@ export const localFork = defineChain({
 
 export interface Deployment {
   chainId: number;
-  /** TapeOut 官方工厂（X Layer 主网 0x1f09…0761）。BSC 上没有官方工厂，部署 Chipet 时自己指定。 */
+  /** TapeOut 官方工厂（X Layer `0x1f09…0761` / BSC `0x6822…F7e2`）。 */
   factory?: Address;
   arena?: Address;
   library?: Address;
@@ -40,9 +40,13 @@ export interface Deployment {
 /** TapeOut 在 X Layer 主网的工厂地址，来自 TapeKit 内核配置并经链上核对。 */
 export const XLAYER_TAPEOUT_FACTORY = '0x1f09daefa827f02cbb40967cc91b259763760761' as Address;
 export const XLAYER_BEM = '0x60e62efa9405d6873c5deabd4e6cc91c25363952' as Address;
+/** TapeOut 在 BSC 主网的工厂（Genesis Circuits 见 BSC_GENESIS_CPU）。 */
+export const BSC_TAPEOUT_FACTORY = '0x68224f668083c29e9800be2a646d42d18cedf7e2' as Address;
+export const BSC_GENESIS_CPU = '0x50a994e71615474b55559ff4f500928fbc339dd9' as Address;
 
 export const DEPLOYMENTS: Record<number, Deployment> = {
   196: { chainId: 196, factory: XLAYER_TAPEOUT_FACTORY },
+  56: { chainId: 56, factory: BSC_TAPEOUT_FACTORY, cpu: BSC_GENESIS_CPU },
   ...(deployments as Record<string, Deployment>),
 };
 

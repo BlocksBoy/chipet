@@ -31,10 +31,11 @@ if (existsSync(dir)) {
       ...all[id],
       chainId: Number(id),
       ...(d.factory ? { factory: d.factory } : {}),
+      ...(d.cpu && d.cpu !== zeroAddress ? { cpu: d.cpu } : {}),
       ...(d.chipet && d.chipet !== zeroAddress ? { chipet: d.chipet } : {}),
       deployedAt: new Date().toISOString(),
     };
-    console.log(`链 ${id}: chipet ${d.chipet}`);
+    console.log(`链 ${id}: chipet ${d.chipet}${d.cpu ? ` cpu ${d.cpu}` : ''}`);
   }
 }
 writeFileSync(target, JSON.stringify(all, null, 2) + '\n');
