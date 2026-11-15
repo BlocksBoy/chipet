@@ -3,8 +3,9 @@ import { CHAIN_LABEL, CHAINS, MAINNET_IDS } from '@tapearena/chain';
 import {
   Blocks, BookMarked, BookOpen, Check, ChevronDown, CircleAlert, CircleCheck, Code2, Coins, Cpu, ExternalLink, FlaskConical, Home, Loader2, PenTool, Plus, Swords, TriangleAlert, Trophy, Users, Wallet, X as IconClose,
 } from 'lucide-react';
+import { formatUnits } from 'viem';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
-import { useAccount } from 'wagmi';
+import { useAccount, useBalance } from 'wagmi';
 import { CHAIN_IDS } from '../env.ts';
 import { Link, useRoute } from '../router.tsx';
 import { useApp } from '../state.tsx';
@@ -137,12 +138,17 @@ function NetworkSwitch() {
 }
 
 function WalletButton() {
-  const { connector } = useAccount();
-  const { connect } = useApp();
+  const { connect, chainId, chain } = useApp();
   const t = useT();
+  const { address } = useAccount();
+  const { data: bal } = useBalance({ address, chainId, query: { enabled: !!address } });
+  const displayBal = bal
+    ? `${Number(formatUnits(bal.value, bal.decimals)).toLocaleString(undefined, { maximumFractionDigits: 4 })} ${chain.nativeCurrency.symbol}`
+    : null;
+
   return (
     <ConnectButton.Custom>
-      {({ account, chain, mounted, openAccountModal, openChainModal }) => {
+      {({ account, chain: walletChain, mounted, openAccountModal, openChainModal }) => {
         if (!mounted) return <span className="hidden h-8 w-28 sm:block" aria-hidden />;
         if (!account) {
           return (
@@ -151,7 +157,7 @@ function WalletButton() {
             </Button>
           );
         }
-        if (chain?.unsupported) {
+        if (walletChain?.unsupported) {
           return (
             <Button size="sm" variant="danger" icon={TriangleAlert} onClick={openChainModal} aria-label={t('切换网络', 'Switch network')}>
               <span className="hidden sm:inline">{t('切换网络', 'Switch network')}</span>
@@ -161,10 +167,8 @@ function WalletButton() {
         return (
           <button type="button" onClick={openAccountModal} title={account.address} aria-label={account.displayName}
             className="flex h-8 max-w-[42vw] shrink-0 items-center gap-1 rounded-full bg-panel pr-1.5 pl-1 font-mono text-xs text-ink shadow-sm ring-1 ring-line transition hover:ring-si sm:h-9 sm:gap-2 sm:pr-3 sm:pl-1.5">
-            {connector?.icon
-              ? <img src={connector.icon} alt={connector.name} className="size-5 rounded-full sm:size-6" />
-              : <span className="grid size-5 place-items-center rounded-full bg-panel-2 sm:size-6"><Wallet className="size-3.5 text-si" /></span>}
-            {account.displayBalance && <span className="hidden text-mute tabular-nums xl:inline">{account.displayBalance}</span>}
+            <ChainIcon id={chainId} className="size-5 sm:size-6" />
+            {displayBal && <span className="hidden text-mute tabular-nums xl:inline">{displayBal}</span>}
             <span className="size-1.5 shrink-0 rounded-full bg-si" />
             <span className="hidden truncate sm:inline">{account.displayName}</span>
             <ChevronDown className="size-3.5 shrink-0 text-mute" />
@@ -259,8 +263,8 @@ export function Shell({ children }: { children: ReactNode }) {
               <span className="truncate tabular-nums">{bem.demoBal()}</span>
               <span className="hidden sm:inline">BEM</span>
             </Link>
-            <NetworkSwitch />
             <LangSwitch />
+            <NetworkSwitch />
             <WalletButton />
           </div>
         </div>

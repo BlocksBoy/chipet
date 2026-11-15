@@ -60,7 +60,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return { pub, lib: new ChainLibrary(pub) };
   }, [chainId, chain]);
 
-  const setChainId = (id: number) => { localStorage.setItem('tapearena.chain', String(id)); setChainIdRaw(id); };
+  const setChainId = (id: number) => {
+    localStorage.setItem('tapearena.chain', String(id));
+    setChainIdRaw(id);
+    // 应用内切网时同步钱包，这样原生币余额 / 后续交易都落在同一条链
+    if (account && walletChainId !== id) {
+      void switchChainAsync({ chainId: id }).catch(() => { /* 用户拒绝或钱包不支持时保留应用侧选择 */ });
+    }
+  };
 
   const connectors = useConnectors();
   const [walletGuide, setWalletGuide] = useState(false);
