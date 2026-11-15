@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { CHAIN_LABEL, CHAINS, MAINNET_IDS } from '@tapearena/chain';
 import {
-  Blocks, BookMarked, BookOpen, Check, ChevronDown, CircleAlert, CircleCheck, Code2, Coins, Cpu, ExternalLink, FlaskConical, Home, Loader2, PenTool, Plus, Swords, TriangleAlert, Trophy, Users, Wallet, X,
+  Blocks, BookMarked, BookOpen, Check, ChevronDown, CircleAlert, CircleCheck, Code2, Coins, Cpu, ExternalLink, FlaskConical, Home, Loader2, PenTool, Plus, Swords, TriangleAlert, Trophy, Users, Wallet, X as IconClose,
 } from 'lucide-react';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { useAccount } from 'wagmi';
@@ -298,6 +298,18 @@ export function Shell({ children }: { children: ReactNode }) {
               {CHAIN_IDS.filter((id) => MAINNET_IDS.includes(id)).map((id) => (
                 <span key={id} className="flex items-center gap-1.5 rounded-full bg-panel py-1 pr-2.5 pl-1 ring-1 ring-line"><ChainIcon id={id} className="size-4" />{chainLabel(id)}</span>
               ))}
+              <a
+                href="https://x.com/blocksboy"
+                target="_blank"
+                rel="noreferrer"
+                aria-label="X @blocksboy"
+                className="inline-flex items-center gap-1.5 rounded-full bg-panel py-1 pr-2.5 pl-2 text-mute no-underline ring-1 ring-line transition-colors hover:text-ink hover:ring-si"
+              >
+                <svg viewBox="0 0 24 24" className="size-3.5" aria-hidden fill="currentColor">
+                  <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.727-8.835L1.254 2.25H8.08l4.259 5.63 5.905-5.63Zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+                </svg>
+                @blocksboy
+              </a>
             </div>
           </div>
           <div className="grid grid-cols-2 gap-6 md:contents">
@@ -324,6 +336,12 @@ export function Shell({ children }: { children: ReactNode }) {
         <div className="border-t border-line/60">
           <div className="mx-auto flex max-w-[1180px] flex-wrap items-center gap-x-4 gap-y-1 px-4 py-4 font-mono text-[11px] text-faint sm:px-7">
             <span className="flex items-center gap-1.5"><Cpu className="size-3.5 text-si" />Chipet · X Layer TapeOut Accelerate</span>
+            <a href="https://x.com/blocksboy" target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-faint no-underline transition-colors hover:text-ink">
+              <svg viewBox="0 0 24 24" className="size-3" aria-hidden fill="currentColor">
+                <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.727-8.835L1.254 2.25H8.08l4.259 5.63 5.905-5.63Zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+              </svg>
+              @blocksboy
+            </a>
             <span className="ml-auto">{t('外形由电路身份派生 · 对战功率由电路逐门算出', 'Looks derive from the circuit identity · battle power is computed gate by gate')}</span>
           </div>
         </div>
@@ -346,7 +364,7 @@ export function Shell({ children }: { children: ReactNode }) {
                 </a>
               )}
             </div>
-            <button type="button" aria-label={t('关闭', 'Close')} onClick={() => dismiss(toast.id)} className="text-faint transition-colors hover:text-ink"><X className="size-4" /></button>
+            <button type="button" aria-label={t('关闭', 'Close')} onClick={() => dismiss(toast.id)} className="text-faint transition-colors hover:text-ink"><IconClose className="size-4" /></button>
           </div>
         ))}
       </div>
