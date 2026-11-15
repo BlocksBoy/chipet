@@ -330,6 +330,7 @@ export function Shell({ children }: { children: ReactNode }) {
               <ul className="mt-3 space-y-2 text-sm">
                 <li><Link to="/guide" className="inline-flex items-center gap-1.5 text-mute no-underline transition-colors hover:text-ink"><BookMarked className="size-3.5 shrink-0" />{t('玩法手册', 'Playbook')}</Link></li>
                 <li><Link to="/shop" className="inline-flex items-center gap-1.5 text-mute no-underline transition-colors hover:text-ink"><Coins className="size-3.5 shrink-0" />{t('BEM 商店', 'BEM Shop')}</Link></li>
+                <li><a href="https://tapeout.net/" target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-mute no-underline transition-colors hover:text-ink">{t('TapeOut 官网', 'TapeOut')}<ExternalLink className="size-3.5 shrink-0" /></a></li>
                 <li><a href={t('https://web3.okx.com/zh-hans/xlayer/build-x-series', 'https://web3.okx.com/xlayer/build-x-series')} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-mute no-underline transition-colors hover:text-ink">X Layer TapeOut<ExternalLink className="size-3.5 shrink-0" /></a></li>
                 <li><a href="https://github.com/TapeOutProtocol/TapeKit" target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-mute no-underline transition-colors hover:text-ink"><Code2 className="size-3.5 shrink-0" />TapeKit</a></li>
                 <li><Link to="/lab/studio" className="inline-flex items-center gap-1.5 text-mute no-underline transition-colors hover:text-ink"><PenTool className="size-3.5 shrink-0" />{t('电路设计器', 'Circuit Studio')}</Link></li>
@@ -345,6 +346,9 @@ export function Shell({ children }: { children: ReactNode }) {
                 <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.727-8.835L1.254 2.25H8.08l4.259 5.63 5.905-5.63Zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
               </svg>
               @blocksboy
+            </a>
+            <a href="https://tapeout.net/" target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-faint no-underline transition-colors hover:text-ink">
+              tapeout.net<ExternalLink className="size-3 shrink-0" />
             </a>
             <span className="ml-auto">{t('外形由电路身份派生 · 对战功率由电路逐门算出', 'Looks derive from the circuit identity · battle power is computed gate by gate')}</span>
           </div>

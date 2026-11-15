@@ -2,14 +2,14 @@ import { useEffect, useMemo, useState } from 'react';
 import { formatUnits } from 'viem';
 import { CHAIN_LABEL, transferErc20 } from '@tapearena/chain';
 import {
-  Cable, Coins, Egg, Fish, History, Sparkles, Zap,
+  ArrowUpRight, Cable, Coins, Egg, Fish, History, Sparkles, Zap,
 } from 'lucide-react';
 import { Button, PAGE, PageHeader, Panel, SectionTitle, Tag, cn } from '../components/ui.tsx';
 import { Link, go } from '../router.tsx';
 import { useApp } from '../state.tsx';
 import { txt, useT } from '../i18n.ts';
 import {
-  BEM_SKUS, BEM_SKU_LIST, BOND_SLOTS_MAX, FAUCET_AMOUNT,
+  BEM_BRIDGE_HINT, BEM_BRIDGE_URL, BEM_SKUS, BEM_SKU_LIST, BOND_SLOTS_MAX, FAUCET_AMOUNT,
   bem, bemAmount, type BemSku,
 } from '../chipet/bem.ts';
 import { localChipet } from '../chipet/store.ts';
@@ -84,7 +84,12 @@ export function Shop() {
         const bal = chainBal ?? 0n;
         const need = bemAmount(info.price, bemNet.decimals);
         if (bal < need) {
-          notify('err', t('链上 BEM 不足，可先切本地 fork 用演示余额', 'Not enough on-chain BEM. Switch to the local fork to use demo balance'));
+          if (chainId === 196) {
+            notify('err', t(`X Layer BEM 不足。${BEM_BRIDGE_HINT.zh}`, `Not enough X Layer BEM. ${BEM_BRIDGE_HINT.en}`));
+            window.open(BEM_BRIDGE_URL, '_blank', 'noopener,noreferrer');
+          } else {
+            notify('err', t('链上 BEM 不足，可先切本地 fork 用演示余额', 'Not enough on-chain BEM. Switch to the local fork to use demo balance'));
+          }
           return;
         }
         const ok = await run(t(`支付 ${info.price} BEM`, `Pay ${info.price} BEM`), async (step) => {
@@ -180,7 +185,28 @@ export function Shop() {
           <div className="mt-4 flex flex-wrap gap-2">
             <Tag tone="si">{t('线友位', 'Bond slots')} {st.bondSlots}/{BOND_SLOTS_MAX}</Tag>
             <Tag tone="copper">{t('支付方式', 'Pay with')} {useChainPay ? t('链上', 'On-chain') : t('演示', 'Demo')}</Tag>
+            {chainId === 196 && (
+              <Button
+                size="sm"
+                variant="ghost"
+                icon={ArrowUpRight}
+                onClick={() => {
+                  window.open(BEM_BRIDGE_URL, '_blank', 'noopener,noreferrer');
+                  notify('ok', t(BEM_BRIDGE_HINT.zh, BEM_BRIDGE_HINT.en));
+                }}
+              >
+                {t('去官网跨链充值', 'Top up via official bridge')}
+              </Button>
+            )}
           </div>
+          {chainId === 196 && (
+            <p className="mt-3 text-[11px] text-faint">
+              {t(
+                '官网地址栏不会变。打开 tapeout.net 后，点左侧「BEM 跨链」（或首页「BEM 跨链到 X Layer」），从 BNB Chain 1:1 转入。',
+                'The official site keeps one URL. On tapeout.net, open “BEM Bridge” in the left menu (or the home “Bridge BEM to X Layer” card) to move BEM 1:1 from BNB Chain.',
+              )}
+            </p>
+          )}
         </Panel>
       </div>
 

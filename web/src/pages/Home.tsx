@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ComponentType } from 'react';
 import { motion } from 'motion/react';
-import { Egg, Sparkles, Swords, BookOpen, ArrowRight, Users, Fish, ListChecks, CircleCheck, Zap, Hand, CalendarCheck, Cable, Cat, Trophy, Coins, type LucideProps } from 'lucide-react';
+import { Egg, Sparkles, Hammer, Swords, BookOpen, ArrowRight, Users, Fish, ListChecks, CircleCheck, Zap, Hand, CalendarCheck, Cable, Cat, Trophy, Coins, type LucideProps } from 'lucide-react';
 import { Button, Panel, Tag, Input, PAGE, SectionTitle, StatBand, Trait, cn } from '../components/ui.tsx';
 import { Link, go } from '../router.tsx';
 import { useApp } from '../state.tsx';
@@ -121,7 +121,6 @@ export function Home() {
   };
 
   const hatch = async (fancy = false) => {
-    if (!account && onChain) return connect();
     const n = name.trim();
     if (!n || phase !== 'egg') return;
     try {
@@ -134,7 +133,8 @@ export function Home() {
           return;
         }
       }
-      if (onChain && chipet) {
+      // 免费普通蛋永远可本地敲，不强制连钱包；已连接且合约在线时才上链铸造
+      if (onChain && chipet && account) {
         await run(t('孵化芯宠', 'Hatch'), async (step) => {
           const s = await signer();
           const hatchedOn = await hatchChipet(s, chipet, n, undefined, step);
@@ -156,6 +156,7 @@ export function Home() {
         });
         return;
       }
+      if (fancy && onChain && chipet && !account) return connect();
       reveal(localChipet.hatch(n, fancy ? { guarantee: 'fancy' } : undefined));
     } catch (e) {
       notify('err', e instanceof Error ? e.message : String(e));
@@ -228,33 +229,19 @@ export function Home() {
 
   return (
     <div className={cn(PAGE, 'py-8 sm:py-10')}>
-      <section className="relative overflow-hidden rounded-[2rem] border border-line/80 bg-panel px-4 py-10 shadow-sm shadow-si/5 sm:px-12 sm:py-14">
+      <section className="relative overflow-hidden rounded-[2rem] border border-line/80 bg-panel px-4 pb-6 pt-4 shadow-sm shadow-si/5 sm:px-8 sm:pb-8 sm:pt-5 lg:pl-8 lg:pr-10">
         <div className="pointer-events-none absolute -top-24 right-0 size-72 rounded-full bg-[#f7d6df]/80 blur-3xl" />
         <div className="pointer-events-none absolute -bottom-28 left-10 size-64 rounded-full bg-si/10 blur-3xl" />
 
-        <div className="relative grid grid-cols-1 items-center gap-10 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
-          <div>
-            <Tag tone="si" icon={Egg}>{t('Chipet · 芯宠', 'Chipet · chip pets')}</Tag>
-            <h1 className="mt-5 max-w-xl text-[2rem] leading-[1.15] text-ink sm:text-5xl">
+        <div className="relative grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)] lg:items-stretch lg:gap-8">
+          <div className="flex min-w-0 flex-col lg:h-full lg:max-w-xl">
+            <Tag tone="si" icon={Egg} className="w-fit self-start">{t('Chipet · 芯宠', 'Chipet · chip pets')}</Tag>
+            <h1 className="mt-8 max-w-xl text-[1.85rem] leading-[1.15] text-ink sm:mt-10 sm:text-[2.75rem] lg:mt-12">
               {t('敲开彩蛋', 'Crack the egg,')}<br />
               <span className="text-si">{t('遇见你的芯喵', 'meet your chip kitty')}</span>
             </h1>
-            <p className="mt-4 max-w-md text-pretty text-mute">
-              {t(
-                '像加密猫一样：每只芯喵都有独特毛色、瞳色与花纹。心脏是一枚 TapeOut 电路——给它通电、带它对战，每一步都是这枚电路算出来的。',
-                'Like CryptoKitties, every kitty has its own coat, eye color and pattern. Its heart is a TapeOut circuit: power it up, take it into battle, and every step is computed by that circuit.',
-              )}
-            </p>
-            {!onChain && (
-              <p className="mt-2 max-w-md text-xs text-pretty text-faint">
-                {t(
-                  `本地演示模式 · ${chain.name} 上还没有部署 Chipet 合约，芯宠先存在这个浏览器里，刷新不会丢`,
-                  `Local demo mode · the Chipet contract isn't deployed on ${chain.name} yet, so your pets are kept in this browser and survive a refresh`,
-                )}
-              </p>
-            )}
 
-            <div className="mt-5 flex flex-wrap items-center gap-2">
+            <div className="mt-5 flex flex-wrap items-center gap-2 sm:mt-6">
               <Tag tone="si" icon={Fish}>{t('小鱼干', 'Fish treats')} {profile.fish}</Tag>
               <Tag tone="copper">{t(`连续签到 ${profile.streak} 天`, `${profile.streak}-day streak`)}</Tag>
               <Button size="sm" variant="ghost" disabled={profile.checkedIn} onClick={checkin}>
@@ -262,61 +249,93 @@ export function Home() {
               </Button>
             </div>
 
-            <div className="mt-8 max-w-md">
-              <span className="mb-1.5 block font-mono text-xs text-mute">{t('给它起名', 'Name it')}</span>
-              <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
-                <Input id={NAME_INPUT_ID} className="min-w-0 w-full sm:flex-1 sm:basis-40" value={name} maxLength={32} placeholder={t('例如：青豆', 'e.g. Mochi')}
-                  onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && void hatch()} />
-                <Button icon={Sparkles} disabled={!name.trim()} onClick={() => void hatch()}>{t('免费敲蛋', 'Free hatch')}</Button>
-              </div>
-              <p className="mt-2 text-[11px] text-faint">
-                {t('孵化永远免费。想要保底珍奇，可去商店买限定彩蛋。', 'Hatching stays free. For a guaranteed Fancy, buy a premium egg in the Shop.')}
+            <div className="mt-8 max-w-md lg:mt-auto lg:mb-20 lg:pt-0">
+              <p className="text-sm text-pretty text-mute sm:text-base">
+                {t(
+                  '像加密猫一样：每只芯喵都有独特毛色、瞳色与花纹。心脏是一枚 TapeOut 电路——给它通电、带它对战，每一步都是这枚电路算出来的。',
+                  'Like CryptoKitties, every kitty has its own coat, eye color and pattern. Its heart is a TapeOut circuit: power it up, take it into battle, and every step is computed by that circuit.',
+                )}
+              </p>
+              {!onChain && (
+                <p className="mt-1.5 text-xs text-pretty text-faint">
+                  {t(
+                    `本地演示模式 · ${chain.name} 上还没有部署 Chipet 合约，芯宠先存在这个浏览器里，刷新不会丢`,
+                    `Local demo mode · the Chipet contract isn't deployed on ${chain.name} yet, so your pets are kept in this browser and survive a refresh`,
+                  )}
+                </p>
+              )}
+              <p className="mt-4 text-xs text-pretty text-faint">
+                {t('外形由电路身份派生 · 对战功率由电路逐门算出', 'Looks from circuit identity · battle power computed gate by gate')}
               </p>
             </div>
           </div>
 
           <SceneStage
-            className="mx-auto w-full max-w-[min(100%,360px)] sm:max-w-[380px]"
+            className="mx-auto w-full max-w-[min(100%,340px)] sm:max-w-[360px] lg:justify-self-center"
             bg={showKitty && ph ? ph.bg : undefined}
             hint={hint}
           >
-            {showKitty && <div className="hatch-rays" />}
-            <KittyEgg
-              key={eggKey}
-              phase={phase === 'egg' ? 'idle' : phase === 'cracking' ? 'shake' : 'open'}
-              cracks={cracks}
-              onTap={tapEgg}
-            >
-              {showKitty && hatched && (
-                // 先从下半壳里蹦出来悬一下，等壳掉了再落回正中
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.25, y: 70 }}
-                  animate={{ opacity: [0, 1, 1, 1, 1], scale: [0.25, 1.1, 1, 1, 1], y: [70, -34, -18, -18, 0] }}
-                  transition={{ duration: 1.5, times: [0, 0.28, 0.42, 0.7, 1], ease: 'easeOut' }}
-                >
-                  <PetAvatar
-                    cpu={hatched.cpu}
-                    circuitId={hatched.circuitId}
-                    rarity={hatched.rarity}
-                    mood={Math.max(80, hatched.mood)}
-                    size={250}
-                    interactive
-                    onPat={() => pulse('pat')}
+            {!showKitty && (
+              <div
+                className="absolute inset-x-0 top-0 z-20 px-3 pt-3 sm:px-4 sm:pt-4"
+                onPointerDown={(e) => e.stopPropagation()}
+              >
+                <div className="flex min-w-0 items-center gap-2 rounded-2xl bg-white/80 p-1.5 shadow-sm ring-1 ring-white/70 backdrop-blur-md">
+                  <Input
+                    id={NAME_INPUT_ID}
+                    className="h-9 min-w-0 w-0 flex-1 border-0 bg-transparent px-2.5 shadow-none focus:ring-0 focus-visible:ring-0"
+                    value={name}
+                    maxLength={32}
+                    placeholder={t('起名，如：青豆', 'Name, e.g. Mochi')}
+                    onChange={(e) => setName(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && void hatch()}
                   />
-                </motion.div>
-              )}
-            </KittyEgg>
-            <FxOverlay
-              impulse={impulse}
-              nonce={fxNonce}
-              label={
-                impulse === 'hatch'
-                  ? t('破壳啦！', 'Hatched!')
-                  : impulse === 'pat' && phase === 'egg'
-                    ? eggSay
-                    : undefined
-              }
-            />
+                  <Button size="sm" className="shrink-0" icon={Hammer} disabled={!name.trim()} onClick={() => void hatch()}>
+                    {t('免费敲蛋', 'Free hatch')}
+                  </Button>
+                </div>
+              </div>
+            )}
+            {/* 起名条占位：蛋、锤子、提示都落在条下方，避免被挡住 */}
+            <div className={cn('absolute inset-0', !showKitty && 'top-[3.75rem] sm:top-16')}>
+              {showKitty && <div className="hatch-rays" />}
+              <KittyEgg
+                key={eggKey}
+                phase={phase === 'egg' ? 'idle' : phase === 'cracking' ? 'shake' : 'open'}
+                cracks={cracks}
+                onTap={tapEgg}
+              >
+                {showKitty && hatched && (
+                  // 先从下半壳里蹦出来悬一下，等壳掉了再落回正中
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.25, y: 70 }}
+                    animate={{ opacity: [0, 1, 1, 1, 1], scale: [0.25, 1.1, 1, 1, 1], y: [70, -34, -18, -18, 0] }}
+                    transition={{ duration: 1.5, times: [0, 0.28, 0.42, 0.7, 1], ease: 'easeOut' }}
+                  >
+                    <PetAvatar
+                      cpu={hatched.cpu}
+                      circuitId={hatched.circuitId}
+                      rarity={hatched.rarity}
+                      mood={Math.max(80, hatched.mood)}
+                      size={250}
+                      interactive
+                      onPat={() => pulse('pat')}
+                    />
+                  </motion.div>
+                )}
+              </KittyEgg>
+              <FxOverlay
+                impulse={impulse}
+                nonce={fxNonce}
+                label={
+                  impulse === 'hatch'
+                    ? t('破壳啦！', 'Hatched!')
+                    : impulse === 'pat' && phase === 'egg'
+                      ? eggSay
+                      : undefined
+                }
+              />
+            </div>
           </SceneStage>
         </div>
 

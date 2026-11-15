@@ -14,7 +14,7 @@ export function SceneStage({ children, className, hint, bg = '#fbd9f3' }: Props)
   return (
     <div className={cn('relative mx-auto w-full', className)}>
       <div
-        className="relative z-[1] aspect-square overflow-hidden rounded-[1.75rem] transition-[background-color] duration-700 ease-out"
+        className="relative z-[1] aspect-[11/12] overflow-hidden rounded-[1.75rem] transition-[background-color] duration-700 ease-out"
         style={{
           backgroundColor: bg,
           boxShadow: 'inset 0 0 0 1px rgb(255 255 255 / 0.6), 0 10px 28px rgb(120 90 110 / 0.16)',

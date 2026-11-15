@@ -15,6 +15,16 @@ export const FAUCET_AMOUNT = 20;
 /** @deprecated 用 bem.forChain(chainId)；保留默认指向 X Layer 以免旧引用炸 */
 export const BEM_SHOP_TREASURY = bemNetwork(196)!.treasury;
 export const BEM_TOKEN = XLAYER_BEM;
+/**
+ * TapeOut 新官网是内存路由，地址栏始终是 `/`；直达 `/bridge` 会落到老站。
+ * 充值时打开首页，引导用户点左侧「BEM 跨链」（或首页「BEM 跨链到 X Layer」卡片）。
+ */
+export const TAPEOUT_SITE = 'https://tapeout.net/';
+export const BEM_BRIDGE_URL = TAPEOUT_SITE;
+export const BEM_BRIDGE_HINT = {
+  zh: '打开后请点左侧菜单「BEM 跨链」，把 BNB Chain 的 BEM 1:1 转到 X Layer。',
+  en: 'On the site, open “BEM Bridge” in the left menu to move BEM 1:1 from BNB Chain to X Layer.',
+} as const;
 
 export type BemSku = 'egg_fancy' | 'energy' | 'fish5' | 'bond_slot';
 
