@@ -20,6 +20,10 @@
 		Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https: wss:; worker-src 'self' blob:; frame-src 'self' https:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests"
 		-Server
 	}
+	# AI / 编译等：同源 /api → 容器 chipet-api
+	handle /api* {
+		reverse_proxy api:8787
+	}
 	handle {
 		root * /srv/frontend
 		@assets path /assets/*

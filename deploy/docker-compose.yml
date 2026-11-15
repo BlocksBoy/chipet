@@ -1,9 +1,21 @@
-# Chipet 静态站（弗吉尼亚）。与 S-UI VPN 并存：宿主机映射 8443→443。
+# Chipet 静态站 + AI API（弗吉尼亚）。与 S-UI VPN 并存：宿主机映射 8443→443。
 #   docker compose --env-file .env.deploy up -d
 services:
+  api:
+    image: chipet-api:latest
+    restart: unless-stopped
+    env_file:
+      - .env.api
+    environment:
+      PORT: "8787"
+    expose:
+      - "8787"
+
   caddy:
     image: caddy:2.10-alpine
     restart: unless-stopped
+    depends_on:
+      - api
     environment:
       SITE_DOMAIN: ${SITE_DOMAIN:-chipet.web3book.io}
     ports:
