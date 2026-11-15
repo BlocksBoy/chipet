@@ -101,18 +101,18 @@ export function Studio() {
               )}
           </Panel>
           {built && (
-            <dl className="flex flex-wrap items-stretch gap-3 sm:gap-0 sm:divide-x sm:divide-line/80">
+            <dl className="flex flex-nowrap items-stretch divide-x divide-line/80 overflow-x-auto overflow-y-hidden">
               {([
                 { icon: Cpu, label: tr('总门数', 'Total gates'), value: built.circuit.gateCount, tone: 'text-copper' },
                 { icon: Square, label: tr('本层 NAND', 'NAND (this level)'), value: built.compiled.nNand, tone: 'text-ink' },
                 { icon: Clock, label: tr('寄存器', 'Registers'), value: built.circuit.nState, tone: 'text-si' },
                 { icon: Gauge, label: tr('关键路径', 'Critical path'), value: depth, tone: 'text-ink' },
               ] as const).map(({ icon: I, label, value, tone }) => (
-                <div key={label} className="flex basis-[calc(50%-0.375rem)] flex-1 items-center gap-3 rounded-2xl bg-panel px-3.5 py-3 ring-1 ring-line/70 sm:basis-0 sm:rounded-none sm:bg-transparent sm:px-5 sm:py-1 sm:ring-0">
-                  <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-panel-2 text-mute"><I className="size-4" /></span>
+                <div key={label} className="flex min-w-0 flex-1 items-center gap-2 px-2.5 py-1 sm:gap-3 sm:px-5">
+                  <span className="grid size-8 shrink-0 place-items-center rounded-xl bg-panel-2 text-mute sm:size-9"><I className="size-3.5 sm:size-4" /></span>
                   <div className="min-w-0">
-                    <dd className={cn('m-0 font-display text-2xl leading-none font-bold tabular-nums', tone)}>{value}</dd>
-                    <dt className="mt-1 text-[11px] whitespace-nowrap text-mute">{label}</dt>
+                    <dd className={cn('m-0 font-display text-xl leading-none font-bold tabular-nums sm:text-2xl', tone)}>{value}</dd>
+                    <dt className="mt-1 text-[10px] whitespace-nowrap text-mute sm:text-[11px]">{label}</dt>
                   </div>
                 </div>
               ))}
@@ -123,12 +123,12 @@ export function Studio() {
         <div className="flex flex-col gap-5">
           {built && <SimDie built={built} />}
           <Panel>
-            <div role="tablist" className="flex gap-1 overflow-x-auto border-b border-line px-2">
+            <div role="tablist" className="flex gap-1 overflow-x-auto overflow-y-hidden border-b border-line px-2">
               {TABS.map(({ id, label, icon: I }) => (
                 <button key={id} role="tab" aria-selected={tab === id} type="button" onClick={() => setTab(id)}
-                  className={cn('-mb-px flex items-center gap-1.5 border-b-2 px-3 pt-3 pb-2.5 text-[13px] whitespace-nowrap transition-colors',
+                  className={cn('flex shrink-0 items-center gap-1.5 border-b-2 px-3 pt-3 pb-2.5 text-[13px] leading-none whitespace-nowrap transition-colors',
                     tab === id ? 'border-copper text-ink' : 'border-transparent text-mute hover:text-ink')}>
-                  <I className={cn('size-4', tab === id && 'text-copper')} />{label}
+                  <I className={cn('size-4 shrink-0', tab === id && 'text-copper')} />{label}
                 </button>
               ))}
             </div>
@@ -226,13 +226,36 @@ function TruthTable({ built }: { built: Built }) {
     const out = unpackBits(step(circuit, new Uint8Array(0), packBits(bits), lib).outputs, circuit.nOut);
     return { i: bitsToPins(compiled.inputs, bits), o: bitsToPins(compiled.outputs, out) };
   });
+  const cols = [...compiled.inputs.map((p) => p.name), ...compiled.outputs.map((p) => p.name)];
+  const colW = `${100 / Math.max(cols.length, 1)}%`;
   return (
-    <div className="max-h-[340px] overflow-auto">
-      <p className="mt-0 flex items-center gap-1.5 text-[13px] text-mute"><Table2 className="size-4" />{exhaustive ? tr(`全部 ${rows.length} 种输入`, `All ${rows.length} input combinations`) : tr('输入太宽，随机抽 16 组', 'Inputs are too wide, so here are 16 random samples')}</p>
-      <table className="table-t font-mono tabular-nums">
-        <thead><tr>{compiled.inputs.map((p) => <th key={p.name}>{p.name}</th>)}{compiled.outputs.map((p) => <th key={p.name} className="!text-si">{p.name}</th>)}</tr></thead>
-        <tbody>{rows.map((r, k) => <tr key={k}>{compiled.inputs.map((p) => <td key={p.name}>{r.i[p.name].toString()}</td>)}{compiled.outputs.map((p) => <td key={p.name} className="text-si">{r.o[p.name].toString()}</td>)}</tr>)}</tbody>
+    <div className="flex max-h-[340px] flex-col">
+      <p className="mt-0 mb-2 flex shrink-0 items-center gap-1.5 text-[13px] text-mute">
+        <Table2 className="size-4" />
+        {exhaustive ? tr(`全部 ${rows.length} 种输入`, `All ${rows.length} input combinations`) : tr('输入太宽，随机抽 16 组', 'Inputs are too wide, so here are 16 random samples')}
+      </p>
+      <table className="table-t shrink-0 table-fixed font-mono tabular-nums">
+        <colgroup>{cols.map((n) => <col key={n} style={{ width: colW }} />)}</colgroup>
+        <thead>
+          <tr>
+            {compiled.inputs.map((p) => <th key={p.name}>{p.name}</th>)}
+            {compiled.outputs.map((p) => <th key={p.name} className="!text-si">{p.name}</th>)}
+          </tr>
+        </thead>
       </table>
+      <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
+        <table className="table-t table-fixed font-mono tabular-nums">
+          <colgroup>{cols.map((n) => <col key={n} style={{ width: colW }} />)}</colgroup>
+          <tbody>
+            {rows.map((r, k) => (
+              <tr key={k}>
+                {compiled.inputs.map((p) => <td key={p.name}>{r.i[p.name].toString()}</td>)}
+                {compiled.outputs.map((p) => <td key={p.name} className="text-si">{r.o[p.name].toString()}</td>)}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
