@@ -69,7 +69,7 @@ export function Home() {
   const pets = useMemo(() => localChipet.list(), [tick, refreshKey]);
   const profile = useMemo(() => social.profile(), [tick]);
   const quests = useMemo(() => social.quests(), [tick]);
-  const feed = useMemo(() => social.activities().slice(0, 5), [tick]);
+  const feed = useMemo(() => social.activities(), [tick]);
   const speciesSeen = useMemo(() => new Set(pets.map((p) => phenotypeOf(p.cpu, p.circuitId, p.rarity).speciesId)).size, [pets]);
   const totalWins = pets.reduce((n, p) => n + p.wins, 0);
   const ph = useMemo(
@@ -521,11 +521,11 @@ export function Home() {
           {feed.length === 0 ? (
             <p className="px-1 py-2 text-sm text-mute">{t('还没有动态，去孵化或摸摸邻居吧。', 'Nothing here yet. Hatch a kitty or go pat a neighbor.')}</p>
           ) : (
-            <ul className="space-y-1">
+            <ul className="max-h-[calc(20*3.35rem)] space-y-1 overflow-y-auto overscroll-contain pr-1 [scrollbar-gutter:stable]">
               {feed.map((a) => {
                 const I = ACT_ICON[a.kind] ?? Sparkles;
                 return (
-                  <li key={a.id}>
+                  <li key={a.id} className="min-h-[3.35rem]">
                     <button type="button" onClick={() => (a.petKey ? go(`/pet/${routeIdOf(a.petKey)}`) : go('/plaza'))}
                       className="flex w-full items-start gap-3 rounded-2xl px-2 py-2 text-left transition hover:bg-panel-2/60">
                       <span className={cn('mt-0.5 grid size-8 shrink-0 place-items-center rounded-xl', actTone(a.kind))}><I className="size-4" /></span>

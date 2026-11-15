@@ -37,5 +37,18 @@ if (existsSync(dir)) {
     };
     console.log(`链 ${id}: chipet ${d.chipet}${d.cpu ? ` cpu ${d.cpu}` : ''}`);
   }
+  for (const f of readdirSync(dir).filter((x) => /^\d+-cpu\.json$/.test(x))) {
+    const d = JSON.parse(readFileSync(new URL(f, dir), 'utf8'));
+    const id = String(d.chainId);
+    if (!d.cpu || d.cpu === zeroAddress) continue;
+    all[id] = {
+      ...all[id],
+      chainId: Number(id),
+      ...(d.factory ? { factory: d.factory } : {}),
+      cpu: d.cpu,
+      deployedAt: new Date().toISOString(),
+    };
+    console.log(`链 ${id}: cpu ${d.cpu}`);
+  }
 }
 writeFileSync(target, JSON.stringify(all, null, 2) + '\n');

@@ -108,11 +108,11 @@ export function Studio() {
                 { icon: Clock, label: tr('寄存器', 'Registers'), value: built.circuit.nState, tone: 'text-si' },
                 { icon: Gauge, label: tr('关键路径', 'Critical path'), value: depth, tone: 'text-ink' },
               ] as const).map(({ icon: I, label, value, tone }) => (
-                <div key={label} className="flex min-w-0 basis-[calc(50%-0.375rem)] flex-1 items-center gap-3 rounded-2xl bg-panel px-3.5 py-3 ring-1 ring-line/70 sm:basis-0 sm:rounded-none sm:bg-transparent sm:px-5 sm:py-1 sm:ring-0">
+                <div key={label} className="flex basis-[calc(50%-0.375rem)] flex-1 items-center gap-3 rounded-2xl bg-panel px-3.5 py-3 ring-1 ring-line/70 sm:basis-0 sm:rounded-none sm:bg-transparent sm:px-5 sm:py-1 sm:ring-0">
                   <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-panel-2 text-mute"><I className="size-4" /></span>
                   <div className="min-w-0">
                     <dd className={cn('m-0 font-display text-2xl leading-none font-bold tabular-nums', tone)}>{value}</dd>
-                    <dt className="mt-1 truncate text-[11px] text-mute">{label}</dt>
+                    <dt className="mt-1 text-[11px] whitespace-nowrap text-mute">{label}</dt>
                   </div>
                 </div>
               ))}

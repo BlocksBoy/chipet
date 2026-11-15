@@ -54,11 +54,35 @@ export async function mintPayment(pub: PublicClient, transistors: Address) {
 export async function mintFor(s: Signer, cpu: Address, netlist: Uint8Array, nIn: number, onStep?: Progress) {
   const st = stats(netlist, nIn);
   const transistors = await s.pub.readContract({ address: cpu, abi: cpuAbi, functionName: 'transistors' });
-  const pay = await mintPayment(s.pub, transistors);
+  const [pay, supplyCap, alreadyMinted] = await Promise.all([
+    mintPayment(s.pub, transistors),
+    s.pub.readContract({ address: transistors, abi: transistorsAbi, functionName: 'supplyCap' }),
+    s.pub.readContract({ address: transistors, abi: transistorsAbi, functionName: 'minted' }),
+  ]);
+  // 余额够烧时不必再 mint；只有还要新铸时才卡 supply
+  const haveNand = st.nNand
+    ? await s.pub.readContract({ address: transistors, abi: transistorsAbi, functionName: 'balanceOf', args: [s.account, 0n] })
+    : 0n;
+  const haveLatch = st.nLatch
+    ? await s.pub.readContract({ address: transistors, abi: transistorsAbi, functionName: 'balanceOf', args: [s.account, 1n] })
+    : 0n;
+  const shortTotal =
+    (st.nNand ? (BigInt(st.nNand) > haveNand ? BigInt(st.nNand) - haveNand : 0n) : 0n) +
+    (st.nLatch ? (BigInt(st.nLatch) > haveLatch ? BigInt(st.nLatch) - haveLatch : 0n) : 0n);
+  if (shortTotal > 0n && alreadyMinted + shortTotal > supplyCap) {
+    throw new Error(
+      L(
+        `这台 CPU 晶体管额度已满（已铸 ${alreadyMinted.toString()} / 上限 ${supplyCap.toString()}，还差 ${shortTotal.toString()}）。换一台有余量的处理器地址再流片。`,
+        `This CPU's transistor supply is exhausted (${alreadyMinted.toString()} / ${supplyCap.toString()} minted; still need ${shortTotal.toString()}). Pick another processor address with remaining supply.`,
+      ),
+    );
+  }
   const minted: { nand: number; latch: number } = { nand: 0, latch: 0 };
-  for (const [id, need, key] of [[0n, st.nNand, 'nand'], [1n, st.nLatch, 'latch']] as const) {
+  for (const [id, need, key, have] of [
+    [0n, st.nNand, 'nand', haveNand],
+    [1n, st.nLatch, 'latch', haveLatch],
+  ] as const) {
     if (!need) continue;
-    const have = await s.pub.readContract({ address: transistors, abi: transistorsAbi, functionName: 'balanceOf', args: [s.account, id] });
     const short = BigInt(need) - have;
     if (short <= 0n) continue;
     const cost = pay.price * short + pay.fee;

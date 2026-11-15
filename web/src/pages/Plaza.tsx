@@ -81,31 +81,35 @@ export function Plaza() {
           ]} />
 
           {tab === 'feed' && (
-            <Panel className="mt-4" bodyClass="divide-y divide-line/70">
+            <Panel className="mt-4" bodyClass="p-0">
               {activities.length === 0 ? (
                 <p className="p-10 text-center text-sm text-mute">{t('还没有动态，去孵化或摸摸邻居吧。', 'Nothing here yet. Hatch a kitty or go pat a neighbor.')}</p>
-              ) : activities.map((a) => {
-                const I = ACT_ICON[a.kind] ?? Sparkles;
-                return (
-                  <div key={a.id} className="flex items-center gap-2 pr-4 transition hover:bg-panel-2/50">
-                    <button type="button" onClick={() => a.petKey && go(`/pet/${routeIdOf(a.petKey)}`)}
-                      className="flex min-w-0 flex-1 items-start gap-3 py-4 pl-5 text-left">
-                      <span className={cn('mt-0.5 grid size-9 shrink-0 place-items-center rounded-xl', actTone(a.kind))}>
-                        <I className="size-4" />
-                      </span>
-                      <span className="min-w-0 flex-1">
-                        <span className="block text-sm text-pretty text-ink">{txt(a.text)}</span>
-                        <span className="mt-1 block text-xs text-faint">{txt(a.actor)} · {timeAgo(a.at)}</span>
-                      </span>
-                    </button>
-                    <button type="button" onClick={() => like(a.id)} aria-pressed={a.liked} aria-label={t('击掌', 'High five')}
-                      className={cn('flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3 font-mono text-xs transition active:scale-95', a.liked ? 'bg-copper/10 text-copper-dim ring-1 ring-copper/40' : 'text-faint ring-1 ring-line hover:text-copper-dim hover:ring-copper/40')}>
-                      <ThumbsUp className={cn('size-3.5', a.liked && 'fill-copper/30')} />
-                      {a.likes > 0 ? a.likes : t('击掌', 'High five')}
-                    </button>
-                  </div>
-                );
-              })}
+              ) : (
+                <div className="max-h-[calc(20*4.75rem)] divide-y divide-line/70 overflow-y-auto overscroll-contain [scrollbar-gutter:stable]">
+                  {activities.map((a) => {
+                    const I = ACT_ICON[a.kind] ?? Sparkles;
+                    return (
+                      <div key={a.id} className="flex min-h-[4.75rem] items-center gap-2 pr-4 transition hover:bg-panel-2/50">
+                        <button type="button" onClick={() => a.petKey && go(`/pet/${routeIdOf(a.petKey)}`)}
+                          className="flex min-w-0 flex-1 items-start gap-3 py-4 pl-5 text-left">
+                          <span className={cn('mt-0.5 grid size-9 shrink-0 place-items-center rounded-xl', actTone(a.kind))}>
+                            <I className="size-4" />
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block text-sm text-pretty text-ink">{txt(a.text)}</span>
+                            <span className="mt-1 block text-xs text-faint">{txt(a.actor)} · {timeAgo(a.at)}</span>
+                          </span>
+                        </button>
+                        <button type="button" onClick={() => like(a.id)} aria-pressed={a.liked} aria-label={t('击掌', 'High five')}
+                          className={cn('flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3 font-mono text-xs transition active:scale-95', a.liked ? 'bg-copper/10 text-copper-dim ring-1 ring-copper/40' : 'text-faint ring-1 ring-line hover:text-copper-dim hover:ring-copper/40')}>
+                          <ThumbsUp className={cn('size-3.5', a.liked && 'fill-copper/30')} />
+                          {a.likes > 0 ? a.likes : t('击掌', 'High five')}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </Panel>
           )}
 
