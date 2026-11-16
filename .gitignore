@@ -13,6 +13,6 @@ contracts/broadcast/
 server/data/
 .cache
 .cache
-
+docs/
 web/dist-deweb
 contracts/deweb
