@@ -180,13 +180,11 @@ function snapshotWallet(s: SocialState): WalletIdentity {
 /** 套用某钱包存档；无存档则清空签到/任务日限并给起步鱼干。 */
 function applyWallet(s: SocialState, saved: WalletIdentity | undefined, mode: 'switch' | 'first') {
   if (saved) {
-    if (saved.custom && saved.displayName && !LEGACY_NAMES.has(saved.displayName)) {
+    // 有存档就恢复昵称（含首次随机网名）；只有空/旧默认名才重抽
+    if (saved.displayName && !LEGACY_NAMES.has(saved.displayName)) {
       s.displayName = saved.displayName.slice(0, 16);
-      s.nameCustomized = true;
-    } else if (mode === 'switch') {
-      s.displayName = pickRandomName();
-      s.nameCustomized = false;
-    } else if (LEGACY_NAMES.has(s.displayName)) {
+      s.nameCustomized = Boolean(saved.custom);
+    } else {
       s.displayName = pickRandomName();
       s.nameCustomized = false;
     }
@@ -693,7 +691,8 @@ export const social = {
   },
   /**
    * 绑定当前钱包：签到 / 今日任务 / 日限 / 鱼干 / 昵称都按钱包切换。
-   * - 曾自定义昵称 → 恢复；否则换钱包重抽
+   * - 该钱包已有昵称（随机或自定义）→ 原样恢复，不重抽
+   * - 新钱包 → 抽一次随机网名并记住
    * - 首次连接 → 当前进度归属这只钱包，不重置
    */
   bindAccount(address: string | null | undefined) {
