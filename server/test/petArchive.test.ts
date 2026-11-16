@@ -95,5 +95,15 @@ describe('petArchive', () => {
     const all = listArchivedPets({ page: 1, pageSize: 30 });
     expect(all.total).toBe(26);
     expect(all.items.some((x) => x.chainId === 56 && x.petId === 1)).toBe(true);
+
+    const fancy = listArchivedPets({ chainId: 196, rarity: 1, page: 1, pageSize: 50 });
+    expect(fancy.items.every((x) => x.rarity === 1)).toBe(true);
+    expect(fancy.total).toBe(countArchivedPets(196, { rarity: 1 }));
+
+    const midLv = listArchivedPets({ chainId: 196, levelMin: 4, levelMax: 6, page: 1, pageSize: 50 });
+    expect(midLv.items.every((x) => x.level >= 4 && x.level <= 6)).toBe(true);
+
+    const highE = listArchivedPets({ chainId: 196, energyMin: 71, page: 1, pageSize: 50 });
+    expect(highE.items.every((x) => x.energy >= 71)).toBe(true);
   });
 });

@@ -184,14 +184,29 @@ export type ArchivedPet = {
   updatedAt: number;
 };
 
-/** 默认拉全链一张表；可传 chainId 过滤单链 */
-export async function adminCats(page = 1, pageSize = 20, chainId?: number) {
+export type AdminCatsFilter = {
+  chainId?: number;
+  rarity?: number | null;
+  levelMin?: number | null;
+  levelMax?: number | null;
+  energyMin?: number | null;
+  energyMax?: number | null;
+};
+
+/** 默认拉全链一张表；可传 chainId / 稀有度 / 等级 / 能量筛选 */
+export async function adminCats(page = 1, pageSize = 20, filter?: number | AdminCatsFilter) {
+  const f: AdminCatsFilter = typeof filter === 'number' ? { chainId: filter } : (filter ?? {});
   const q = new URLSearchParams({
     page: String(page),
     pageSize: String(pageSize),
   });
-  if (chainId != null) q.set('chainId', String(chainId));
+  if (f.chainId != null) q.set('chainId', String(f.chainId));
   else q.set('chainId', 'all');
+  if (f.rarity != null) q.set('rarity', String(f.rarity));
+  if (f.levelMin != null) q.set('levelMin', String(f.levelMin));
+  if (f.levelMax != null) q.set('levelMax', String(f.levelMax));
+  if (f.energyMin != null) q.set('energyMin', String(f.energyMin));
+  if (f.energyMax != null) q.set('energyMax', String(f.energyMax));
   const r = await fetch(apiURL(`/api/admin/cats?${q}`), { cache: 'no-store', credentials: 'include' });
   const data = await r.json().catch(() => ({}));
   if (!r.ok) {

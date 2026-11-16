@@ -238,11 +238,28 @@ export function createApp(deps: AppDeps = {}) {
     if (chainId != null && chainId !== 196 && chainId !== 56) throw new HttpError(400, 'unsupported chainId');
     const page = Number(c.req.query('page') ?? 1);
     const pageSize = Number(c.req.query('pageSize') ?? 20);
-    const list = listArchivedPets({
+    const rarityRaw = c.req.query('rarity');
+    const rarity = rarityRaw == null || rarityRaw === '' || rarityRaw === 'all'
+      ? null
+      : Number(rarityRaw);
+    if (rarity != null && ![0, 1, 2].includes(rarity)) throw new HttpError(400, 'invalid rarity');
+    const numOrNull = (k: string) => {
+      const v = c.req.query(k);
+      if (v == null || v === '') return null;
+      const n = Number(v);
+      return Number.isFinite(n) ? n : null;
+    };
+    const filters = {
       chainId,
+      rarity,
+      levelMin: numOrNull('levelMin'),
+      levelMax: numOrNull('levelMax'),
+      energyMin: numOrNull('energyMin'),
+      energyMax: numOrNull('energyMax'),
       page: Number.isFinite(page) ? page : 1,
       pageSize: Number.isFinite(pageSize) ? pageSize : 20,
-    });
+    };
+    const list = listArchivedPets(filters);
     return json(c, { chainId: chainId ?? 'all', archived: countArchivedPets(chainId), ...list });
   });
 

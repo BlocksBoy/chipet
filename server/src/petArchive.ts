@@ -146,43 +146,82 @@ export function upsertArchivedPet(input: PetArchiveInput): void {
   );
 }
 
-/** chainId 省略或 null 时统计全链 */
-export function countArchivedPets(chainId?: number | null): number {
-  ensureTable();
-  if (chainId == null) {
-    const row = getAdminDb().prepare(`SELECT COUNT(*) AS n FROM chipet_pets`).get() as { n: number };
-    return Number(row?.n ?? 0);
+export type PetArchiveListOpts = {
+  chainId?: number | null;
+  page?: number;
+  pageSize?: number;
+  /** 稀有度：0 普通 / 1 珍奇 / 2 限定 */
+  rarity?: number | null;
+  levelMin?: number | null;
+  levelMax?: number | null;
+  energyMin?: number | null;
+  energyMax?: number | null;
+};
+
+function buildPetWhere(opts?: PetArchiveListOpts): { sql: string; params: unknown[] } {
+  const parts: string[] = [];
+  const params: unknown[] = [];
+  if (opts?.chainId != null) {
+    parts.push('chain_id = ?');
+    params.push(opts.chainId);
   }
+  if (opts?.rarity != null && Number.isFinite(opts.rarity)) {
+    parts.push('rarity = ?');
+    params.push(Math.trunc(Number(opts.rarity)));
+  }
+  if (opts?.levelMin != null && Number.isFinite(opts.levelMin)) {
+    parts.push('level >= ?');
+    params.push(Math.trunc(Number(opts.levelMin)));
+  }
+  if (opts?.levelMax != null && Number.isFinite(opts.levelMax)) {
+    parts.push('level <= ?');
+    params.push(Math.trunc(Number(opts.levelMax)));
+  }
+  if (opts?.energyMin != null && Number.isFinite(opts.energyMin)) {
+    parts.push('energy >= ?');
+    params.push(Math.trunc(Number(opts.energyMin)));
+  }
+  if (opts?.energyMax != null && Number.isFinite(opts.energyMax)) {
+    parts.push('energy <= ?');
+    params.push(Math.trunc(Number(opts.energyMax)));
+  }
+  return {
+    sql: parts.length ? `WHERE ${parts.join(' AND ')}` : '',
+    params,
+  };
+}
+
+/** chainId 省略或 null 时统计全链；可带与列表相同的筛选 */
+export function countArchivedPets(chainId?: number | null, filters?: Omit<PetArchiveListOpts, 'chainId' | 'page' | 'pageSize'>): number {
+  ensureTable();
+  const { sql, params } = buildPetWhere({ ...filters, chainId: chainId ?? null });
   const row = getAdminDb()
-    .prepare(`SELECT COUNT(*) AS n FROM chipet_pets WHERE chain_id = ?`)
-    .get(chainId) as { n: number };
+    .prepare(`SELECT COUNT(*) AS n FROM chipet_pets ${sql}`)
+    .get(...params) as { n: number };
   return Number(row?.n ?? 0);
 }
 
-/** chainId 省略时一张表拉全链，行内带 chainId 区分 */
+/** chainId 省略时一张表拉全链，行内带 chainId 区分；支持稀有度 / 等级 / 能量筛选 */
 export function listArchivedPets(
-  opts?: { chainId?: number | null; page?: number; pageSize?: number },
+  opts?: PetArchiveListOpts,
 ): { items: ArchivedPet[]; total: number; page: number; pageSize: number; pages: number } {
   ensureTable();
   const pageSize = Math.min(100, Math.max(1, Number(opts?.pageSize ?? 20) || 20));
   const page = Math.max(1, Number(opts?.page ?? 1) || 1);
-  const chainId = opts?.chainId;
-  const total = countArchivedPets(chainId ?? null);
+  const { sql, params } = buildPetWhere(opts);
+  const total = countArchivedPets(opts?.chainId ?? null, opts);
   const pages = Math.max(1, Math.ceil(total / pageSize));
   const safePage = Math.min(page, pages);
   const offset = (safePage - 1) * pageSize;
-  const rows = (chainId == null
-    ? getAdminDb().prepare(`
-        SELECT * FROM chipet_pets
-        ORDER BY updated_at DESC, chain_id ASC, pet_id DESC
-        LIMIT ? OFFSET ?
-      `).all(pageSize, offset)
-    : getAdminDb().prepare(`
-        SELECT * FROM chipet_pets
-        WHERE chain_id = ?
-        ORDER BY pet_id DESC
-        LIMIT ? OFFSET ?
-      `).all(chainId, pageSize, offset)) as Record<string, unknown>[];
+  const order = opts?.chainId == null
+    ? 'ORDER BY updated_at DESC, chain_id ASC, pet_id DESC'
+    : 'ORDER BY pet_id DESC';
+  const rows = getAdminDb().prepare(`
+    SELECT * FROM chipet_pets
+    ${sql}
+    ${order}
+    LIMIT ? OFFSET ?
+  `).all(...params, pageSize, offset) as Record<string, unknown>[];
   return {
     items: rows.map(rowToPet),
     total,
