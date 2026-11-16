@@ -303,16 +303,16 @@ export function Shell({ children }: { children: ReactNode }) {
                 <span key={id} className="flex items-center gap-1.5 rounded-full bg-panel py-1 pr-2.5 pl-1 ring-1 ring-line"><ChainIcon id={id} className="size-4" />{chainLabel(id)}</span>
               ))}
               <a
-                href="https://x.com/blocksboy"
+                href="https://x.com/chipet_"
                 target="_blank"
                 rel="noreferrer"
-                aria-label="X @blocksboy"
+                aria-label="X @chipet_"
                 className="inline-flex items-center gap-1.5 rounded-full bg-panel py-1 pr-2.5 pl-2 text-mute no-underline ring-1 ring-line transition-colors hover:text-ink hover:ring-si"
               >
                 <svg viewBox="0 0 24 24" className="size-3.5" aria-hidden fill="currentColor">
                   <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.727-8.835L1.254 2.25H8.08l4.259 5.63 5.905-5.63Zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
                 </svg>
-                @blocksboy
+                @chipet_
               </a>
             </div>
           </div>
@@ -342,11 +342,11 @@ export function Shell({ children }: { children: ReactNode }) {
           <div className="mx-auto flex max-w-[1180px] flex-col gap-2 px-4 py-4 font-mono text-[11px] text-faint sm:px-7 lg:flex-row lg:flex-wrap lg:items-center lg:gap-x-4 lg:gap-y-1">
             <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1">
               <span className="flex items-center gap-1.5"><Cpu className="size-3.5 text-si" />Chipet · X Layer TapeOut Accelerate</span>
-              <a href="https://x.com/blocksboy" target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-faint no-underline transition-colors hover:text-ink">
+              <a href="https://x.com/chipet_" target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-faint no-underline transition-colors hover:text-ink">
                 <svg viewBox="0 0 24 24" className="size-3" aria-hidden fill="currentColor">
                   <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.727-8.835L1.254 2.25H8.08l4.259 5.63 5.905-5.63Zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
                 </svg>
-                @blocksboy
+                @chipet_
               </a>
               <a href="https://tapeout.net/" target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-faint no-underline transition-colors hover:text-ink">
                 tapeout.net<ExternalLink className="size-3 shrink-0" />
