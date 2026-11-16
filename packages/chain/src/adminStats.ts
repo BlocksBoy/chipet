@@ -22,9 +22,11 @@ export const SCAN_FROM: Record<number, bigint> = {
   56: 70_000_000n,
 };
 
-/** Alchemy 等付费节点可拉更大区间；公共节点保守一点。 */
+/** 付费节点（Alchemy / dRPC 等）可拉更大区间；公共节点保守一点。 */
 function chunkFor(rpcHost?: string): bigint {
-  return rpcHost?.includes('alchemy.com') ? 50_000n : 2_000n;
+  const h = (rpcHost ?? '').toLowerCase();
+  if (h.includes('alchemy.com') || h.includes('drpc.live') || h.includes('drpc.org')) return 50_000n;
+  return 2_000n;
 }
 
 export interface AdminStats {
