@@ -32,44 +32,9 @@ export interface Deployment {
   library?: Address;
   /** 演示/默认流片用的处理器 */
   cpu?: Address;
-  /** Chipet 芯宠合约（当前可孵化） */
+  /** Chipet 芯宠合约 */
   chipet?: Address;
-  /** 历史 Chipet：只读展示/喂玩，不再 hatch */
-  chipetLegacy?: Address[];
   deployedAt?: string;
-}
-
-/** 本地路由 id：旧合约 tokenId 加此前缀，避免与新合约 #1/#2 撞车。 */
-export const LEGACY_PET_ID_BASE = 1_000_000;
-
-/** 当前链上要读的全部 Chipet（新在前，旧在后）。 */
-export function chipetAddresses(d: Deployment | undefined | null): Address[] {
-  if (!d?.chipet) return [];
-  const seen = new Set<string>();
-  const out: Address[] = [];
-  for (const a of [d.chipet, ...(d.chipetLegacy ?? [])]) {
-    const k = a.toLowerCase();
-    if (seen.has(k)) continue;
-    seen.add(k);
-    out.push(a);
-  }
-  return out;
-}
-
-export function isLegacyChipet(d: Deployment | undefined | null, chipet: Address): boolean {
-  if (!d?.chipet) return false;
-  if (chipet.toLowerCase() === d.chipet.toLowerCase()) return false;
-  return (d.chipetLegacy ?? []).some((a) => a.toLowerCase() === chipet.toLowerCase());
-}
-
-/** 链上 tokenId → 本地/路由 id */
-export function toLocalPetId(tokenId: number, chipet: Address, primary: Address): number {
-  return chipet.toLowerCase() === primary.toLowerCase() ? tokenId : tokenId + LEGACY_PET_ID_BASE;
-}
-
-/** 本地/路由 id → 链上 tokenId */
-export function toChainTokenId(localId: number): number {
-  return localId >= LEGACY_PET_ID_BASE ? localId - LEGACY_PET_ID_BASE : localId;
 }
 
 /** TapeOut 在 X Layer 主网的工厂地址，来自 TapeKit 内核配置并经链上核对。 */

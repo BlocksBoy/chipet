@@ -27,16 +27,12 @@ if (existsSync(dir)) {
   for (const f of readdirSync(dir).filter((x) => /^\d+-chipet\.json$/.test(x))) {
     const d = JSON.parse(readFileSync(new URL(f, dir), 'utf8'));
     const id = String(d.chainId);
-    const prevLegacy = all[id]?.chipetLegacy;
     all[id] = {
       ...all[id],
       chainId: Number(id),
       ...(d.factory ? { factory: d.factory } : {}),
       ...(d.cpu && d.cpu !== zeroAddress ? { cpu: d.cpu } : {}),
       ...(d.chipet && d.chipet !== zeroAddress ? { chipet: d.chipet } : {}),
-      // forge 写出的 *-chipet.json 不含 legacy；保留 deployments.json 里已有的历史地址
-      ...(Array.isArray(d.chipetLegacy) ? { chipetLegacy: d.chipetLegacy }
-        : Array.isArray(prevLegacy) ? { chipetLegacy: prevLegacy } : {}),
       deployedAt: new Date().toISOString(),
     };
     console.log(`链 ${id}: chipet ${d.chipet}${d.cpu ? ` cpu ${d.cpu}` : ''}`);

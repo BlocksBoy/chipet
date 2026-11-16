@@ -17,7 +17,7 @@ import { adminStatsPayload, decorateAdminStats, startAdminScanJob } from './admi
 import { countWalletUsers, overlayRegisteredStats, registerWallet } from './walletUsers.ts';
 import { overlayRechargeStats, recordRecharge } from './rechargeEvents.ts';
 import { countArchivedPets, listArchivedPets } from './petArchive.ts';
-import { syncAllChipetPetsFully } from './petSync.ts';
+import { syncChipetPetsFully } from './petSync.ts';
 
 export interface AppDeps {
   ctx?: (chainId?: number) => ChainCtx;
@@ -267,12 +267,7 @@ export function createApp(deps: AppDeps = {}) {
         results.push({ chainId, ok: false, error: 'chipet not deployed' });
         continue;
       }
-      const result = await syncAllChipetPetsFully(
-        x.client,
-        chainId,
-        x.deployment.chipet,
-        x.deployment.chipetLegacy ?? [],
-      );
+      const result = await syncChipetPetsFully(x.client, chainId, x.deployment.chipet);
       results.push({ ok: true, ...result });
     }
     return json(c, { ok: true, archived: countArchivedPets(null), results });

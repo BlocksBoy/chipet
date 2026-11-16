@@ -201,8 +201,6 @@ export interface ChipetPet {
   lastFeed: number;
   lastPlay: number;
   name: string;
-  /** 所属 Chipet 合约；多合约并读时必填 */
-  chipet?: Address;
 }
 
 function mapPet(id: number, p: {
@@ -254,26 +252,8 @@ export async function petsOfOwner(client: PublicClient, chipet: Address, owner: 
   const ids = await client.readContract({ address: chipet, abi: chipetAbi, functionName: 'petsOfOwner', args: [owner] });
   return Promise.all(ids.map(async (id) => {
     const p = await client.readContract({ address: chipet, abi: chipetAbi, functionName: 'petOf', args: [id] });
-    return { ...mapPet(Number(id), p), chipet };
+    return mapPet(Number(id), p);
   }));
-}
-
-/** 合并当前 + 历史 Chipet 上该地址持有的猫（每只带 chipet 字段）。 */
-export async function petsOfOwnerAll(
-  client: PublicClient,
-  chipets: Address[],
-  owner: Address,
-): Promise<ChipetPet[]> {
-  const batches = await Promise.all(
-    chipets.map(async (chipet) => {
-      try {
-        return await petsOfOwner(client, chipet, owner);
-      } catch {
-        return [] as ChipetPet[];
-      }
-    }),
-  );
-  return batches.flat();
 }
 
 export async function listComponents(client: PublicClient, library: Address): Promise<ComponentInfo[]> {

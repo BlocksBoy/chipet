@@ -3,7 +3,7 @@
  * 另：进程内每小时自动增量同步两条主网。
  */
 import type { Address, PublicClient } from 'viem';
-import { chipetAddresses, loadAdminStats, MAINNET_IDS, type AdminStats } from '@tapearena/chain';
+import { loadAdminStats, MAINNET_IDS, type AdminStats } from '@tapearena/chain';
 import {
   getAdminScanCheckpoint,
   latestAdminStats,
@@ -12,7 +12,7 @@ import {
   type AdminStatsRow,
 } from './adminDb.ts';
 import { chainCtx, resetChainCtx, rpcHostLabel } from './chain.ts';
-import { syncAllChipetPetsFully } from './petSync.ts';
+import { syncChipetPetsFully } from './petSync.ts';
 import { overlayRechargeStats } from './rechargeEvents.ts';
 import { overlayRegisteredStats } from './walletUsers.ts';
 
@@ -75,11 +75,8 @@ export function startAdminScanJob(opts: {
       const existingCp = getAdminScanCheckpoint(chainId);
       let checkpoint = full ? null : existingCp;
       let first = true;
-      const dep = chainCtx(chainId).deployment;
-      const addrs = chipetAddresses(dep);
-      const scanAddrs = addrs.length ? addrs : [chipet];
       for (;;) {
-        const { stats, checkpoint: next } = await loadAdminStats(client, chainId, scanAddrs, {
+        const { stats, checkpoint: next } = await loadAdminStats(client, chainId, chipet, {
           rpcHost,
           checkpoint,
           full: first && full,
@@ -95,10 +92,9 @@ export function startAdminScanJob(opts: {
         job.updatedAt = Date.now();
         checkpoint = next;
         if (stats.complete) {
-          // 扫链完成后把全量宠物属性落库（当前 + 历史 Chipet）
+          // 扫链完成后把全量宠物属性落库（特征/能量等存档）
           try {
-            const primary = dep?.chipet ?? chipet;
-            await syncAllChipetPetsFully(client, chainId, primary, dep?.chipetLegacy ?? []);
+            await syncChipetPetsFully(client, chainId, chipet);
           } catch (e) {
             console.warn('[admin] pet archive sync failed', chainId, e);
           }
@@ -118,18 +114,14 @@ export function startAdminScanJob(opts: {
 }
 
 /** 给快照叠注册/充值看板字段，避免扫链原始 hatchers/payers 把前端盖成残缺数据。 */
-export function decorateAdminStats<T extends object>(
-  stats: T | null | undefined,
+export function decorateAdminStats(
+  stats: AdminStatsRow | AdminStats | null | undefined,
   chainId: number,
-): (T & {
-  registered: number;
+): (AdminStatsRow | AdminStats) & {
   registeredOnChain: number;
   walletRegistered: number;
-  rechargeUsers: number;
-  rechargeTxs: number;
-  rechargeBem: string;
   reportedTxs: number;
-}) | null {
+} | null {
   const reg = overlayRegisteredStats(chainId);
   const recharge = overlayRechargeStats(chainId);
   if (!stats) return null;

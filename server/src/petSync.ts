@@ -3,7 +3,7 @@
  * 按 petId 分段，支持 budgetMs 分片，避免一次扫光 RPC。
  */
 import type { Address, PublicClient } from 'viem';
-import { chipetAbi, LEGACY_PET_ID_BASE } from '@tapearena/chain';
+import { chipetAbi } from '@tapearena/chain';
 import { countArchivedPets, upsertArchivedPet } from './petArchive.ts';
 
 export type PetSyncResult = {
@@ -69,9 +69,8 @@ export async function syncChipetPets(
   client: PublicClient,
   chainId: number,
   chipet: Address,
-  opts?: { fromId?: number; budgetMs?: number; batchSize?: number; /** 旧合约入库时加到 pet_id，避免与新合约撞号 */ idOffset?: number },
+  opts?: { fromId?: number; budgetMs?: number; batchSize?: number },
 ): Promise<PetSyncResult> {
-  const idOffset = Math.max(0, Number(opts?.idOffset ?? 0) || 0);
   const next = await client.readContract({ address: chipet, abi: chipetAbi, functionName: 'nextId' });
   const nextId = Number(next);
   const totalOnChain = Math.max(0, nextId - 1);
@@ -94,12 +93,12 @@ export async function syncChipetPets(
     const rows = await Promise.all(ids.map((id) => readOne(client, chipet, id)));
     for (let i = 0; i < ids.length; i++) {
       const row = rows[i];
-      const tokenId = ids[i]!;
-      cursor = tokenId;
+      const petId = ids[i]!;
+      cursor = petId;
       if (!row) continue;
       upsertArchivedPet({
         chainId,
-        petId: tokenId + idOffset,
+        petId,
         owner: row.owner,
         name: row.pet.name,
         cpu: row.pet.cpu,
@@ -136,46 +135,14 @@ export async function syncChipetPetsFully(
   client: PublicClient,
   chainId: number,
   chipet: Address,
-  opts?: { sliceMs?: number; idOffset?: number },
+  opts?: { sliceMs?: number },
 ): Promise<PetSyncResult> {
   const sliceMs = opts?.sliceMs ?? 15_000;
   let fromId = 1;
   let last: PetSyncResult | null = null;
   for (;;) {
-    last = await syncChipetPets(client, chainId, chipet, {
-      fromId,
-      budgetMs: sliceMs,
-      idOffset: opts?.idOffset,
-    });
+    last = await syncChipetPets(client, chainId, chipet, { fromId, budgetMs: sliceMs });
     if (last.complete) return last;
     fromId = last.cursor + 1;
   }
-}
-
-/** 同步当前 + 历史 Chipet；旧合约 pet_id 使用 LEGACY_PET_ID_BASE 偏移。 */
-export async function syncAllChipetPetsFully(
-  client: PublicClient,
-  chainId: number,
-  primary: Address,
-  legacy: Address[] = [],
-  opts?: { sliceMs?: number },
-): Promise<PetSyncResult> {
-  let last = await syncChipetPetsFully(client, chainId, primary, opts);
-  let totalOnChain = last.totalOnChain;
-  let synced = last.synced;
-  for (const addr of legacy) {
-    if (addr.toLowerCase() === primary.toLowerCase()) continue;
-    last = await syncChipetPetsFully(client, chainId, addr, {
-      ...opts,
-      idOffset: LEGACY_PET_ID_BASE,
-    });
-    totalOnChain += last.totalOnChain;
-    synced += last.synced;
-  }
-  return {
-    ...last,
-    totalOnChain,
-    synced,
-    archived: countArchivedPets(chainId),
-  };
 }

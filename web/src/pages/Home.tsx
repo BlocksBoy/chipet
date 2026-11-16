@@ -9,7 +9,7 @@ import { PetAvatar } from '../chipet/PetAvatar.tsx';
 import { KittyEgg } from '../chipet/KittyEgg.tsx';
 import { FxOverlay, type ChipImpulse } from '../chipet/FxOverlay.tsx';
 import { SceneStage } from '../chipet/SceneStage.tsx';
-import { chipetAddresses, hatchChipet, nameAvailable, petsOfOwnerAll } from '@tapearena/chain';
+import { hatchChipet, nameAvailable, petsOfOwner } from '@tapearena/chain';
 import { localChipet } from '../chipet/store.ts';
 import { cattributes, phenotypeOf, SPECIES_COUNT, typeLabel } from '../chipet/phenotype.ts';
 import { heartOf } from '../chipet/heart.ts';
@@ -88,15 +88,13 @@ export function Home() {
   useEffect(() => {
     if (!chipet || !account) return;
     let live = true;
-    const addrs = chipetAddresses(deployment);
-    petsOfOwnerAll(pub, addrs, account).then((list) => {
+    petsOfOwner(pub, chipet, account).then((list) => {
       if (!live) return;
-      // 新旧合约一并展示；孵化仍只写 deployment.chipet
-      localChipet.syncChainPets(list, chipet);
+      localChipet.syncChainPets(list);
       setTick((n) => n + 1);
     }).catch(() => { /* 读失败时保留本地缓存 */ });
     return () => { live = false; };
-  }, [chipet, account, pub, refreshKey, deployment]);
+  }, [chipet, account, pub, refreshKey]);
   const later = (fn: () => void, ms: number) => {
     timers.current.push(window.setTimeout(fn, ms));
   };
@@ -159,8 +157,6 @@ export function Home() {
             level: 1,
             lastFeed: 0,
             lastPlay: 0,
-            chipet,
-            primaryChipet: chipet,
           });
           reveal(p);
           return p;
