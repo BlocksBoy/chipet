@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ArrowLeft, Cat, Database, Filter, Gauge, Loader2, RefreshCw, ShieldCheck, Sparkles, Zap,
+  ArrowLeft, Cat, Database, Filter, Gauge, Link2, Loader2, RefreshCw, ShieldCheck, Sparkles, Zap,
 } from 'lucide-react';
-import { CHAINS, CHAIN_LABEL } from '@tapearena/chain';
+import { CHAINS, CHAIN_LABEL, MAINNET_IDS } from '@tapearena/chain';
 import { PaginationBar } from '../components/Pagination.tsx';
 import { Button, Field, PAGE, Panel, Select, Tag, cn } from '../components/ui.tsx';
 import { useT } from '../i18n.ts';
@@ -16,6 +16,7 @@ import {
 
 const PAGE_SIZE = 10;
 
+type ChainBand = 'all' | `${(typeof MAINNET_IDS)[number]}`;
 type EnergyBand = 'all' | 'low' | 'mid' | 'high';
 type LevelBand = 'all' | '1-3' | '4-6' | '7+';
 type RarityBand = 'all' | '0' | '1' | '2';
@@ -42,8 +43,14 @@ function explorer(chainId: number, addr: string) {
   return `${base.replace(/\/$/, '')}/address/${addr}`;
 }
 
-function toApiFilter(energy: EnergyBand, level: LevelBand, rarity: RarityBand): AdminCatsFilter {
+function toApiFilter(
+  chain: ChainBand,
+  energy: EnergyBand,
+  level: LevelBand,
+  rarity: RarityBand,
+): AdminCatsFilter {
   const f: AdminCatsFilter = {};
+  if (chain !== 'all') f.chainId = Number(chain);
   if (rarity !== 'all') f.rarity = Number(rarity);
   if (level === '1-3') { f.levelMin = 1; f.levelMax = 3; }
   else if (level === '4-6') { f.levelMin = 4; f.levelMax = 6; }
@@ -65,14 +72,15 @@ export function AdminCats() {
   const [total, setTotal] = useState(0);
   const [pages, setPages] = useState(1);
   const [archived, setArchived] = useState(0);
+  const [chain, setChain] = useState<ChainBand>('all');
   const [energy, setEnergy] = useState<EnergyBand>('all');
   const [level, setLevel] = useState<LevelBand>('all');
   const [rarity, setRarity] = useState<RarityBand>('all');
   const autoSyncTried = useRef(false);
 
   const filter = useMemo(
-    () => toApiFilter(energy, level, rarity),
-    [energy, level, rarity],
+    () => toApiFilter(chain, energy, level, rarity),
+    [chain, energy, level, rarity],
   );
 
   useEffect(() => {
@@ -175,8 +183,8 @@ export function AdminCats() {
               <h1 className="font-display text-2xl font-bold text-ink">{t('猫咪存档', 'Cat archive')}</h1>
               <p className="mt-0.5 text-sm text-mute">
                 {t(
-                  '全链芯宠属性一张表；可按能量、等级、稀有度筛选。每页 10 条。',
-                  'All-chain Chipet archive; filter by energy, level, rarity. 10 per page.',
+                  '全链芯宠属性一张表；可按链、能量、等级、稀有度筛选。每页 10 条。',
+                  'All-chain Chipet archive; filter by chain, energy, level, rarity. 10 per page.',
                 )}
               </p>
             </div>
@@ -222,6 +230,18 @@ export function AdminCats() {
             <Filter className="size-3.5" />
             {t('筛选', 'Filters')}
           </span>
+          <Field label={t('链', 'Chain')} icon={Link2} className="min-w-[140px] flex-1 sm:flex-none">
+            <Select
+              value={chain}
+              onChange={(e) => { setChain(e.target.value as ChainBand); setPage(1); }}
+              className="h-9 min-w-[140px] text-[13px]"
+            >
+              <option value="all">{t('全部链', 'All chains')}</option>
+              {MAINNET_IDS.map((id) => (
+                <option key={id} value={String(id)}>{CHAIN_LABEL[id] ?? id}</option>
+              ))}
+            </Select>
+          </Field>
           <Field label={t('能量', 'Energy')} icon={Zap} className="min-w-[140px] flex-1 sm:flex-none">
             <Select
               value={energy}

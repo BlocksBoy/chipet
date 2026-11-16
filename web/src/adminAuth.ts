@@ -84,16 +84,24 @@ export function coalesceAdminStats(s: AdminStatsPayload): AdminStatsPayload | nu
 }
 
 export async function adminLogin(token: string) {
-  const r = await fetch(apiURL('/api/admin/login'), {
-    method: 'POST',
-    cache: 'no-store',
-    credentials: 'include',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ token }),
-  });
+  let r: Response;
+  try {
+    r = await fetch(apiURL('/api/admin/login'), {
+      method: 'POST',
+      cache: 'no-store',
+      credentials: 'include',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ token }),
+    });
+  } catch {
+    throw Object.assign(new Error('后端未启动（请 npm run dev 或先开 npm run dev:server）'), { status: 0 });
+  }
   const data = await readJson(r);
   if (!r.ok) {
-    const err = new Error(data.error || `HTTP ${r.status}`) as Error & { status?: number; code?: string };
+    const unreachable = r.status >= 500 && !data.error;
+    const msg = data.error
+      || (unreachable ? '后端未启动或暂时不可用（请 npm run dev 或先开 npm run dev:server）' : `HTTP ${r.status}`);
+    const err = new Error(msg) as Error & { status?: number; code?: string };
     err.status = r.status;
     err.code = data.code;
     throw err;

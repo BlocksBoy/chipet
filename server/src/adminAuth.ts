@@ -37,11 +37,17 @@ async function getRedis(): Promise<RedisClientType | null> {
   if (redisClient?.isOpen) return redisClient;
   if (redisConnecting) return redisConnecting;
   redisConnecting = (async () => {
-    const c = createClient({ url }) as RedisClientType;
-    c.on('error', (e) => console.error('[redis]', e));
-    await c.connect();
-    redisClient = c;
-    return c;
+    try {
+      const c = createClient({ url }) as RedisClientType;
+      c.on('error', (e) => console.error('[redis]', e));
+      await c.connect();
+      redisClient = c;
+      return c;
+    } catch (e) {
+      console.error('[redis] connect failed, fall back to memory sessions', e);
+      redisClient = null;
+      return null;
+    }
   })().finally(() => {
     redisConnecting = null;
   });
@@ -98,24 +104,32 @@ export function allowFailAttempt(ip: string): boolean {
 
 export async function createSession(): Promise<string> {
   const id = randomBytes(32).toString('hex');
-  const r = await getRedis();
-  if (r) {
-    await r.set(sessKey(id), '1', { EX: ADMIN_SESSION_TTL_SEC });
-  } else {
-    memorySessions.set(id, Date.now() + ADMIN_SESSION_TTL_SEC * 1000);
+  try {
+    const r = await getRedis();
+    if (r) {
+      await r.set(sessKey(id), '1', { EX: ADMIN_SESSION_TTL_SEC });
+      return id;
+    }
+  } catch (e) {
+    console.error('[admin-session] redis set failed, using memory', e);
   }
+  memorySessions.set(id, Date.now() + ADMIN_SESSION_TTL_SEC * 1000);
   return id;
 }
 
 export async function sessionValid(id: string | undefined): Promise<boolean> {
   if (!id) return false;
-  const r = await getRedis();
-  if (r) {
-    const n = await r.exists(sessKey(id));
-    if (!n) return false;
-    // 滑动续期
-    await r.expire(sessKey(id), ADMIN_SESSION_TTL_SEC);
-    return true;
+  try {
+    const r = await getRedis();
+    if (r) {
+      const n = await r.exists(sessKey(id));
+      if (!n) return false;
+      // 滑动续期
+      await r.expire(sessKey(id), ADMIN_SESSION_TTL_SEC);
+      return true;
+    }
+  } catch (e) {
+    console.error('[admin-session] redis check failed, using memory', e);
   }
   const exp = memorySessions.get(id);
   if (exp == null) return false;
@@ -129,10 +143,14 @@ export async function sessionValid(id: string | undefined): Promise<boolean> {
 
 export async function revokeSession(id: string | undefined): Promise<void> {
   if (!id) return;
-  const r = await getRedis();
-  if (r) {
-    await r.del(sessKey(id));
-    return;
+  try {
+    const r = await getRedis();
+    if (r) {
+      await r.del(sessKey(id));
+      return;
+    }
+  } catch (e) {
+    console.error('[admin-session] redis del failed, clearing memory', e);
   }
   memorySessions.delete(id);
 }
