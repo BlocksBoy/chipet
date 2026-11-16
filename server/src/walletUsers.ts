@@ -1,7 +1,9 @@
 /**
- * 前端连钱包注册：独立地址入库；运营看板「注册人数」读这里的总数。
+ * 前端连钱包注册：独立地址入库。
+ * 看板「注册人数」= 连钱包地址 ∪ 扫链孵化地址（去重），避免只数新表丢掉历史孵化用户。
  */
-import { getAdminDb } from './adminDb.ts';
+import { MAINNET_IDS } from '@tapearena/chain';
+import { getAdminDb, getAdminScanCheckpoint } from './adminDb.ts';
 
 const ADDR_RE = /^0x[a-fA-F0-9]{40}$/;
 
@@ -22,18 +24,47 @@ function ensureTable() {
   `);
 }
 
-export function countWalletUsers(): number {
+export function listWalletUsers(): { address: string; chainId: number }[] {
   ensureTable();
-  const row = getAdminDb().prepare(`SELECT COUNT(*) AS n FROM wallet_users`).get() as { n: number };
-  return Number(row?.n ?? 0);
+  const rows = getAdminDb()
+    .prepare(`SELECT address, chain_id FROM wallet_users`)
+    .all() as { address: string; chain_id: number }[];
+  return rows.map((r) => ({ address: r.address, chainId: Number(r.chain_id) }));
+}
+
+export function countWalletUsers(): number {
+  return listWalletUsers().length;
 }
 
 export function countWalletUsersByChain(chainId: number): number {
-  ensureTable();
-  const row = getAdminDb()
-    .prepare(`SELECT COUNT(*) AS n FROM wallet_users WHERE chain_id = ?`)
-    .get(chainId) as { n: number };
-  return Number(row?.n ?? 0);
+  return listWalletUsers().filter((w) => w.chainId === chainId).length;
+}
+
+/** 全局注册人数 + 本链归因（钱包 last_seen 链 ∪ 本链孵化地址） */
+export function overlayRegisteredStats(chainId: number): {
+  registered: number;
+  registeredOnChain: number;
+  walletRegistered: number;
+} {
+  const wallets = listWalletUsers();
+  const global = new Set(wallets.map((w) => w.address));
+  for (const id of MAINNET_IDS) {
+    const cp = getAdminScanCheckpoint(id);
+    for (const h of cp?.hatchers ?? []) global.add(h.toLowerCase());
+  }
+
+  const onChain = new Set<string>();
+  for (const w of wallets) {
+    if (w.chainId === chainId) onChain.add(w.address);
+  }
+  const cp = getAdminScanCheckpoint(chainId);
+  for (const h of cp?.hatchers ?? []) onChain.add(h.toLowerCase());
+
+  return {
+    registered: global.size,
+    registeredOnChain: onChain.size,
+    walletRegistered: wallets.length,
+  };
 }
 
 /** 新地址插入并返回 true；已存在则刷新 last_seen / chain_id，返回 false。 */
@@ -46,10 +77,10 @@ export function registerWallet(address: string, chainId = 0): { isNew: boolean; 
   const existing = db.prepare(`SELECT address FROM wallet_users WHERE address = ?`).get(addr) as { address: string } | undefined;
   if (existing) {
     db.prepare(`UPDATE wallet_users SET last_seen = ?, chain_id = ? WHERE address = ?`).run(now, chainId, addr);
-    return { isNew: false, total: countWalletUsers() };
+    return { isNew: false, total: overlayRegisteredStats(chainId || 196).registered };
   }
   db.prepare(
     `INSERT INTO wallet_users (address, chain_id, first_seen, last_seen) VALUES (?, ?, ?, ?)`,
   ).run(addr, chainId, now, now);
-  return { isNew: true, total: countWalletUsers() };
+  return { isNew: true, total: overlayRegisteredStats(chainId || 196).registered };
 }

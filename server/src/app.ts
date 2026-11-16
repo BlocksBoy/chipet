@@ -14,7 +14,7 @@ import {
 } from './adminAuth.ts';
 import { listAdminStatsHistory } from './adminDb.ts';
 import { adminStatsPayload, startAdminScanJob } from './adminScanWorker.ts';
-import { countWalletUsers, countWalletUsersByChain, registerWallet } from './walletUsers.ts';
+import { countWalletUsers, overlayRegisteredStats, registerWallet } from './walletUsers.ts';
 import { overlayRechargeStats, recordRecharge } from './rechargeEvents.ts';
 
 export interface AppDeps {
@@ -163,18 +163,17 @@ export function createApp(deps: AppDeps = {}) {
     const chainId = Number(c.req.query('chainId') ?? process.env.CHAIN_ID ?? 196);
     if (chainId !== 196 && chainId !== 56) throw new HttpError(400, 'unsupported chainId');
     const { stats, job } = adminStatsPayload(chainId);
-    const walletRegistered = countWalletUsers();
-    const registeredOnChain = countWalletUsersByChain(chainId);
+    const reg = overlayRegisteredStats(chainId);
     const recharge = overlayRechargeStats(chainId);
     if (!stats) {
       return json(c, {
         chainId,
         empty: true,
         job,
-        // 扫链未完成时也能看钱包注册 / 上报充值
-        registered: walletRegistered,
-        registeredOnChain,
-        walletRegistered,
+        // 扫链未完成时也能看注册 / 上报充值
+        registered: reg.registered,
+        registeredOnChain: reg.registeredOnChain,
+        walletRegistered: reg.walletRegistered,
         rechargeUsers: recharge.rechargeUsers,
         rechargeTxs: recharge.rechargeTxs,
         rechargeBem: recharge.rechargeBem,
@@ -184,10 +183,10 @@ export function createApp(deps: AppDeps = {}) {
     }
     return json(c, {
       ...stats,
-      // 看板「注册人数」= 连过钱包的独立地址（非扫链孵化地址）
-      registered: walletRegistered,
-      registeredOnChain,
-      walletRegistered,
+      // 看板「注册人数」= 连钱包 ∪ 扫链孵化地址（去重）
+      registered: reg.registered,
+      registeredOnChain: reg.registeredOnChain,
+      walletRegistered: reg.walletRegistered,
       // 充值 = 历史扫链冻结 + 商店成功上报
       rechargeUsers: recharge.rechargeUsers,
       rechargeTxs: recharge.rechargeTxs,

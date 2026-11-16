@@ -2,8 +2,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { closeAdminDb } from '../src/adminDb.ts';
-import { countWalletUsers, registerWallet } from '../src/walletUsers.ts';
+import { closeAdminDb, saveAdminScanCheckpoint } from '../src/adminDb.ts';
+import { countWalletUsers, overlayRegisteredStats, registerWallet } from '../src/walletUsers.ts';
 import { createApp } from '../src/app.ts';
 import type { PublicClient } from 'viem';
 import { ChainLibrary } from '@tapearena/chain';
@@ -54,5 +54,40 @@ describe('walletUsers', () => {
     expect(ok.status).toBe(200);
     const j = await ok.json();
     expect(j).toMatchObject({ ok: true, isNew: true, registered: 1 });
+  });
+
+  it('注册人数 = 连钱包 ∪ 扫链孵化地址', () => {
+    saveAdminScanCheckpoint(196, {
+      scannedTo: '1',
+      rechargeTxs: 0,
+      rechargeBemRaw: '0',
+      payers: [],
+      hatchers: [
+        '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+        '0xcccccccccccccccccccccccccccccccccccccccc',
+        '0xdddddddddddddddddddddddddddddddddddddddd',
+      ],
+      playedPets: [],
+      players: [],
+    });
+    saveAdminScanCheckpoint(56, {
+      scannedTo: '1',
+      rechargeTxs: 0,
+      rechargeBemRaw: '0',
+      payers: [],
+      hatchers: ['0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee'],
+      playedPets: [],
+      players: [],
+    });
+    // 已在孵化集合里的地址再连钱包，不重复计
+    registerWallet('0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 196);
+    // 新连钱包但未孵化
+    registerWallet('0xffffffffffffffffffffffffffffffffffffffff', 196);
+
+    const o = overlayRegisteredStats(196);
+    expect(o.walletRegistered).toBe(2);
+    expect(o.registered).toBe(6); // 4 XL hatchers + 1 BSC + 1 新钱包
+    expect(o.registeredOnChain).toBe(5); // 4 hatchers + 1 新钱包（同链）
   });
 });
