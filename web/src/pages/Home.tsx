@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ComponentType } from 'react';
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ComponentType } from 'react';
 import { motion } from 'motion/react';
 import { Egg, Sparkles, Hammer, Swords, BookOpen, ArrowRight, Users, Fish, ListChecks, CircleCheck, Zap, Hand, CalendarCheck, Cable, Cat, Trophy, Coins, type LucideProps } from 'lucide-react';
 import { Button, Panel, Tag, Input, PAGE, SectionTitle, StatBand, Trait, cn } from '../components/ui.tsx';
@@ -14,7 +14,7 @@ import { localChipet } from '../chipet/store.ts';
 import { cattributes, phenotypeOf, SPECIES_COUNT, typeLabel } from '../chipet/phenotype.ts';
 import { heartOf } from '../chipet/heart.ts';
 import { ACT_ICON, actTone, PetCard, routeIdOf, timeAgo } from '../chipet/PetCard.tsx';
-import { social, type QuestId } from '../chipet/social.ts';
+import { getSocialRev, social, subscribeSocial, type QuestId } from '../chipet/social.ts';
 import { BEM_SKUS, bem } from '../chipet/bem.ts';
 
 const NAME_INPUT_ID = 'chipet-name';
@@ -66,10 +66,11 @@ export function Home() {
   const [fxNonce, setFxNonce] = useState(0);
   const pulseSeq = useRef(0);
   const timers = useRef<number[]>([]);
+  const socialRev = useSyncExternalStore(subscribeSocial, getSocialRev, getSocialRev);
   const pets = useMemo(() => localChipet.list(), [tick, refreshKey]);
-  const profile = useMemo(() => social.profile(), [tick]);
-  const quests = useMemo(() => social.quests(), [tick]);
-  const feed = useMemo(() => social.activities(), [tick]);
+  const profile = useMemo(() => social.profile(), [tick, socialRev]);
+  const quests = useMemo(() => social.quests(), [tick, socialRev]);
+  const feed = useMemo(() => social.activities(), [tick, socialRev]);
   const speciesSeen = useMemo(() => new Set(pets.map((p) => phenotypeOf(p.cpu, p.circuitId, p.rarity).speciesId)).size, [pets]);
   const totalWins = pets.reduce((n, p) => n + p.wins, 0);
   const ph = useMemo(

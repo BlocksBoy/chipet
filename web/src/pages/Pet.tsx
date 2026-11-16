@@ -155,33 +155,27 @@ export function PetPage({ id, share: shareToken }: { id?: number; share?: string
 
   /** 通电小游戏打完三关后结算，返回给小游戏展示的奖励文案。 */
   const settlePower = (stars: number, max: number) => {
-    const finishLocal = () => {
+    // 任务进度 / 心情经验立刻落本地，不挂在链上交易之后，避免回家园仍显示 0/1
+    try {
       const r = localChipet.powerUp(petId, stars);
       const { fish } = social.recordPower(r.pet, stars, max);
       setNow(Date.now());
       setTick((n) => n + 1);
       pulse('happy');
-      return t(
+      const summary = t(
         `心情 +${r.mood} · 经验 +${r.xp}${r.ups ? ` · 升到 Lv.${r.pet.level}` : ''}${fish ? ' · 满星奖励鱼干 +1' : ''}`,
         `Mood +${r.mood} · XP +${r.xp}${r.ups ? ` · leveled up to Lv.${r.pet.level}` : ''}${fish ? ' · perfect bonus: +1 fish treat' : ''}`,
       );
-    };
-    if (chainCare && chipet) {
-      // 链上 play 写心情/亲密；经验仍记在本地缓存
-      void run(t('通电玩耍', 'Power Play'), async (step) => {
-        const s = await signer();
-        await playChipet(s, chipet, petId, step);
-        await refreshFromChain();
-        const xp = 4 + stars * 2;
-        const { pet: cur } = localChipet.grantXp(petId, xp);
-        social.recordPower(cur, stars, max);
-        pulse('happy');
-        notify('ok', t('通电完成', 'Power Play done'));
-      });
-      return t('链上结算中…', 'Settling on-chain…');
-    }
-    try {
-      return finishLocal();
+      if (chainCare && chipet) {
+        // 链上 play 同步心情/亲密；任务已记过，不再 recordPower
+        void run(t('通电玩耍', 'Power Play'), async (step) => {
+          const s = await signer();
+          await playChipet(s, chipet, petId, step);
+          await refreshFromChain();
+          notify('ok', t('通电完成', 'Power Play done'));
+        }).catch(fail);
+      }
+      return summary;
     } catch (e) {
       return e instanceof Error ? e.message : String(e);
     }

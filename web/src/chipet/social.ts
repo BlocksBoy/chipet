@@ -385,8 +385,23 @@ function load(): SocialState {
   }
 }
 
+/** 跨页面订阅：Pet 里记账后，家园任务等能立刻重读。 */
+let socialRev = 0;
+const socialSubs = new Set<() => void>();
+
 function save(s: SocialState) {
   localStorage.setItem(KEY, JSON.stringify(s));
+  socialRev += 1;
+  socialSubs.forEach((fn) => fn());
+}
+
+export function subscribeSocial(fn: () => void) {
+  socialSubs.add(fn);
+  return () => { socialSubs.delete(fn); };
+}
+
+export function getSocialRev() {
+  return socialRev;
 }
 
 /** 我的昵称（进场已随机；可手动改）。 */
