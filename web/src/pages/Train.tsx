@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ComponentType, type ReactElement, type ReactNode } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import {
-  ArrowRight, Cable, Cpu, Egg, Fish, Flag, RotateCcw, Shield, Swords, Trophy, WandSparkles, X, Zap, type LucideProps,
+  ArrowRight, Cable, Cpu, Egg, Fish, Flag, RotateCcw, ScrollText, Shield, Swords, Trophy, WandSparkles, X, Zap, type LucideProps,
 } from 'lucide-react';
 import { Button, Empty, ErrBar, PAGE, PageHeader, Panel, Tag, cn } from '../components/ui.tsx';
 import { Link, go, useRoute } from '../router.tsx';
@@ -842,7 +842,7 @@ export function Train() {
       opHp: Math.max(0, f.opHp - c.myDmg),
       busy: true,
       reveal: { n: f.round, myMove: move, opMove, myRoll, opRoll, c },
-      log: [{ n: f.round, say }, ...f.log].slice(0, 4),
+      log: [{ n: f.round, say }, ...f.log],
       fusion: f.fusion && move === FUSION ? { ...f.fusion, used: true } : f.fusion,
     };
   };
@@ -971,14 +971,16 @@ export function Train() {
           </div>
 
           {reveal && (
-            <motion.div key={reveal.n} className="mt-3 grid gap-2" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25 }}>
-              <ChipStrip
-                who={fight.petName}
-                chip={reveal.myMove === FUSION && fight.fusion ? `${fight.heart.name} ⟶ ${fight.fusion.f.b.name}` : fight.heart.name}
-                gates={reveal.myMove === FUSION && fight.fusion ? fight.fusion.f.gates : fight.heart.gates}
-                inBits={reveal.myRoll.inBits} outBits={reveal.myRoll.outBits} power={reveal.myRoll.power}
-              />
-              <ChipStrip who={opp.name} chip={opp.heart.name} gates={opp.heart.gates} inBits={reveal.opRoll.inBits} outBits={reveal.opRoll.outBits} power={reveal.opRoll.power} />
+            <motion.div key={reveal.n} className="mt-3 space-y-2" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25 }}>
+              <div className="grid grid-cols-2 gap-2 sm:gap-3">
+                <ChipStrip
+                  who={fight.petName}
+                  chip={reveal.myMove === FUSION && fight.fusion ? `${fight.heart.name} ⟶ ${fight.fusion.f.b.name}` : fight.heart.name}
+                  gates={reveal.myMove === FUSION && fight.fusion ? fight.fusion.f.gates : fight.heart.gates}
+                  inBits={reveal.myRoll.inBits} outBits={reveal.myRoll.outBits} power={reveal.myRoll.power}
+                />
+                <ChipStrip who={opp.name} chip={opp.heart.name} gates={opp.heart.gates} inBits={reveal.opRoll.inBits} outBits={reveal.opRoll.outBits} power={reveal.opRoll.power} />
+              </div>
               <p className="text-center text-sm font-semibold text-ink">{verdict}</p>
             </motion.div>
           )}
@@ -1080,9 +1082,33 @@ export function Train() {
           )}
 
           {fight.log.length > 0 && (
-            <ul className="mt-4 space-y-1 border-t border-line/70 pt-3 text-xs text-mute">
-              {fight.log.map((l, i) => <li key={l.n} className={i === 0 ? 'text-ink' : undefined}>{t(`第 ${l.n} 回合 · ${l.say()}`, `Round ${l.n} · ${l.say()}`)}</li>)}
-            </ul>
+            <div className="mt-4 rounded-2xl border border-line/70 bg-panel-2/70 p-3 sm:p-4">
+              <div className="mb-2.5 flex items-center gap-1.5 font-mono text-[11px] text-faint">
+                <ScrollText className="size-3.5 shrink-0 text-si" />
+                {t('战报', 'Battle log')}
+                <span className="text-line">·</span>
+                <span>{t(`${fight.log.length} 回合`, `${fight.log.length} rounds`)}</span>
+              </div>
+              <ol className="space-y-1.5">
+                {fight.log.map((l, i) => (
+                  <li
+                    key={l.n}
+                    className={cn(
+                      'flex gap-2.5 rounded-xl px-2.5 py-2 text-sm leading-snug',
+                      i === 0 ? 'bg-panel text-ink shadow-sm ring-1 ring-line/70' : 'text-mute',
+                    )}
+                  >
+                    <span className={cn(
+                      'mt-0.5 shrink-0 rounded-md px-1.5 py-0.5 font-mono text-[10px] font-semibold tabular-nums',
+                      i === 0 ? 'bg-copper/15 text-copper' : 'bg-panel text-faint',
+                    )}>
+                      {t(`第 ${l.n} 回合`, `R${l.n}`)}
+                    </span>
+                    <span className="min-w-0 flex-1">{l.say()}</span>
+                  </li>
+                ))}
+              </ol>
+            </div>
           )}
         </div>
 
