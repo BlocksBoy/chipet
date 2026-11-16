@@ -183,8 +183,8 @@ export function Admin() {
           </div>
           <p className="mt-4 text-sm leading-relaxed text-mute">
             {t(
-              '输入服务端配置的 ADMIN_TOKEN。会话以 HttpOnly Cookie 保存约 8 小时，口令不会写入浏览器存储。',
-              'Enter the server ADMIN_TOKEN. The session is stored in an HttpOnly cookie for about 8 hours; the secret is never written to browser storage.',
+              '输入服务端配置的 ADMIN_TOKEN。会话以 HttpOnly Cookie 保存约 48 小时，口令不会写入浏览器存储。',
+              'Enter the server ADMIN_TOKEN. The session is stored in an HttpOnly cookie for about 48 hours; the secret is never written to browser storage.',
             )}
           </p>
           <form className="mt-6 flex flex-col gap-3" onSubmit={onLogin}>

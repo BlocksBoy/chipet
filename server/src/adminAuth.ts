@@ -9,7 +9,7 @@ import { getCookie, setCookie, deleteCookie } from 'hono/cookie';
 import { HttpError } from './chain.ts';
 
 export const ADMIN_COOKIE = 'chipet_admin';
-export const ADMIN_SESSION_TTL_SEC = 8 * 3600;
+export const ADMIN_SESSION_TTL_SEC = 48 * 3600;
 export const MIN_ADMIN_TOKEN_LEN = 16;
 
 type SessionStore = Map<string, number>;
