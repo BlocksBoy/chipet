@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import {
-  Cat, Coins, Database, History, KeyRound, Loader2, LogOut, RefreshCw, RotateCcw, ShieldCheck, Swords, Users,
+  Cat, Check, Coins, Copy, Database, ExternalLink, History, KeyRound, Loader2, LogOut, RefreshCw, RotateCcw, ShieldCheck, Swords, Users,
 } from 'lucide-react';
-import { CHAIN_LABEL, MAINNET_IDS, bemNetwork } from '@tapearena/chain';
+import { CHAINS, CHAIN_LABEL, MAINNET_IDS, bemNetwork } from '@tapearena/chain';
 import { Button, PAGE, Panel, Tag, cn } from '../components/ui.tsx';
 import { useT } from '../i18n.ts';
 import {
@@ -10,6 +10,12 @@ import {
   type AdminScanJob, type AdminStatsPayload,
 } from '../adminAuth.ts';
 import { short } from '../format.ts';
+
+function addressExplorerUrl(chainId: number, addr: string): string | null {
+  const base = CHAINS[chainId as keyof typeof CHAINS]?.blockExplorers?.default.url;
+  if (!base) return null;
+  return `${base.replace(/\/$/, '')}/address/${addr}`;
+}
 
 type ChainBundle = {
   stats: AdminStatsPayload | null;
@@ -444,7 +450,7 @@ export function Admin() {
       </div>
 
       <div className="mt-6 grid gap-4 lg:grid-cols-2">
-        <Panel title={t('充值明细', 'Recharge detail')} icon={Coins} bodyClass="space-y-3 p-4">
+        <Panel title={t('充值明细', 'Recharge detail')} icon={Coins} bodyClass="grid grid-cols-1 gap-3 p-4 sm:grid-cols-2">
           <BreakdownCard
             compact
             swatch="bg-copper"
@@ -493,25 +499,7 @@ export function Admin() {
               };
             })}
           />
-          <div className="rounded-2xl border border-line/80 bg-panel px-4 py-3">
-            <div className="text-sm text-mute">{t('收款地址', 'Treasury')}</div>
-            <div className="mt-2 space-y-2 border-t border-dashed border-line/80 pt-2">
-              {MAINNET_IDS.map((id) => {
-                const bem = bemNetwork(id);
-                return (
-                  <div key={id} className="flex items-center justify-between gap-3 pl-1 text-sm">
-                    <span className="flex items-center gap-2 text-mute">
-                      <span className={cn('size-2.5 rounded-sm', id === 56 ? 'bg-gold' : 'bg-si')} />
-                      {CHAIN_LABEL[id]}
-                    </span>
-                    <span className="font-mono text-[12px] font-semibold tabular-nums text-ink" title={bem?.treasury}>
-                      {bem ? short(bem.treasury, 8) : '—'}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
+          <TreasuryAddresses />
         </Panel>
 
         <Panel title={t('快照信息', 'Snapshot')} icon={Database} bodyClass="p-5 space-y-3 text-sm">
@@ -570,6 +558,71 @@ function Row({ k, v }: { k: string; v: ReactNode }) {
     <div className="flex items-baseline justify-between gap-3">
       <span className="text-mute">{k}</span>
       <span className="font-semibold tabular-nums text-ink">{v}</span>
+    </div>
+  );
+}
+
+function TreasuryAddresses() {
+  const t = useT();
+  const [copied, setCopied] = useState<string | null>(null);
+
+  const copyAddr = async (addr: string) => {
+    try {
+      await navigator.clipboard.writeText(addr);
+      setCopied(addr);
+      window.setTimeout(() => setCopied((c) => (c === addr ? null : c)), 1500);
+    } catch {
+      /* ignore */
+    }
+  };
+
+  return (
+    <div className="rounded-2xl border border-line/80 bg-panel px-4 py-3">
+      <div className="text-sm font-semibold text-ink">{t('收款地址', 'Treasury')}</div>
+      <div className="mt-2 space-y-2 border-t border-dashed border-line/80 pt-2">
+        {MAINNET_IDS.map((id) => {
+          const bem = bemNetwork(id);
+          const addr = bem?.treasury;
+          const href = addr ? addressExplorerUrl(id, addr) : null;
+          const done = copied === addr;
+          return (
+            <div key={id} className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)] items-center gap-2 pl-1 text-sm">
+              <span className="flex min-w-0 items-center gap-2 text-mute">
+                <span className={cn('size-2.5 shrink-0 rounded-sm', id === 56 ? 'bg-gold' : 'bg-si')} />
+                <span className="truncate">{CHAIN_LABEL[id]}</span>
+              </span>
+              {addr ? (
+                <span className="flex min-w-0 items-center justify-end gap-1">
+                  {href ? (
+                    <a
+                      href={href}
+                      target="_blank"
+                      rel="noreferrer"
+                      title={addr}
+                      className="inline-flex min-w-0 max-w-full items-center gap-1 font-mono text-[12px] font-semibold text-si-dim no-underline hover:text-si"
+                    >
+                      <span className="truncate">{short(addr, 8)}</span>
+                      <ExternalLink className="size-3 shrink-0 opacity-70" />
+                    </a>
+                  ) : (
+                    <span className="truncate font-mono text-[12px] font-semibold text-ink" title={addr}>{short(addr, 8)}</span>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => void copyAddr(addr)}
+                    aria-label={t('复制地址', 'Copy address')}
+                    className="grid size-7 shrink-0 place-items-center rounded-lg text-mute transition hover:bg-panel-2 hover:text-ink"
+                  >
+                    {done ? <Check className="size-3.5 text-si" /> : <Copy className="size-3.5" />}
+                  </button>
+                </span>
+              ) : (
+                <span className="text-right font-semibold text-ink">—</span>
+              )}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
