@@ -23,6 +23,8 @@ const baseStats = {
   scannedTo: '123',
   scannedFrom: '100',
   scanMode: 'full' as const,
+  complete: true,
+  head: '123',
   rpcHost: 'xlayer-mainnet.g.alchemy.com',
   note: 'test',
 };
@@ -61,6 +63,8 @@ describe('adminDb sqlite', () => {
       scannedTo: '124',
       scannedFrom: '124',
       scanMode: 'incremental',
+      complete: true,
+      head: '124',
       note: 'test2',
     });
     expect(latestAdminStats(196)?.cats).toBe(4);

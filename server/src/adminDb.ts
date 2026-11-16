@@ -54,6 +54,8 @@ export function getAdminDb(): DatabaseSyncType {
       scanned_to TEXT NOT NULL,
       scanned_from TEXT NOT NULL DEFAULT '',
       scan_mode TEXT NOT NULL DEFAULT 'full',
+      complete INTEGER NOT NULL DEFAULT 1,
+      head TEXT NOT NULL DEFAULT '',
       rpc_host TEXT NOT NULL,
       note TEXT NOT NULL,
       created_at INTEGER NOT NULL
@@ -82,6 +84,12 @@ export function getAdminDb(): DatabaseSyncType {
   if (!names.has('scan_mode')) {
     db.exec(`ALTER TABLE admin_stats_snapshots ADD COLUMN scan_mode TEXT NOT NULL DEFAULT 'full'`);
   }
+  if (!names.has('complete')) {
+    db.exec(`ALTER TABLE admin_stats_snapshots ADD COLUMN complete INTEGER NOT NULL DEFAULT 1`);
+  }
+  if (!names.has('head')) {
+    db.exec(`ALTER TABLE admin_stats_snapshots ADD COLUMN head TEXT NOT NULL DEFAULT ''`);
+  }
   return db;
 }
 
@@ -108,6 +116,8 @@ function rowToStats(r: Record<string, unknown>, source: 'cache' | 'live'): Admin
     scannedTo: String(r.scanned_to),
     scannedFrom: String(r.scanned_from ?? ''),
     scanMode: (String(r.scan_mode || 'full') as AdminStats['scanMode']),
+    complete: Number(r.complete ?? 1) !== 0,
+    head: String(r.head ?? r.scanned_to ?? ''),
     rpcHost: String(r.rpc_host),
     note: String(r.note),
     createdAt: Number(r.created_at),
@@ -122,8 +132,8 @@ export function saveAdminStats(stats: AdminStats): AdminStatsRow {
     INSERT INTO admin_stats_snapshots (
       chain_id, cats, registered, players,
       recharge_users, recharge_txs, recharge_bem, treasury_bal,
-      scanned_to, scanned_from, scan_mode, rpc_host, note, created_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      scanned_to, scanned_from, scan_mode, complete, head, rpc_host, note, created_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     stats.chainId,
     stats.cats,
@@ -136,6 +146,8 @@ export function saveAdminStats(stats: AdminStats): AdminStatsRow {
     stats.scannedTo,
     stats.scannedFrom,
     stats.scanMode,
+    stats.complete ? 1 : 0,
+    stats.head,
     stats.rpcHost,
     stats.note,
     createdAt,

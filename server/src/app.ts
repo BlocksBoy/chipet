@@ -3,7 +3,7 @@ import { cors } from 'hono/cors';
 import { streamSSE } from 'hono/streaming';
 import { zeroAddress, type Address } from 'viem';
 import { EXAMPLES, FULL_ADDER_NAND9, generateVectors, HdlError, toHex, type Library, type Resolved } from '@tapearena/netlist';
-import { bountyPhase, loadAdminStats, type Bounty } from '@tapearena/chain';
+import { bountyPhase, type Bounty } from '@tapearena/chain';
 import { bountiesOf, bountyOf, chainCtx, componentsOf, HttpError, resetChainCtx, rpcHostLabel, type ChainCtx } from './chain.ts';
 import { build, challengeHint, precheck, simulate, summary, vectorsFor } from '@tapearena/chain';
 import { designLoop, openAIChat, type ChatFn, type DesignTarget } from './ai.ts';
@@ -12,10 +12,8 @@ import {
   clientIp, createSession, getAdminToken, readAdminSession, requireAdmin, revokeSession,
   sessionValid, setAdminSessionCookie, tokenMatches,
 } from './adminAuth.ts';
-import {
-  getAdminScanCheckpoint, latestAdminStats, listAdminStatsHistory,
-  saveAdminScanCheckpoint, saveAdminStats,
-} from './adminDb.ts';
+import { listAdminStatsHistory } from './adminDb.ts';
+import { adminStatsPayload, startAdminScanJob } from './adminScanWorker.ts';
 
 export interface AppDeps {
   ctx?: (chainId?: number) => ChainCtx;
@@ -113,30 +111,39 @@ export function createApp(deps: AppDeps = {}) {
   app.get('/api/admin/session', requireAdmin(), (c) =>
     json(c, { ok: true, expiresIn: ADMIN_SESSION_TTL_SEC, session: sessionValid(readAdminSession(c)) }));
 
-  app.get('/api/admin/stats', requireAdmin(), async (c) => {
+  // 读库 + 任务状态（永不在请求里跑长扫链，避免 Cloudflare/Caddy 502）
+  app.get('/api/admin/stats', requireAdmin(), (c) => {
     const chainId = Number(c.req.query('chainId') ?? process.env.CHAIN_ID ?? 196);
     if (chainId !== 196 && chainId !== 56) throw new HttpError(400, 'unsupported chainId');
-    const refresh = c.req.query('refresh') === '1' || c.req.query('refresh') === 'true';
-    const full = c.req.query('full') === '1' || c.req.query('full') === 'true';
-
-    if (!refresh) {
-      const cached = latestAdminStats(chainId);
-      if (cached) return json(c, cached);
+    const { stats, job } = adminStatsPayload(chainId);
+    if (!stats) {
+      return json(c, {
+        chainId,
+        empty: true,
+        job,
+        note: '尚无快照。点「增量入库」启动后台扫链（首次会全量分片）。',
+      });
     }
+    return json(c, { ...stats, job });
+  });
 
-    // 保证读到最新 RPC_URL_*（热更新 .env 后无需整机重启才能换节点）
+  // 启动后台扫链（立即返回；前端轮询 /api/admin/stats）
+  app.post('/api/admin/stats/scan', requireAdmin(), (c) => {
+    const chainId = Number(c.req.query('chainId') ?? process.env.CHAIN_ID ?? 196);
+    if (chainId !== 196 && chainId !== 56) throw new HttpError(400, 'unsupported chainId');
+    const full = c.req.query('full') === '1' || c.req.query('full') === 'true';
     resetChainCtx(chainId);
     const x = ctxOf(chainId);
     if (!x.deployment?.chipet) throw new HttpError(404, 'chipet not deployed on this chain');
-    const rpcHost = rpcHostLabel(chainId);
-    const checkpoint = full ? null : getAdminScanCheckpoint(chainId);
-    const { stats, checkpoint: next } = await loadAdminStats(x.client, chainId, x.deployment.chipet, {
-      rpcHost,
-      checkpoint,
+    const job = startAdminScanJob({
+      chainId,
       full,
+      client: x.client,
+      chipet: x.deployment.chipet,
+      rpcHost: rpcHostLabel(chainId),
     });
-    saveAdminScanCheckpoint(chainId, next);
-    return json(c, saveAdminStats(stats));
+    const { stats } = adminStatsPayload(chainId);
+    return json(c, { ok: true, job, stats: stats ?? null });
   });
 
   app.get('/api/admin/stats/history', requireAdmin(), (c) => {
