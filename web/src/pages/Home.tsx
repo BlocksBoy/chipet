@@ -546,7 +546,7 @@ export function Home() {
                 <li>
                   <button
                     type="button"
-                    onClick={() => go('/dex')}
+                    onClick={() => go('/kitties')}
                     className="group flex h-full min-h-[220px] w-full flex-col items-center justify-center gap-2 rounded-3xl border border-dashed border-line-2 bg-panel/70 px-4 py-8 text-center shadow-sm shadow-si/5 transition duration-200 hover:-translate-y-0.5 hover:border-si/40 hover:bg-panel hover:shadow-md hover:shadow-si/10"
                   >
                     <span className="grid size-12 place-items-center rounded-2xl bg-si/10 text-si transition group-hover:bg-si/15">

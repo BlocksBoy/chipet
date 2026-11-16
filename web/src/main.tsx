@@ -9,6 +9,7 @@ import { Shell } from './components/Shell.tsx';
 import { Home } from './pages/Home.tsx';
 import { PetPage } from './pages/Pet.tsx';
 import { Dex } from './pages/Dex.tsx';
+import { Kitties } from './pages/Kitties.tsx';
 import { Train } from './pages/Train.tsx';
 import { Plaza } from './pages/Plaza.tsx';
 import { Arena } from './pages/Arena.tsx';
@@ -31,6 +32,7 @@ function App() {
   else if (a === 'pet' && b) page = <PetPage id={Number(b)} />;
   else if (a === 'plaza') page = <Plaza />;
   else if (a === 'dex') page = <Dex />;
+  else if (a === 'kitties') page = <Kitties />;
   else if (a === 'train') page = <Train />;
   else if (a === 'guide') page = <Guide />;
   else if (a === 'shop') page = <Shop />;
