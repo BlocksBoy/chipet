@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type Compon
 import { motion } from 'motion/react';
 import { Egg, Sparkles, Hammer, Swords, BookOpen, ArrowRight, Users, Fish, ListChecks, CircleCheck, Zap, Hand, CalendarCheck, Cable, Cat, Trophy, Coins, type LucideProps } from 'lucide-react';
 import { Button, Panel, Tag, Input, PAGE, SectionTitle, StatBand, Trait, cn } from '../components/ui.tsx';
-import { Link, go } from '../router.tsx';
+import { Link, go, useRoute } from '../router.tsx';
 import { useApp } from '../state.tsx';
 import { both, tr, txt, useLang, useT } from '../i18n.ts';
 import { PetAvatar } from '../chipet/PetAvatar.tsx';
@@ -66,11 +66,13 @@ export function Home() {
   const [fxNonce, setFxNonce] = useState(0);
   const pulseSeq = useRef(0);
   const timers = useRef<number[]>([]);
+  const route = useRoute();
   const socialRev = useSyncExternalStore(subscribeSocial, getSocialRev, getSocialRev);
   const pets = useMemo(() => localChipet.list(), [tick, refreshKey]);
-  const profile = useMemo(() => social.profile(), [tick, socialRev]);
-  const quests = useMemo(() => social.quests(), [tick, socialRev]);
-  const feed = useMemo(() => social.activities(), [tick, socialRev]);
+  // 路由回到家园 / 社交存档变更时都重算，避免任务进度卡住
+  const profile = useMemo(() => social.profile(), [tick, socialRev, route.path]);
+  const quests = useMemo(() => social.quests(), [tick, socialRev, route.path]);
+  const feed = useMemo(() => social.activities(), [tick, socialRev, route.path]);
   const speciesSeen = useMemo(() => new Set(pets.map((p) => phenotypeOf(p.cpu, p.circuitId, p.rarity).speciesId)).size, [pets]);
   const totalWins = pets.reduce((n, p) => n + p.wins, 0);
   const ph = useMemo(

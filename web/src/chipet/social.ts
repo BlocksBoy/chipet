@@ -85,7 +85,22 @@ interface NpcLive {
 }
 
 const KEY = 'chipet.social.v1';
-const DAY = () => new Date().toISOString().slice(0, 10);
+/** 按本地日历日算「今天」，避免 UTC 切日导致任务进度读成 0。 */
+const DAY = () => {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+};
+
+function normalizeQuest(q: Partial<SocialState['quest']> | null | undefined): SocialState['quest'] {
+  return {
+    day: typeof q?.day === 'string' ? q.day : '',
+    n: q?.n && typeof q.n === 'object' ? { ...q.n } : {},
+    claimed: q?.claimed && typeof q.claimed === 'object' ? { ...q.claimed } : {},
+  };
+}
 /** 免费基础线友位；可用 BEM 扩到 bem.bondSlots()（最多 5） */
 export const MAX_BONDS = 3;
 export const maxBonds = () => bem.bondSlots();
@@ -372,16 +387,38 @@ function load(): SocialState {
       return s;
     }
     const parsed = JSON.parse(raw) as Partial<SocialState>;
-    const s: SocialState = { ...defaultState(), ...parsed };
+    const base = defaultState();
+    const s: SocialState = {
+      ...base,
+      ...parsed,
+      // 嵌套对象浅合并会丢字段；任务进度必须单独规范化
+      quest: normalizeQuest(parsed.quest ?? base.quest),
+      pats: { ...base.pats, ...(parsed.pats ?? {}) },
+      myPatsToday: { ...(parsed.myPatsToday ?? {}) },
+      giftsToday: { ...(parsed.giftsToday ?? {}) },
+      notes: { ...base.notes, ...(parsed.notes ?? {}) },
+      visits: { ...base.visits, ...(parsed.visits ?? {}) },
+      activities: Array.isArray(parsed.activities) ? parsed.activities : base.activities,
+      bubbles: { ...(parsed.bubbles ?? {}) },
+      bonds: Array.isArray(parsed.bonds) ? parsed.bonds : [],
+      likes: { ...base.likes, ...(parsed.likes ?? {}) },
+      liked: { ...(parsed.liked ?? {}) },
+      npcWins: { ...(parsed.npcWins ?? {}) },
+      npcLive: { ...(parsed.npcLive ?? {}) },
+      wildDay: { ...(parsed.wildDay ?? {}) },
+    };
     // 旧存档空名会被上面的随机名盖掉，需按存档原值再判一次
     if (LEGACY_NAMES.has(parsed.displayName ?? '')) s.displayName = '';
-    upgradeSeeds(s);
+    try {
+      upgradeSeeds(s);
+    } catch {
+      /* 升级失败不丢存档 */
+    }
     if (ensureDisplayName(s)) save(s);
     return s;
   } catch {
-    const s = defaultState();
-    save(s);
-    return s;
+    // 读失败时不要 overwrite 用户存档
+    return defaultState();
   }
 }
 
@@ -416,6 +453,7 @@ function pushAct(s: SocialState, act: Omit<Activity, 'id' | 'at'>) {
 
 /** 今日任务进度 +1（跨天自动清零）。 */
 function bump(s: SocialState, id: QuestId, n = 1) {
+  s.quest = normalizeQuest(s.quest);
   if (s.quest.day !== DAY()) s.quest = { day: DAY(), n: {}, claimed: {} };
   s.quest.n[id] = (s.quest.n[id] ?? 0) + n;
 }
@@ -685,24 +723,35 @@ export const social = {
   // ── 今日任务 ─────────────────────────────────────
   quests(): Quest[] {
     const s = load();
-    const live = s.quest.day === DAY();
+    const quest = normalizeQuest(s.quest);
+    const live = quest.day === DAY();
     return QUEST_DEFS.map((q) => {
-      const progress = Math.min(q.goal, live ? (s.quest.n[q.id] ?? 0) : 0);
+      const progress = Math.min(q.goal, live ? (quest.n[q.id] ?? 0) : 0);
       return {
         id: q.id,
         goal: q.goal,
         get label() { return txt(q.label); },
         progress,
         done: progress >= q.goal,
-        claimed: live && !!s.quest.claimed[q.id],
+        claimed: live && !!quest.claimed[q.id],
       };
     });
   },
+  /** 只记任务进度（小游戏通关时立刻调用，不依赖养成结算是否成功）。 */
+  completeQuest(id: QuestId) {
+    const s = load();
+    bump(s, id);
+    save(s);
+    return this.quests().find((q) => q.id === id);
+  },
   claimQuest(id: QuestId) {
     const s = load();
+    s.quest = normalizeQuest(s.quest);
     const q = this.quests().find((x) => x.id === id);
     if (!q || !q.done) throw new Error(tr('任务还没完成', 'Quest not finished yet'));
     if (q.claimed) throw new Error(tr('奖励已经领过了', 'Reward already claimed'));
+    // 跨日时 quests() 已判定；这里再对齐 day，避免写到空 claimed
+    if (s.quest.day !== DAY()) s.quest = { day: DAY(), n: { ...s.quest.n }, claimed: {} };
     s.quest.claimed[id] = true;
     s.fish += 1;
     save(s);

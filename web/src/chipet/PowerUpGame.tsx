@@ -4,6 +4,7 @@ import { Die } from '../components/Die.tsx';
 import { Button, Panel, cn } from '../components/ui.tsx';
 import { useLang, useT } from '../i18n.ts';
 import { run, type Heart } from './heart.ts';
+import { social } from './social.ts';
 
 const ROUNDS = 3;
 export const POWER_MAX_STARS = ROUNDS * 3;
@@ -93,6 +94,8 @@ export function PowerUpGame({ heart, petName, onFinish, onClose }: {
     setPhase('solved');
     timer.current = window.setTimeout(() => {
       if (round + 1 >= ROUNDS) {
+        // 三关打完立刻记任务，不依赖父组件养成结算是否成功
+        social.completeQuest('power');
         setSummary(onFinish(all.reduce((s, v) => s + v, 0), POWER_MAX_STARS));
         setPhase('done');
         return;
