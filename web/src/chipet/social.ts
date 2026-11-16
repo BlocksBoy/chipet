@@ -67,9 +67,21 @@ interface SocialState {
   bonds: string[]; // 牵过线的邻居 petKey（合体电路的另一半）
   likes: Record<string, number>; // 动态 id -> 击掌数
   liked: Record<string, boolean>;
-  npcWins: Record<string, number>; // 邻居守擂成功的次数
+  npcWins: Record<string, number>; // 邻居守擂成功的次数（旧字段，并入 npcLive.wins）
+  /** 邻居切磋的活数据：等级/胜场/心情/能量会随对战与日期变化 */
+  npcLive: Record<string, NpcLive>;
   wildDay: Record<string, string>; // 野怪 id -> 今日首胜日期
   quest: { day: string; n: Record<string, number>; claimed: Record<string, boolean> };
+}
+
+/** 邻居可成长状态；身份（名字/电路）仍来自 NEIGHBORS 模板。 */
+interface NpcLive {
+  day: string;
+  level: number;
+  wins: number;
+  mood: number;
+  energy: number;
+  intimacy: number;
 }
 
 const KEY = 'chipet.social.v1';
@@ -164,9 +176,62 @@ function defaultState(): SocialState {
     likes: { a0: 5, a3: 2, a4: 3 },
     liked: {},
     npcWins: {},
+    npcLive: {},
     wildDay: {},
     quest: { day: '', n: {}, claimed: {} },
   };
+}
+
+function clamp(n: number, lo: number, hi: number) {
+  return Math.max(lo, Math.min(hi, n));
+}
+
+function hashStr(s: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+
+/** 胜场涨了，等级跟着涨；保底不低于模板等级。 */
+function npcLevelOf(baseLevel: number, baseWins: number, wins: number) {
+  return Math.min(12, Math.max(baseLevel, baseLevel + Math.max(0, Math.floor((wins - baseWins) / 3))));
+}
+
+/** 取出或初始化邻居活数据；跨天会轻微抖动心情/能量，偶尔多一场胜场，看起来像在线活动。 */
+function ensureNpcLive(s: SocialState, n: Neighbor): { live: NpcLive; dirty: boolean } {
+  if (!s.npcLive) s.npcLive = {};
+  const key = npcKey(n.id);
+  const today = DAY();
+  let live = s.npcLive[key];
+  let dirty = false;
+  if (!live) {
+    const migrated = s.npcWins[key] ?? 0;
+    live = {
+      day: today,
+      level: n.level,
+      wins: n.wins + migrated,
+      mood: n.mood,
+      energy: n.energy,
+      intimacy: n.intimacy,
+    };
+    live.level = npcLevelOf(n.level, n.wins, live.wins);
+    s.npcLive[key] = live;
+    dirty = true;
+  }
+  if (live.day !== today) {
+    const h = hashStr(`${key}:${today}`);
+    live.day = today;
+    live.mood = clamp(50 + (h % 46), 40, 100);
+    live.energy = clamp(45 + ((h >> 5) % 51), 30, 100);
+    if (h % 4 === 0) live.wins += 1;
+    if (h % 7 === 0) live.intimacy = clamp(live.intimacy + 1, 0, 99);
+    live.level = npcLevelOf(n.level, n.wins, live.wins);
+    dirty = true;
+  }
+  return { live, dirty };
 }
 
 /** 加双语之前存下的孵化动态是纯中文，句式固定，可以原样补出英文。 */
@@ -253,16 +318,26 @@ function toPublic(p: LocalPet, owner: Text): PublicPet {
   };
 }
 
-function npcPublic(n: Neighbor, s: SocialState): PublicPet {
-  const { name, owner, ...rest } = n;
-  const key = npcKey(n.id);
+function npcPublic(n: Neighbor, s: SocialState): { pet: PublicPet; dirty: boolean } {
+  const { name, owner } = n;
+  const { live, dirty } = ensureNpcLive(s, n);
   return {
-    ...rest,
-    key,
-    mine: false,
-    wins: n.wins + (s.npcWins[key] ?? 0),
-    get name() { return txt(name); },
-    get owner() { return txt(owner); },
+    dirty,
+    pet: {
+      key: npcKey(n.id),
+      id: n.id,
+      cpu: n.cpu,
+      circuitId: n.circuitId,
+      rarity: n.rarity,
+      energy: live.energy,
+      mood: live.mood,
+      intimacy: live.intimacy,
+      level: live.level,
+      wins: live.wins,
+      mine: false,
+      get name() { return txt(name); },
+      get owner() { return txt(owner); },
+    },
   };
 }
 
@@ -332,7 +407,14 @@ export const social = {
   allPets(): PublicPet[] {
     const s = load();
     const mine = localChipet.list().map((p) => toPublic(p, me(s)));
-    return [...mine, ...NEIGHBORS.map((n) => npcPublic(n, s))];
+    let dirty = false;
+    const npcs = NEIGHBORS.map((n) => {
+      const { pet, dirty: d } = npcPublic(n, s);
+      dirty ||= d;
+      return pet;
+    });
+    if (dirty) save(s);
+    return [...mine, ...npcs];
   },
   neighbors(): PublicPet[] {
     return this.allPets().filter((p) => !p.mine);
@@ -523,7 +605,26 @@ export const social = {
       }
     }
     if (!a.wildId && a.opKey) {
-      if (a.result === 'lose') s.npcWins[a.opKey] = (s.npcWins[a.opKey] ?? 0) + 1;
+      const nid = Number(a.opKey.replace(/^npc:/, ''));
+      const n = Number.isFinite(nid) ? NEIGHBORS.find((x) => x.id === nid) : undefined;
+      if (n) {
+        const { live } = ensureNpcLive(s, n);
+        if (a.result === 'lose') {
+          live.wins += 1;
+          live.mood = clamp(live.mood + 8, 40, 100);
+          live.energy = clamp(live.energy - 12, 20, 100);
+          live.intimacy = clamp(live.intimacy + 1, 0, 99);
+          live.level = npcLevelOf(n.level, n.wins, live.wins);
+          s.npcWins[a.opKey] = Math.max(0, live.wins - n.wins);
+        } else if (a.result === 'win') {
+          live.mood = clamp(live.mood - 10, 30, 100);
+          live.energy = clamp(live.energy - 18, 15, 100);
+          live.intimacy = clamp(live.intimacy + 1, 0, 99);
+        } else {
+          live.mood = clamp(live.mood + 2, 35, 100);
+          live.energy = clamp(live.energy - 10, 20, 100);
+        }
+      }
       const line =
         a.result === 'win' ? both(`带「${my}」来切磋，赢了一场！`, `Came to spar with ${my} and won!`)
           : a.result === 'lose' ? both(`带「${my}」来切磋，输了，下次再来。`, `Came to spar with ${my} and lost. We'll be back.`)
