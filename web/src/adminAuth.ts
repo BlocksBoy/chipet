@@ -202,7 +202,12 @@ export type AdminCatsFilter = {
 };
 
 /** 默认拉全链一张表；可传 chainId / 稀有度 / 等级 / 能量筛选 */
-export async function adminCats(page = 1, pageSize = 20, filter?: number | AdminCatsFilter) {
+export async function adminCats(
+  page = 1,
+  pageSize = 20,
+  filter?: number | AdminCatsFilter,
+  signal?: AbortSignal,
+) {
   const f: AdminCatsFilter = typeof filter === 'number' ? { chainId: filter } : (filter ?? {});
   const q = new URLSearchParams({
     page: String(page),
@@ -215,7 +220,11 @@ export async function adminCats(page = 1, pageSize = 20, filter?: number | Admin
   if (f.levelMax != null) q.set('levelMax', String(f.levelMax));
   if (f.energyMin != null) q.set('energyMin', String(f.energyMin));
   if (f.energyMax != null) q.set('energyMax', String(f.energyMax));
-  const r = await fetch(apiURL(`/api/admin/cats?${q}`), { cache: 'no-store', credentials: 'include' });
+  const r = await fetch(apiURL(`/api/admin/cats?${q}`), {
+    cache: 'no-store',
+    credentials: 'include',
+    signal,
+  });
   const data = await r.json().catch(() => ({}));
   if (!r.ok) {
     const err = new Error(data.error || `HTTP ${r.status}`) as Error & { status?: number; code?: string };

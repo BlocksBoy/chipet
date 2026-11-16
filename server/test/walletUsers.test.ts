@@ -90,4 +90,36 @@ describe('walletUsers', () => {
     expect(o.registered).toBe(6); // 4 XL hatchers + 1 BSC + 1 新钱包
     expect(o.registeredOnChain).toBe(5); // 4 hatchers + 1 新钱包（同链）
   });
+
+  it('GET/装饰后的 stats 带 registeredOnChain，不会只剩原始 hatchers', async () => {
+    process.env.ADMIN_TOKEN = 'test-admin-token';
+    saveAdminScanCheckpoint(196, {
+      scannedTo: '10',
+      rechargeTxs: 0,
+      rechargeBemRaw: '0',
+      payers: [],
+      hatchers: ['0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'],
+      playedPets: [],
+      players: [],
+    });
+    registerWallet('0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', 196);
+
+    const { decorateAdminStats } = await import('../src/adminScanWorker.ts');
+    const decorated = decorateAdminStats({
+      chainId: 196,
+      cats: 1,
+      registered: 1, // 原始快照只计 hatchers
+      players: 0,
+      rechargeUsers: 0,
+      rechargeTxs: 0,
+      rechargeBem: '0',
+      treasuryBal: '0',
+      scannedTo: '10',
+      rpcHost: 'test',
+      note: 'x',
+    }, 196);
+    expect(decorated?.registered).toBe(2);
+    expect(decorated?.registeredOnChain).toBe(2);
+    expect(decorated?.walletRegistered).toBe(1);
+  });
 });

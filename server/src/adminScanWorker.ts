@@ -13,6 +13,8 @@ import {
 } from './adminDb.ts';
 import { chainCtx, resetChainCtx, rpcHostLabel } from './chain.ts';
 import { syncChipetPetsFully } from './petSync.ts';
+import { overlayRechargeStats } from './rechargeEvents.ts';
+import { overlayRegisteredStats } from './walletUsers.ts';
 
 export type AdminScanJobStatus = 'idle' | 'running' | 'done' | 'error';
 
@@ -111,11 +113,35 @@ export function startAdminScanJob(opts: {
   return { ...job };
 }
 
+/** 给快照叠注册/充值看板字段，避免扫链原始 hatchers/payers 把前端盖成残缺数据。 */
+export function decorateAdminStats(
+  stats: AdminStatsRow | AdminStats | null | undefined,
+  chainId: number,
+): (AdminStatsRow | AdminStats) & {
+  registeredOnChain: number;
+  walletRegistered: number;
+  reportedTxs: number;
+} | null {
+  const reg = overlayRegisteredStats(chainId);
+  const recharge = overlayRechargeStats(chainId);
+  if (!stats) return null;
+  return {
+    ...stats,
+    registered: reg.registered,
+    registeredOnChain: reg.registeredOnChain,
+    walletRegistered: reg.walletRegistered,
+    rechargeUsers: recharge.rechargeUsers,
+    rechargeTxs: recharge.rechargeTxs,
+    rechargeBem: recharge.rechargeBem,
+    reportedTxs: recharge.reportedTxs,
+  };
+}
+
 export function adminStatsPayload(chainId: number) {
   const cached = latestAdminStats(chainId);
   const job = getAdminScanJob(chainId);
   return {
-    stats: cached,
+    stats: decorateAdminStats(cached, chainId),
     job: {
       chainId: job.chainId,
       status: job.status,

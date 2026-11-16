@@ -207,14 +207,17 @@ export async function loadAdminStats(
 
   const base = opts?.full || !opts?.checkpoint ? emptyAdminCheckpoint() : opts.checkpoint;
   const full = !!opts?.full || !opts?.checkpoint;
-  // 跳过 Transfer 时：全量也不清掉历史充值人数/笔数/金额
+  // 跳过 Transfer 时：全量也不清掉历史充值/孵化/游玩集合（RPC 空结果或分片中途不能把看板打成 0）
   const seed = skipTransfers ? (opts.rechargeSeed ?? opts.checkpoint ?? null) : null;
   const prev: AdminScanCheckpoint = seed
     ? {
       ...base,
       rechargeTxs: seed.rechargeTxs,
       rechargeBemRaw: seed.rechargeBemRaw,
-      payers: [...seed.payers],
+      payers: [...new Set([...(base.payers ?? []), ...(seed.payers ?? [])])],
+      hatchers: [...new Set([...(base.hatchers ?? []), ...(seed.hatchers ?? [])])],
+      playedPets: [...new Set([...(base.playedPets ?? []), ...(seed.playedPets ?? [])])],
+      players: [...new Set([...(base.players ?? []), ...(seed.players ?? [])])],
     }
     : base;
 

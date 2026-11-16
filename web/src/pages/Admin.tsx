@@ -221,10 +221,21 @@ export function Admin() {
         const next = { ...prev };
         for (const { id, r } of results) {
           if (r.job.status === 'running') running = true;
+          const prevStats = prev[id]?.stats ?? null;
+          const nextStats = r.stats ? (coalesceAdminStats(r.stats) ?? prevStats) : prevStats;
+          // 扫链启动响应若缺 registeredOnChain，保留上一屏并集，避免瞬间归零
+          const stats = nextStats && prevStats && nextStats.registeredOnChain == null
+            ? {
+              ...nextStats,
+              registered: prevStats.registered ?? nextStats.registered,
+              registeredOnChain: prevStats.registeredOnChain,
+              walletRegistered: prevStats.walletRegistered ?? nextStats.walletRegistered,
+            }
+            : nextStats;
           next[id] = {
             ...(prev[id] ?? emptyBundle()),
             job: r.job,
-            stats: r.stats ? (coalesceAdminStats(r.stats) ?? prev[id]?.stats ?? null) : (prev[id]?.stats ?? null),
+            stats,
             progress: r.job.status === 'running' ? starting : '',
             err: '',
           };

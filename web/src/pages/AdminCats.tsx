@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowLeft, Cat, Database, Filter, Gauge, Link2, Loader2, RefreshCw, ShieldCheck, Sparkles, Zap,
 } from 'lucide-react';
@@ -77,6 +77,8 @@ export function AdminCats() {
   const [level, setLevel] = useState<LevelBand>('all');
   const [rarity, setRarity] = useState<RarityBand>('all');
   const autoSyncTried = useRef(false);
+  const loadAbort = useRef<AbortController | null>(null);
+  const loadSeq = useRef(0);
 
   const filter = useMemo(
     () => toApiFilter(chain, energy, level, rarity),
@@ -97,17 +99,25 @@ export function AdminCats() {
   }, []);
 
   const load = useCallback(async (p: number, f: AdminCatsFilter) => {
+    loadAbort.current?.abort();
+    const ac = new AbortController();
+    loadAbort.current = ac;
+    const seq = ++loadSeq.current;
     setBusy(true);
     setErr('');
     try {
-      const data = await adminCats(p, PAGE_SIZE, f);
+      const data = await adminCats(p, PAGE_SIZE, f, ac.signal);
+      if (seq !== loadSeq.current) return null;
       setItems(data.items);
       setTotal(data.total);
       setPages(data.pages);
-      setPage(data.page);
       setArchived(data.archived);
+      // 仅当服务端钳制了页码（越界）时回写，避免旧请求把页码打回去造成闪烁
+      if (data.page !== p) setPage(data.page);
       return data;
     } catch (e) {
+      if (ac.signal.aborted || (e instanceof DOMException && e.name === 'AbortError')) return null;
+      if (seq !== loadSeq.current) return null;
       const err = e as Error & { status?: number };
       if (err.status === 401) {
         go('/admin');
@@ -117,7 +127,7 @@ export function AdminCats() {
       setItems([]);
       return null;
     } finally {
-      setBusy(false);
+      if (seq === loadSeq.current) setBusy(false);
     }
   }, [t]);
 
@@ -127,7 +137,9 @@ export function AdminCats() {
     try {
       const r = await adminSyncCats();
       setArchived(r.archived);
-      await load(1, filter);
+      // 已在第 1 页则直接重载；否则靠 setPage 触发 effect，避免打两次
+      if (page === 1) await load(1, filter);
+      else setPage(1);
     } catch (e) {
       const err = e as Error & { status?: number };
       if (err.status === 401) {
@@ -138,12 +150,17 @@ export function AdminCats() {
     } finally {
       setSyncing(false);
     }
-  }, [load, filter, t]);
+  }, [load, filter, t, page]);
 
   useEffect(() => {
     if (!authed) return;
     void load(page, filter);
+    return () => { loadAbort.current?.abort(); };
   }, [authed, page, filter, load]);
+
+  const goPage = useCallback((p: number) => {
+    startTransition(() => setPage(p));
+  }, []);
 
   // 库空时自动全量同步一次（链上已有猫、部署后尚未入库）
   useEffect(() => {
@@ -278,8 +295,9 @@ export function AdminCats() {
               <option value="2">{t('限定', 'Exclusive')}</option>
             </Select>
           </Field>
-          <p className="mb-2 ml-auto text-xs text-mute tabular-nums">
-            {busy ? t('加载中…', 'Loading…') : t(`匹配 ${total} / 存档 ${archived}`, `Match ${total} / archived ${archived}`)}
+          <p className="mb-2 ml-auto inline-flex items-center gap-1.5 text-xs text-mute tabular-nums">
+            {busy && <Loader2 className="size-3.5 animate-spin text-copper" aria-hidden />}
+            {t(`匹配 ${total} / 存档 ${archived}`, `Match ${total} / archived ${archived}`)}
           </p>
         </div>
 
@@ -297,7 +315,7 @@ export function AdminCats() {
                 <th className="px-4 py-3 font-medium">{t('链', 'Chain')}</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className={cn('transition-opacity duration-150', busy && items.length > 0 && 'opacity-55')}>
               {busy && items.length === 0 && (
                 <tr>
                   <td colSpan={8} className="px-4 py-12 text-center text-mute">
@@ -353,7 +371,7 @@ export function AdminCats() {
         <PaginationBar
           page={page}
           pages={pages}
-          onChange={setPage}
+          onChange={goPage}
           label={t('猫咪存档分页', 'Cat archive pagination')}
           hideWhenSingle={false}
         />

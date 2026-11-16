@@ -13,7 +13,7 @@ import {
   sessionValid, setAdminSessionCookie, tokenMatches,
 } from './adminAuth.ts';
 import { listAdminStatsHistory } from './adminDb.ts';
-import { adminStatsPayload, startAdminScanJob } from './adminScanWorker.ts';
+import { adminStatsPayload, decorateAdminStats, startAdminScanJob } from './adminScanWorker.ts';
 import { countWalletUsers, overlayRegisteredStats, registerWallet } from './walletUsers.ts';
 import { overlayRechargeStats, recordRecharge } from './rechargeEvents.ts';
 import { countArchivedPets, listArchivedPets } from './petArchive.ts';
@@ -169,37 +169,23 @@ export function createApp(deps: AppDeps = {}) {
     const chainId = Number(c.req.query('chainId') ?? process.env.CHAIN_ID ?? 196);
     if (chainId !== 196 && chainId !== 56) throw new HttpError(400, 'unsupported chainId');
     const { stats, job } = adminStatsPayload(chainId);
-    const reg = overlayRegisteredStats(chainId);
-    const recharge = overlayRechargeStats(chainId);
     if (!stats) {
-      return json(c, {
+      const empty = decorateAdminStats({
         chainId,
-        empty: true,
-        job,
-        // 扫链未完成时也能看注册 / 上报充值
-        registered: reg.registered,
-        registeredOnChain: reg.registeredOnChain,
-        walletRegistered: reg.walletRegistered,
-        rechargeUsers: recharge.rechargeUsers,
-        rechargeTxs: recharge.rechargeTxs,
-        rechargeBem: recharge.rechargeBem,
-        reportedTxs: recharge.reportedTxs,
+        cats: 0,
+        registered: 0,
+        players: 0,
+        rechargeUsers: 0,
+        rechargeTxs: 0,
+        rechargeBem: '0',
+        treasuryBal: '0',
+        scannedTo: '0',
+        rpcHost: '',
         note: '尚无快照。点「增量入库」启动后台扫链（首次会全量分片）。',
-      });
+      }, chainId);
+      return json(c, { ...empty, empty: true, job });
     }
-    return json(c, {
-      ...stats,
-      // 看板「注册人数」= 连钱包 ∪ 扫链孵化地址（去重）
-      registered: reg.registered,
-      registeredOnChain: reg.registeredOnChain,
-      walletRegistered: reg.walletRegistered,
-      // 充值 = 历史扫链冻结 + 商店成功上报
-      rechargeUsers: recharge.rechargeUsers,
-      rechargeTxs: recharge.rechargeTxs,
-      rechargeBem: recharge.rechargeBem,
-      reportedTxs: recharge.reportedTxs,
-      job,
-    });
+    return json(c, { ...stats, job });
   });
 
   // 启动后台扫链（立即返回；前端轮询 /api/admin/stats）
@@ -217,6 +203,7 @@ export function createApp(deps: AppDeps = {}) {
       chipet: x.deployment.chipet,
       rpcHost: rpcHostLabel(chainId),
     });
+    // 与 GET 同源：必须带 overlay，否则前端一点「增量入库」就把注册人数盖成原始 hatchers / 缺 registeredOnChain
     const { stats } = adminStatsPayload(chainId);
     return json(c, { ok: true, job, stats: stats ?? null });
   });
