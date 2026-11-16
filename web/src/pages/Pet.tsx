@@ -15,7 +15,7 @@ import { PowerUpGame } from '../chipet/PowerUpGame.tsx';
 import { fuse, heartOf } from '../chipet/heart.ts';
 import { maxHpOf, MOOD_HP, MOVES, favOf } from '../chipet/battle.ts';
 import { feedChipet, playChipet, readPet } from '@tapearena/chain';
-import { isChainPet, localChipet, xpNeed } from '../chipet/store.ts';
+import { displayPetNumber, isChainPet, localChipet, toChainTokenId, xpNeed } from '../chipet/store.ts';
 import { cattributes, geneStory, phenotypeOf, typeLabel } from '../chipet/phenotype.ts';
 import { maxBonds, social } from '../chipet/social.ts';
 import { ShareVisitModal } from '../chipet/ShareVisitModal.tsx';
@@ -34,7 +34,7 @@ export function PetPage({ id, share: shareToken }: { id?: number; share?: string
   const t = useT();
   const lang = useLang();
   const { deployment, signer, run, notify } = useApp();
-  const chipet = deployment?.chipet;
+  const primaryChipet = deployment?.chipet;
   const [err, setErr] = useState('');
   const [ok, setOk] = useState('');
   const [gameOpen, setGameOpen] = useState(false);
@@ -52,7 +52,9 @@ export function PetPage({ id, share: shareToken }: { id?: number; share?: string
   );
   const key = pet?.key ?? '';
   const local = pet?.mine ? localChipet.get(pet.id) : undefined;
-  const chainCare = !!(chipet && local && isChainPet(local));
+  /** 喂玩走该猫实际所在合约（旧猫 → legacy，新猫 → 当前） */
+  const careChipet = local?.chipet ?? primaryChipet;
+  const chainCare = !!(careChipet && local && isChainPet(local));
   const bubble = txt(useMemo(() => (key ? social.bubble(key) : ''), [key, tick]));
   const notes = useMemo(() => (key ? social.notes(key) : []), [key, tick]);
   const bonds = useMemo(() => social.bonds(), [tick]);
@@ -110,21 +112,22 @@ export function PetPage({ id, share: shareToken }: { id?: number; share?: string
   };
 
   const petId = pet.id;
+  const tokenId = local ? toChainTokenId(local.id) : toChainTokenId(petId);
 
   const refreshFromChain = async () => {
-    if (!chipet) return;
+    if (!careChipet || !primaryChipet) return;
     const s = await signer();
-    const on = await readPet(s.pub, chipet, petId);
-    localChipet.upsertChain(on);
+    const on = await readPet(s.pub, careChipet, tokenId);
+    localChipet.upsertChain({ ...on, chipet: careChipet, primaryChipet });
     setNow(Date.now());
     setTick((n) => n + 1);
   };
 
   const feed = () => {
-    if (chainCare && chipet) {
+    if (chainCare && careChipet) {
       void run(t('喂食', 'Feed'), async (step) => {
         const s = await signer();
-        await feedChipet(s, chipet, petId, step);
+        await feedChipet(s, careChipet, tokenId, step);
         await refreshFromChain();
         pulse('gift');
         flash(t('吃饱啦，呼噜呼噜~', 'All full. Purr purr~'));
@@ -166,10 +169,10 @@ export function PetPage({ id, share: shareToken }: { id?: number; share?: string
         `心情 +${r.mood} · 经验 +${r.xp}${r.ups ? ` · 升到 Lv.${r.pet.level}` : ''}${fish ? ' · 满星奖励鱼干 +1' : ''}`,
         `Mood +${r.mood} · XP +${r.xp}${r.ups ? ` · leveled up to Lv.${r.pet.level}` : ''}${fish ? ' · perfect bonus: +1 fish treat' : ''}`,
       );
-      if (chainCare && chipet) {
+      if (chainCare && careChipet) {
         void run(t('通电玩耍', 'Power Play'), async (step) => {
           const s = await signer();
-          await playChipet(s, chipet, petId, step);
+          await playChipet(s, careChipet, tokenId, step);
           await refreshFromChain();
           notify('ok', t('通电完成', 'Power Play done'));
         }).catch(fail);
@@ -271,7 +274,7 @@ export function PetPage({ id, share: shareToken }: { id?: number; share?: string
 
   const idText = pet.key.startsWith('share:')
     ? `S-${String(Math.abs(pet.id) % 10000).padStart(4, '0')}`
-    : `${pet.mine ? '#' : 'N-'}${String(Math.abs(pet.id)).padStart(4, '0')}`;
+    : `${pet.mine ? '#' : 'N-'}${String(displayPetNumber(pet)).padStart(4, '0')}`;
   const hp = maxHpOf(level, pet.rarity, mood);
   const genes = [
     ...traits.map((g) => ({ ...g, swatch: g.id === 'base' ? ph.body : g.id === 'eyes' ? ph.eye : undefined })),

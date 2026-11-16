@@ -143,16 +143,16 @@ async function resolveOwners(
 async function readLiveBalances(
   pub: PublicClient,
   chainId: number,
-  chipet: Address | undefined,
+  chipets: Address[],
 ): Promise<{ cats: number; treasuryBal: string }> {
   const bem = bemNetwork(chainId);
   let cats = 0;
-  if (chipet) {
+  for (const chipet of chipets) {
     try {
       const next = await pub.readContract({ address: chipet, abi: chipetAbi, functionName: 'nextId' });
-      cats = Number(next > 0n ? next - 1n : 0n);
+      cats += Number(next > 0n ? next - 1n : 0n);
     } catch {
-      cats = 0;
+      /* ignore one failed contract */
     }
   }
   let treasuryBal = '0';
@@ -179,7 +179,7 @@ async function readLiveBalances(
 export async function loadAdminStats(
   pub: PublicClient,
   chainId: number,
-  chipet: Address | undefined,
+  chipet: Address | Address[] | undefined,
   opts?: {
     rpcHost?: string;
     /** 上次扫到的游标与去重集合；有则默认增量 */
@@ -197,6 +197,7 @@ export async function loadAdminStats(
     rechargeSeed?: AdminScanCheckpoint | null;
   },
 ): Promise<LoadAdminStatsResult> {
+  const chipets = !chipet ? [] : Array.isArray(chipet) ? chipet : [chipet];
   const bem = bemNetwork(chainId);
   const rpcHost = opts?.rpcHost ?? 'default';
   const chunk = chunkFor(rpcHost);
@@ -238,7 +239,7 @@ export async function loadAdminStats(
   }
 
   const scannedFrom = scanMode === 'noop' ? head.toString() : from.toString();
-  const { cats, treasuryBal } = await readLiveBalances(pub, chainId, chipet);
+  const { cats, treasuryBal } = await readLiveBalances(pub, chainId, chipets);
 
   const payers = new Set(prev.payers);
   const hatchers = new Set(prev.hatchers);
@@ -279,9 +280,9 @@ export async function loadAdminStats(
         }
       }
 
-      if (chipet) {
+      for (const addr of chipets) {
         const hatched = await getLogsSafe(pub, {
-          address: chipet,
+          address: addr,
           event: HATCHED,
           fromBlock: a,
           toBlock: b,
@@ -291,22 +292,25 @@ export async function loadAdminStats(
         }
 
         const played = await getLogsSafe(pub, {
-          address: chipet,
+          address: addr,
           event: PLAYED,
           fromBlock: a,
           toBlock: b,
         });
+        const newPlayedOn: string[] = [];
         for (const l of played) {
           if (l.args.petId == null) continue;
-          const id = l.args.petId.toString();
-          if (!playedPets.has(id)) {
-            playedPets.add(id);
-            newPlayed.push(id);
+          // 跨合约 tokenId 可能撞号，用合约前缀区分
+          const key = `${addr.toLowerCase()}:${l.args.petId.toString()}`;
+          if (!playedPets.has(key)) {
+            playedPets.add(key);
+            newPlayedOn.push(l.args.petId.toString());
+            newPlayed.push(l.args.petId.toString());
           }
         }
 
-        if (newPlayed.length) {
-          const added = await resolveOwners(pub, chipet, newPlayed);
+        if (newPlayedOn.length) {
+          const added = await resolveOwners(pub, addr, newPlayedOn);
           for (const p of added) players.add(p);
         }
       }

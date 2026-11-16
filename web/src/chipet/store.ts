@@ -1,9 +1,11 @@
 import type { Address } from 'viem';
+import { LEGACY_PET_ID_BASE, toChainTokenId, toLocalPetId } from '@tapearena/chain';
 import { tr } from '../i18n.ts';
 import type { Rarity } from './phenotype.ts';
 
 /** 本地演示宠：链上 Chipet 未部署时用 localStorage，让前端立刻可玩。 */
 export interface LocalPet {
+  /** 本地/路由 id；旧合约猫 = tokenId + LEGACY_PET_ID_BASE */
   id: number;
   name: string;
   cpu: Address;
@@ -19,6 +21,15 @@ export interface LocalPet {
   lastFeed: number;
   lastPlay: number;
   hatchedAt: number;
+  /** 链上 Chipet 合约；本地 MOCK 宠无此字段 */
+  chipet?: Address;
+}
+
+export { LEGACY_PET_ID_BASE, toChainTokenId };
+
+/** 详情页展示的链上编号（去掉旧合约偏移） */
+export function displayPetNumber(p: { id: number }): number {
+  return toChainTokenId(p.id);
 }
 
 const KEY = 'chipet.local.pets';
@@ -32,17 +43,25 @@ export const MOCK_CPU = '0x000000000000000000000000000000000000c111' as Address;
 /** 链上宠物：cpu 不是本地占位地址 */
 export const isChainPet = (p: { cpu: Address }) => p.cpu.toLowerCase() !== MOCK_CPU.toLowerCase();
 
-type Stored = Omit<LocalPet, 'circuitId' | 'xp' | 'wins' | 'losses'> & {
+type Stored = Omit<LocalPet, 'circuitId' | 'xp' | 'wins' | 'losses' | 'chipet'> & {
   circuitId: string;
   xp?: number;
   wins?: number;
   losses?: number;
+  chipet?: string;
 };
 
 function load(): LocalPet[] {
   try {
     const raw = JSON.parse(localStorage.getItem(KEY) || '[]') as Stored[];
-    return raw.map((p) => ({ ...p, circuitId: BigInt(p.circuitId), xp: p.xp ?? 0, wins: p.wins ?? 0, losses: p.losses ?? 0 }));
+    return raw.map((p) => ({
+      ...p,
+      circuitId: BigInt(p.circuitId),
+      xp: p.xp ?? 0,
+      wins: p.wins ?? 0,
+      losses: p.losses ?? 0,
+      chipet: p.chipet ? (p.chipet as Address) : undefined,
+    }));
   } catch {
     return [];
   }
@@ -117,7 +136,7 @@ export const localChipet = {
     save(pets);
     return pet;
   },
-  /** 把链上宠物写入本地缓存（按 id 覆盖），供广场/图鉴/详情共用。 */
+  /** 把链上宠物写入本地缓存（按 chipet+tokenId / 本地 id 覆盖）。 */
   upsertChain(input: {
     id: number;
     name: string;
@@ -130,12 +149,18 @@ export const localChipet = {
     level: number;
     lastFeed: number;
     lastPlay: number;
+    chipet?: Address;
+    /** 当前可孵化合约；有 chipet 时用于算本地 id 偏移 */
+    primaryChipet?: Address;
   }): LocalPet {
     const pets = load();
-    const i = pets.findIndex((p) => p.id === input.id);
+    const localId = input.chipet && input.primaryChipet
+      ? toLocalPetId(input.id, input.chipet, input.primaryChipet)
+      : input.id;
+    const i = pets.findIndex((p) => p.id === localId);
     const prev = i >= 0 ? pets[i]! : undefined;
     const pet: LocalPet = {
-      id: input.id,
+      id: localId,
       name: input.name,
       cpu: input.cpu,
       circuitId: input.circuitId,
@@ -152,6 +177,7 @@ export const localChipet = {
       lastFeed: input.lastFeed ? input.lastFeed * 1000 : 0,
       lastPlay: input.lastPlay ? input.lastPlay * 1000 : 0,
       hatchedAt: prev?.hatchedAt ?? Date.now(),
+      chipet: input.chipet ?? prev?.chipet,
     };
     if (i >= 0) pets[i] = pet;
     else pets.push(pet);
@@ -159,16 +185,24 @@ export const localChipet = {
     return pet;
   },
   /** 批量同步链上宠物；保留纯本地（MOCK_CPU）的演示宠。 */
-  syncChainPets(chainPets: {
-    id: number; name: string; cpu: Address; circuitId: bigint; rarity: Rarity;
-    energy: number; mood: number; intimacy: number; level: number; lastFeed: number; lastPlay: number;
-  }[]) {
+  syncChainPets(
+    chainPets: {
+      id: number; name: string; cpu: Address; circuitId: bigint; rarity: Rarity;
+      energy: number; mood: number; intimacy: number; level: number; lastFeed: number; lastPlay: number;
+      chipet?: Address;
+    }[],
+    primaryChipet?: Address,
+  ) {
     const prevAll = load();
     const keep = prevAll.filter((p) => !isChainPet(p));
     const mapped = chainPets.map((c) => {
-      const prev = prevAll.find((p) => p.id === c.id);
+      const localId = c.chipet && primaryChipet
+        ? toLocalPetId(c.id, c.chipet, primaryChipet)
+        : c.id;
+      const prev = prevAll.find((p) => p.id === localId)
+        ?? prevAll.find((p) => p.id === c.id && (!c.chipet || !p.chipet || p.chipet.toLowerCase() === c.chipet.toLowerCase()));
       return {
-        id: c.id,
+        id: localId,
         name: c.name,
         cpu: c.cpu,
         circuitId: c.circuitId,
@@ -183,6 +217,7 @@ export const localChipet = {
         lastFeed: c.lastFeed ? c.lastFeed * 1000 : 0,
         lastPlay: c.lastPlay ? c.lastPlay * 1000 : 0,
         hatchedAt: prev?.hatchedAt ?? Date.now(),
+        chipet: c.chipet,
       } satisfies LocalPet;
     });
     save([...keep, ...mapped]);

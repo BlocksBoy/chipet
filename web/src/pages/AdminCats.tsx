@@ -336,7 +336,12 @@ export function AdminCats() {
                 const url = explorer(p.chainId, p.owner);
                 return (
                   <tr key={`${p.chainId}-${p.petId}`} className="border-b border-line/50 last:border-0 hover:bg-panel-2/40">
-                    <td className="px-4 py-3 font-mono tabular-nums text-ink">#{p.petId}</td>
+                    <td className="px-4 py-3 font-mono tabular-nums text-ink">
+                      #{p.petId >= 1_000_000 ? p.petId - 1_000_000 : p.petId}
+                      {p.petId >= 1_000_000 && (
+                        <span className="ml-1 text-[10px] text-mute">{t('旧', 'legacy')}</span>
+                      )}
+                    </td>
                     <td className="px-4 py-3 font-semibold text-ink">{p.name || '—'}</td>
                     <td className="px-4 py-3">
                       <Tag tone={rarityTone(p.rarity)}>{rarityLabel(p.rarity, t)}</Tag>
