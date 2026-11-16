@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { Cable, CalendarCheck, Check, Fish, Flame, Hand, Pencil, Sparkles, Swords, ThumbsUp, Trophy, Users } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { Cable, CalendarCheck, Check, ChevronLeft, ChevronRight, Fish, Flame, Hand, Pencil, Sparkles, Swords, ThumbsUp, Trophy, Users } from 'lucide-react';
 import { Button, Input, PAGE, PageHeader, Panel, Segmented, StatBand, Tag, cn } from '../components/ui.tsx';
 import { go } from '../router.tsx';
 import { useApp } from '../state.tsx';
@@ -9,8 +9,26 @@ import { heartOf } from '../chipet/heart.ts';
 import { maxBonds, social } from '../chipet/social.ts';
 import { plural, txt, useLang, useT } from '../i18n.ts';
 
-/** 广场动态每页条数；滚到底加载下一页 */
-const FEED_PAGE = 12;
+/** 广场动态每页条数 */
+const FEED_PAGE = 20;
+
+/** 页码窗口：当前页附近若干号，两端保留首尾 */
+function pageWindow(current: number, total: number, radius = 2): (number | '…')[] {
+  if (total <= 1) return total === 1 ? [1] : [];
+  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
+  const set = new Set<number>([1, total]);
+  for (let i = current - radius; i <= current + radius; i++) {
+    if (i >= 1 && i <= total) set.add(i);
+  }
+  const sorted = [...set].sort((a, b) => a - b);
+  const out: (number | '…')[] = [];
+  for (let i = 0; i < sorted.length; i++) {
+    const n = sorted[i]!;
+    if (i > 0 && n - sorted[i - 1]! > 1) out.push('…');
+    out.push(n);
+  }
+  return out;
+}
 
 export function Plaza() {
   const t = useT();
@@ -21,27 +39,25 @@ export function Plaza() {
   const [name, setName] = useState(social.profile().displayName);
   const [editing, setEditing] = useState(false);
   const [tick, setTick] = useState(0);
-  const [feedShown, setFeedShown] = useState(FEED_PAGE);
-  const feedScroll = useRef<HTMLDivElement>(null);
+  const [feedPage, setFeedPage] = useState(1);
   const profile = useMemo(() => social.profile(), [tick, lang]);
   const activities = useMemo(() => social.activities(), [tick]);
-  const feed = useMemo(() => activities.slice(0, feedShown), [activities, feedShown]);
-  const feedMore = feedShown < activities.length;
+  const feedPages = Math.max(1, Math.ceil(activities.length / FEED_PAGE));
+  const feed = useMemo(() => {
+    const page = Math.min(Math.max(1, feedPage), feedPages);
+    const start = (page - 1) * FEED_PAGE;
+    return activities.slice(start, start + FEED_PAGE);
+  }, [activities, feedPage, feedPages]);
   const hot = useMemo(() => social.leaderboard('pats').slice(0, 6), [tick]);
   const ranks = useMemo(() => social.leaderboard(rankKind), [tick, rankKind]);
   const bonds = useMemo(() => social.bonds(), [tick]);
   const neighbors = useMemo(() => social.neighbors(), [tick]);
   const top = ranks[0]?.score || 1;
 
-  useEffect(() => { setFeedShown(FEED_PAGE); }, [tick, tab]);
-
-  const onFeedScroll = () => {
-    const el = feedScroll.current;
-    if (!el || !feedMore) return;
-    if (el.scrollTop + el.clientHeight >= el.scrollHeight - 48) {
-      setFeedShown((n) => Math.min(n + FEED_PAGE, activities.length));
-    }
-  };
+  useEffect(() => { setFeedPage(1); }, [tick, tab]);
+  useEffect(() => {
+    setFeedPage((p) => Math.min(Math.max(1, p), feedPages));
+  }, [feedPages]);
 
   const saveName = () => {
     social.setName(name);
@@ -102,39 +118,80 @@ export function Plaza() {
               {activities.length === 0 ? (
                 <p className="p-10 text-center text-sm text-mute">{t('还没有动态，去孵化或摸摸邻居吧。', 'Nothing here yet. Hatch a kitty or go pat a neighbor.')}</p>
               ) : (
-                <div
-                  ref={feedScroll}
-                  onScroll={onFeedScroll}
-                  className="chip-scroll max-h-[calc(12*4.75rem)] divide-y divide-line/70 overflow-y-auto overscroll-contain [scrollbar-gutter:stable]"
-                >
-                  {feed.map((a) => {
-                    const I = ACT_ICON[a.kind] ?? Sparkles;
-                    return (
-                      <div key={a.id} className="flex min-h-[4.75rem] items-center gap-2 pr-4 transition hover:bg-panel-2/50">
-                        <button type="button" onClick={() => a.petKey && go(`/pet/${routeIdOf(a.petKey)}`)}
-                          className="flex min-w-0 flex-1 items-start gap-3 py-4 pl-5 text-left">
-                          <span className={cn('mt-0.5 grid size-9 shrink-0 place-items-center rounded-xl', actTone(a.kind))}>
-                            <I className="size-4" />
-                          </span>
-                          <span className="min-w-0 flex-1">
-                            <span className="block text-sm text-pretty text-ink">{txt(a.text)}</span>
-                            <span className="mt-1 block text-xs text-faint">{txt(a.actor)} · {timeAgo(a.at)}</span>
-                          </span>
-                        </button>
-                        <button type="button" onClick={() => like(a.id)} aria-pressed={a.liked} aria-label={t('击掌', 'High five')}
-                          className={cn('flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3 font-mono text-xs transition active:scale-95', a.liked ? 'bg-copper/10 text-copper-dim ring-1 ring-copper/40' : 'text-faint ring-1 ring-line hover:text-copper-dim hover:ring-copper/40')}>
-                          <ThumbsUp className={cn('size-3.5', a.liked && 'fill-copper/30')} />
-                          {a.likes > 0 ? a.likes : t('击掌', 'High five')}
-                        </button>
-                      </div>
-                    );
-                  })}
-                  {feedMore && (
-                    <p className="py-3 text-center text-[11px] text-faint">
-                      {t(`已显示 ${feed.length} / ${activities.length} · 继续下滑加载`, `Showing ${feed.length} / ${activities.length} · scroll for more`)}
-                    </p>
+                <>
+                  <div className="divide-y divide-line/70">
+                    {feed.map((a) => {
+                      const I = ACT_ICON[a.kind] ?? Sparkles;
+                      return (
+                        <div key={a.id} className="flex min-h-[4.75rem] items-center gap-2 pr-4 transition hover:bg-panel-2/50">
+                          <button type="button" onClick={() => a.petKey && go(`/pet/${routeIdOf(a.petKey)}`)}
+                            className="flex min-w-0 flex-1 items-start gap-3 py-4 pl-5 text-left">
+                            <span className={cn('mt-0.5 grid size-9 shrink-0 place-items-center rounded-xl', actTone(a.kind))}>
+                              <I className="size-4" />
+                            </span>
+                            <span className="min-w-0 flex-1">
+                              <span className="block text-sm text-pretty text-ink">{txt(a.text)}</span>
+                              <span className="mt-1 block text-xs text-faint">{txt(a.actor)} · {timeAgo(a.at)}</span>
+                            </span>
+                          </button>
+                          <button type="button" onClick={() => like(a.id)} aria-pressed={a.liked} aria-label={t('击掌', 'High five')}
+                            className={cn('flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3 font-mono text-xs transition active:scale-95', a.liked ? 'bg-copper/10 text-copper-dim ring-1 ring-copper/40' : 'text-faint ring-1 ring-line hover:text-copper-dim hover:ring-copper/40')}>
+                            <ThumbsUp className={cn('size-3.5', a.liked && 'fill-copper/30')} />
+                            {a.likes > 0 ? a.likes : t('击掌', 'High five')}
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {feedPages > 1 && (
+                    <nav
+                      aria-label={t('动态分页', 'Feed pagination')}
+                      className="flex flex-wrap items-center justify-center gap-1.5 border-t border-line/70 px-4 py-3"
+                    >
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        icon={ChevronLeft}
+                        disabled={feedPage <= 1}
+                        onClick={() => setFeedPage((p) => Math.max(1, p - 1))}
+                        aria-label={t('上一页', 'Previous page')}
+                      >
+                        {t('上一页', 'Prev')}
+                      </Button>
+                      {pageWindow(feedPage, feedPages).map((item, i) => (
+                        item === '…' ? (
+                          <span key={`e${i}`} className="px-1 font-mono text-xs text-faint" aria-hidden>…</span>
+                        ) : (
+                          <button
+                            key={item}
+                            type="button"
+                            aria-label={t(`第 ${item} 页`, `Page ${item}`)}
+                            aria-current={item === feedPage ? 'page' : undefined}
+                            onClick={() => setFeedPage(item)}
+                            className={cn(
+                              'grid min-w-8 place-items-center rounded-full px-2.5 py-1.5 font-mono text-xs tabular-nums transition',
+                              item === feedPage
+                                ? 'bg-copper text-white shadow-sm'
+                                : 'text-mute ring-1 ring-line hover:text-ink hover:ring-copper/40',
+                            )}
+                          >
+                            {item}
+                          </button>
+                        )
+                      ))}
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        disabled={feedPage >= feedPages}
+                        onClick={() => setFeedPage((p) => Math.min(feedPages, p + 1))}
+                        aria-label={t('下一页', 'Next page')}
+                      >
+                        {t('下一页', 'Next')}
+                        <ChevronRight className="size-4" />
+                      </Button>
+                    </nav>
                   )}
-                </div>
+                </>
               )}
             </Panel>
           )}
