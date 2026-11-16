@@ -146,49 +146,56 @@ export function Plaza() {
                   {feedPages > 1 && (
                     <nav
                       aria-label={t('动态分页', 'Feed pagination')}
-                      className="flex flex-wrap items-center justify-end gap-1.5 border-t border-line/70 px-4 py-3"
+                      className="flex flex-wrap items-center justify-end gap-3 border-t border-line/70 bg-substrate/40 px-4 py-3"
                     >
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        icon={ChevronLeft}
-                        disabled={feedPage <= 1}
-                        onClick={() => setFeedPage((p) => Math.max(1, p - 1))}
-                        aria-label={t('上一页', 'Previous page')}
-                      >
-                        {t('上一页', 'Prev')}
-                      </Button>
-                      {pageWindow(feedPage, feedPages).map((item, i) => (
-                        item === '…' ? (
-                          <span key={`e${i}`} className="px-1 font-mono text-xs text-faint" aria-hidden>…</span>
-                        ) : (
-                          <button
-                            key={item}
-                            type="button"
-                            aria-label={t(`第 ${item} 页`, `Page ${item}`)}
-                            aria-current={item === feedPage ? 'page' : undefined}
-                            onClick={() => setFeedPage(item)}
-                            className={cn(
-                              'grid min-w-8 place-items-center rounded-full px-2.5 py-1.5 font-mono text-xs tabular-nums transition',
-                              item === feedPage
-                                ? 'bg-copper text-white shadow-sm'
-                                : 'text-mute ring-1 ring-line hover:text-ink hover:ring-copper/40',
-                            )}
-                          >
-                            {item}
-                          </button>
-                        )
-                      ))}
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        disabled={feedPage >= feedPages}
-                        onClick={() => setFeedPage((p) => Math.min(feedPages, p + 1))}
-                        aria-label={t('下一页', 'Next page')}
-                      >
-                        {t('下一页', 'Next')}
-                        <ChevronRight className="size-4" />
-                      </Button>
+                      <span className="mr-auto font-mono text-[11px] tabular-nums text-faint">
+                        {t(`第 ${feedPage} / ${feedPages} 页`, `Page ${feedPage} / ${feedPages}`)}
+                      </span>
+                      <div className="inline-flex items-center gap-0.5 rounded-full bg-panel p-1 shadow-sm ring-1 ring-line/80">
+                        <button
+                          type="button"
+                          disabled={feedPage <= 1}
+                          onClick={() => setFeedPage((p) => Math.max(1, p - 1))}
+                          aria-label={t('上一页', 'Previous page')}
+                          className="inline-flex h-8 items-center gap-1 rounded-full px-2.5 text-[12px] font-semibold text-mute transition enabled:hover:bg-panel-2 enabled:hover:text-ink disabled:cursor-not-allowed disabled:opacity-35"
+                        >
+                          <ChevronLeft className="size-3.5" />
+                          {t('上一页', 'Prev')}
+                        </button>
+                        <div className="flex items-center gap-0.5 px-0.5">
+                          {pageWindow(feedPage, feedPages).map((item, i) => (
+                            item === '…' ? (
+                              <span key={`e${i}`} className="grid size-8 place-items-center font-mono text-xs text-faint" aria-hidden>…</span>
+                            ) : (
+                              <button
+                                key={item}
+                                type="button"
+                                aria-label={t(`第 ${item} 页`, `Page ${item}`)}
+                                aria-current={item === feedPage ? 'page' : undefined}
+                                onClick={() => setFeedPage(item)}
+                                className={cn(
+                                  'grid size-8 place-items-center rounded-full font-mono text-[12px] tabular-nums transition',
+                                  item === feedPage
+                                    ? 'bg-copper font-bold text-white shadow-sm shadow-copper/30'
+                                    : 'text-mute hover:bg-panel-2 hover:text-ink',
+                                )}
+                              >
+                                {item}
+                              </button>
+                            )
+                          ))}
+                        </div>
+                        <button
+                          type="button"
+                          disabled={feedPage >= feedPages}
+                          onClick={() => setFeedPage((p) => Math.min(feedPages, p + 1))}
+                          aria-label={t('下一页', 'Next page')}
+                          className="inline-flex h-8 items-center gap-1 rounded-full px-2.5 text-[12px] font-semibold text-mute transition enabled:hover:bg-panel-2 enabled:hover:text-ink disabled:cursor-not-allowed disabled:opacity-35"
+                        >
+                          {t('下一页', 'Next')}
+                          <ChevronRight className="size-3.5" />
+                        </button>
+                      </div>
                     </nav>
                   )}
                 </>
