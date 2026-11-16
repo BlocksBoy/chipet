@@ -180,7 +180,7 @@ export function Shop() {
               ? t(`当前购买会从钱包转账 ${chainLabel} 上的真实 BEM。`, `Purchases will transfer real BEM on ${chainLabel} from your wallet.`)
               : bemNet
                 ? t(`在 ${chainLabel} 连接钱包后，可用真实 BEM 支付。`, `Connect a wallet on ${chainLabel} to pay with real BEM.`)
-                : t('切到 X Layer 或 BSC 并连接钱包后，可用真实 BEM 支付。', 'Switch to X Layer or BSC and connect a wallet to pay with real BEM.')}
+                : t('切到 X Layer 并连接钱包后，可用真实 BEM 支付。', 'Switch to X Layer and connect a wallet to pay with real BEM.')}
           </p>
           <div className="mt-4 flex flex-wrap gap-2">
             <Tag tone="si">{t('线友位', 'Bond slots')} {st.bondSlots}/{BOND_SLOTS_MAX}</Tag>

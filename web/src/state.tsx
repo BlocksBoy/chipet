@@ -39,7 +39,11 @@ export const useApp = () => useContext(C)!;
 const defaultChain = () => {
   const saved = Number(localStorage.getItem('tapearena.chain'));
   if (CHAIN_IDS.includes(saved)) return saved;
-  return Number(import.meta.env.VITE_CHAIN_ID ?? 196);
+  // 曾选过已隐藏的主网（如 BSC）时回落到默认可见链
+  const fallback = Number(import.meta.env.VITE_CHAIN_ID ?? 196);
+  const id = CHAIN_IDS.includes(fallback) ? fallback : (CHAIN_IDS[0] ?? 196);
+  localStorage.setItem('tapearena.chain', String(id));
+  return id;
 };
 
 let toastSeq = 0;
@@ -61,6 +65,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [chainId, chain]);
 
   const setChainId = (id: number) => {
+    if (!CHAIN_IDS.includes(id)) return; // 隐藏主网（如 BSC）不可选
     localStorage.setItem('tapearena.chain', String(id));
     setChainIdRaw(id);
     // 应用内切网时同步钱包，这样原生币余额 / 后续交易都落在同一条链

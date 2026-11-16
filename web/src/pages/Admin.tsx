@@ -3,7 +3,7 @@ import {
   Cat, Coins, Database, History, KeyRound, Loader2, LogOut, RefreshCw, RotateCcw, ShieldCheck, Swords, Users,
 } from 'lucide-react';
 import { CHAIN_LABEL, MAINNET_IDS, bemNetwork } from '@tapearena/chain';
-import { Button, PAGE, Panel, StatBand, Tag, cn } from '../components/ui.tsx';
+import { Button, PAGE, Panel, Tag, cn } from '../components/ui.tsx';
 import { useT } from '../i18n.ts';
 import {
   adminLogin, adminLogout, adminSession, adminStartScan, adminStats, adminStatsHistory,
@@ -22,6 +22,10 @@ type ChainBundle = {
 const emptyBundle = (): ChainBundle => ({
   stats: null, job: null, history: [], err: '', progress: '',
 });
+
+function chainTone(id: number): 'si' | 'gold' {
+  return id === 56 ? 'gold' : 'si';
+}
 
 export function Admin() {
   const t = useT();
@@ -84,7 +88,7 @@ export function Admin() {
         }));
         setByChain((prev) => {
           const next = { ...prev };
-          let needHistory: number[] = [];
+          const needHistory: number[] = [];
           for (const r of results) {
             if (!r.ok) continue;
             const running = r.s.job?.status === 'running';
@@ -333,32 +337,54 @@ export function Admin() {
     return '—';
   };
 
+  const num = (id: number, key: 'rechargeUsers' | 'registered' | 'players' | 'cats' | 'rechargeTxs') =>
+    byChain[id]?.stats?.[key] ?? 0;
+  const bemSum = (key: 'rechargeBem' | 'treasuryBal') =>
+    MAINNET_IDS.reduce((s, id) => s + Number(byChain[id]?.stats?.[key] ?? 0), 0);
+  const hasAnyStats = MAINNET_IDS.some((id) => byChain[id]?.stats);
+  const progressLines = MAINNET_IDS
+    .map((id) => {
+      const b = byChain[id];
+      if (!b?.progress && !b?.err) return null;
+      return { id, progress: b.progress, err: b.err };
+    })
+    .filter(Boolean) as { id: number; progress: string; err: string }[];
+
+  const historyRows = MAINNET_IDS.flatMap((id) =>
+    (byChain[id]?.history ?? []).map((h) => ({ id, h })),
+  ).sort((a, b) => (b.h.createdAt ?? 0) - (a.h.createdAt ?? 0)).slice(0, 12);
+
+  const metrics: {
+    icon: typeof Coins;
+    label: string;
+    key: 'rechargeUsers' | 'registered' | 'players' | 'cats';
+    tone: string;
+  }[] = [
+    { icon: Coins, label: t('充值人数', 'Recharge users'), key: 'rechargeUsers', tone: 'bg-copper/10 text-copper' },
+    { icon: Users, label: t('注册人数', 'Registered'), key: 'registered', tone: 'bg-si/10 text-si' },
+    { icon: Swords, label: t('游玩人数', 'Players'), key: 'players', tone: 'bg-gold/15 text-gold-dim' },
+    { icon: Cat, label: t('猫咪数量', 'Cats hatched'), key: 'cats', tone: 'bg-[#8b7cf0]/12 text-[#6a5ad6]' },
+  ];
+
   return (
     <div className={cn(PAGE, 'py-6 sm:py-8')}>
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <div className="flex flex-wrap items-center gap-2">
             <ShieldCheck className="size-5 text-copper" />
-            <h1 className="font-display text-2xl font-bold text-ink">{t('运营看板', 'Ops dashboard')}</h1>
-            {MAINNET_IDS.map((id) => (
-              <Tag key={id} tone={id === 56 ? 'gold' : 'si'}>{CHAIN_LABEL[id]}</Tag>
-            ))}
+            <h1 className="font-display text-2xl font-bold text-balance text-ink">{t('运营看板', 'Ops dashboard')}</h1>
             {scanning && <Tag tone="copper" icon={Loader2}>{t('扫链中', 'Scanning')}</Tag>}
-            {!scanning && MAINNET_IDS.some((id) => byChain[id]?.stats) && (
-              <Tag tone="neutral" icon={Database}>{t('数据库', 'SQLite')}</Tag>
-            )}
+            {!scanning && hasAnyStats && <Tag tone="neutral" icon={Database}>{t('数据库', 'SQLite')}</Tag>}
+            {busy && !scanning && <Tag tone="neutral" icon={Loader2}>{t('读取中', 'Loading')}</Tag>}
           </div>
-          <p className="mt-1 text-sm text-mute">
+          <p className="mt-1 max-w-xl text-sm text-pretty text-mute">
             {t(
-              'X Layer 与 BSC 同屏对照。服务端每小时自动增量同步；读库 / 增量 / 全量仍可手动对两条链一并执行。',
-              'X Layer and BSC side by side. Server auto-syncs incrementally every hour; Load / Incremental / Full still run both chains together.',
+              '默认读库展示合计；tag 标明各链贡献。服务端每小时自动增量；也可手动增量 / 全量。',
+              'Totals load from SQLite by default; tags show each chain’s share. Server auto-syncs hourly; manual incremental / full still available.',
             )}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Button size="sm" variant="ghost" icon={Database} busy={busy} disabled={scanning} onClick={() => void loadAll()}>
-            {t('读库', 'Load DB')}
-          </Button>
           <Button size="sm" icon={RefreshCw} busy={scanKind === 'inc'} disabled={scanning || busy} onClick={() => void startScanAll(false)}>
             {t('增量入库', 'Incremental')}
           </Button>
@@ -371,106 +397,160 @@ export function Admin() {
         </div>
       </div>
 
-      <div className="mt-6 grid gap-5 lg:grid-cols-2">
-        {MAINNET_IDS.map((id) => {
-          const b = byChain[id] ?? emptyBundle();
-          const bem = bemNetwork(id);
-          const chainScanning = b.job?.status === 'running';
+      {progressLines.length > 0 && (
+        <div className="mt-4 space-y-1.5">
+          {progressLines.map(({ id, progress, err }) => (
+            <p key={id} className={cn('flex flex-wrap items-center gap-2 text-sm', err ? 'text-danger' : 'text-mute')}>
+              <Tag tone={chainTone(id)}>{CHAIN_LABEL[id]}</Tag>
+              {err ? err : (
+                <>
+                  <Loader2 className="size-3.5 animate-spin text-copper" />
+                  {progress}
+                </>
+              )}
+            </p>
+          ))}
+        </div>
+      )}
+
+      {!hasAnyStats && !busy && !scanning && progressLines.length === 0 && (
+        <p className="mt-4 text-sm text-mute">
+          {t('尚无快照。点「增量入库」开始（首次自动全量分片）。', 'No snapshot yet. Tap “Incremental” (first run is a sliced full scan).')}
+        </p>
+      )}
+
+      <dl className="mt-6 grid grid-cols-1 gap-px overflow-hidden rounded-3xl border border-line/80 bg-line/70 shadow-sm shadow-si/5 sm:grid-cols-2 lg:grid-cols-4">
+        {metrics.map(({ icon: I, label, key, tone }) => {
+          const total = MAINNET_IDS.reduce((s, id) => s + num(id, key), 0);
           return (
-            <section
-              key={id}
-              className={cn(
-                'min-w-0 rounded-3xl border bg-panel/80 p-4 shadow-sm shadow-si/5 sm:p-5',
-                id === 56 ? 'border-gold/35' : 'border-si/30',
-              )}
-            >
-              <div className="flex flex-wrap items-center gap-2">
-                <Tag tone={id === 56 ? 'gold' : 'si'} className="text-[12px] font-semibold">
-                  {CHAIN_LABEL[id]}
-                </Tag>
-                <span className="font-mono text-[11px] text-faint">chainId {id}</span>
-                {chainScanning && <Tag tone="copper" icon={Loader2}>{t('扫链中', 'Scanning')}</Tag>}
+            <div key={key} className="flex min-w-0 flex-col gap-3 bg-panel px-4 py-4 sm:px-5">
+              <div className="flex items-center gap-3.5">
+                <span className={cn('grid size-11 shrink-0 place-items-center rounded-2xl', tone)}>
+                  <I className="size-5" />
+                </span>
+                <div className="min-w-0">
+                  <dd className="m-0 font-display text-2xl font-bold tabular-nums leading-tight text-ink">
+                    {hasAnyStats ? fmt(total) : '—'}
+                  </dd>
+                  <dt className="truncate text-xs text-mute">{label}</dt>
+                </div>
               </div>
-
-              {b.progress && (
-                <p className="mt-3 flex items-center gap-2 text-sm text-mute">
-                  <Loader2 className="size-4 animate-spin text-copper" />{b.progress}
-                </p>
-              )}
-              {b.err && <p className="mt-3 text-sm text-danger">{b.err}</p>}
-              {!b.stats && !b.err && !chainScanning && (
-                <p className="mt-3 text-sm text-mute">
-                  {t('尚无快照。点顶部「增量入库」开始（首次自动全量分片）。', 'No snapshot yet. Use “Incremental” above (first run is a sliced full scan).')}
-                </p>
-              )}
-
-              <StatBand
-                className="mt-4"
-                items={[
-                  { icon: Coins, label: t('充值人数', 'Recharge users'), value: b.stats ? fmt(b.stats.rechargeUsers) : '—', tone: 'copper' },
-                  { icon: Users, label: t('注册人数', 'Registered'), value: b.stats ? fmt(b.stats.registered) : '—', tone: 'si' },
-                  { icon: Swords, label: t('游玩人数', 'Players'), value: b.stats ? fmt(b.stats.players) : '—', tone: 'gold' },
-                  { icon: Cat, label: t('猫咪数量', 'Cats hatched'), value: b.stats ? fmt(b.stats.cats) : '—', tone: 'violet' },
-                ]}
-              />
-
-              <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                <Panel title={t('充值明细', 'Recharge detail')} icon={Coins} bodyClass="p-4 space-y-2 text-sm">
-                  <Row k={t('充值笔数', 'Tx count')} v={b.stats ? fmt(b.stats.rechargeTxs) : '—'} />
-                  <Row k={t('累计 BEM', 'Total BEM')} v={b.stats ? `${fmt(b.stats.rechargeBem)} BEM` : '—'} />
-                  <Row k={t('收款钱包余额', 'Treasury balance')} v={b.stats ? `${fmt(b.stats.treasuryBal)} BEM` : '—'} />
-                  <Row
-                    k={t('收款地址', 'Treasury')}
-                    v={bem ? <span className="font-mono text-[12px]" title={bem.treasury}>{short(bem.treasury, 8)}</span> : '—'}
-                  />
-                </Panel>
-                <Panel title={t('快照信息', 'Snapshot')} icon={Database} bodyClass="p-4 space-y-2 text-sm">
-                  <Row k={t('入库时间', 'Saved at')} v={when(b.stats?.createdAt)} />
-                  <Row k={t('扫描模式', 'Scan mode')} v={modeLabel(b.stats?.scanMode)} />
-                  <Row
-                    k={t('进度', 'Progress')}
-                    v={b.stats?.scannedTo
-                      ? `#${b.stats.scannedTo}${b.stats.head ? ` / #${b.stats.head}` : ''}${b.stats.complete === false ? t('（未完成）', ' (partial)') : ''}`
-                      : '—'}
-                  />
-                  <Row k={t('扫链 RPC', 'Scan RPC')} v={b.stats?.rpcHost ?? '—'} />
-                  {b.stats?.note && <p className="pt-1 text-xs leading-relaxed text-mute">{b.stats.note}</p>}
-                </Panel>
+              <div className="flex flex-wrap gap-1.5">
+                {MAINNET_IDS.map((id) => (
+                  <Tag key={id} tone={chainTone(id)}>
+                    {CHAIN_LABEL[id]} {hasAnyStats ? fmt(num(id, key)) : '—'}
+                  </Tag>
+                ))}
               </div>
-
-              <Panel className="mt-4" title={t('历史快照', 'History')} icon={History} bodyClass="p-3">
-                {b.history.length === 0 ? (
-                  <p className="px-1 py-2 text-sm text-mute">{t('还没有快照。', 'No snapshots yet.')}</p>
-                ) : (
-                  <ul className="divide-y divide-line/70">
-                    {b.history.map((h) => (
-                      <li key={h.id ?? `${h.createdAt}-${h.scannedTo}`} className="flex flex-wrap items-center justify-between gap-2 px-1 py-2 text-sm">
-                        <span className="font-mono text-[12px] text-mute">
-                          {when(h.createdAt)}
-                          {h.scanMode ? ` · ${modeLabel(h.scanMode)}` : ''}
-                          {h.complete === false ? t(' · 分片', ' · partial') : ''}
-                        </span>
-                        <span className="tabular-nums text-ink">
-                          {t('猫', 'cats')} {fmt(h.cats)} · {t('注册', 'reg')} {fmt(h.registered)} · {t('玩', 'play')} {fmt(h.players)} · {t('充', 'pay')} {fmt(h.rechargeUsers)}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </Panel>
-            </section>
+            </div>
           );
         })}
+      </dl>
+
+      <div className="mt-6 grid gap-4 lg:grid-cols-2">
+        <Panel title={t('充值明细', 'Recharge detail')} icon={Coins} bodyClass="p-5 space-y-3 text-sm">
+          <Row
+            k={t('充值笔数', 'Tx count')}
+            v={hasAnyStats ? fmt(MAINNET_IDS.reduce((s, id) => s + num(id, 'rechargeTxs'), 0)) : '—'}
+            tags={MAINNET_IDS.map((id) => (
+              <Tag key={id} tone={chainTone(id)}>{CHAIN_LABEL[id]} {hasAnyStats ? fmt(num(id, 'rechargeTxs')) : '—'}</Tag>
+            ))}
+          />
+          <Row
+            k={t('累计 BEM', 'Total BEM')}
+            v={hasAnyStats ? `${fmt(bemSum('rechargeBem'))} BEM` : '—'}
+            tags={MAINNET_IDS.map((id) => (
+              <Tag key={id} tone={chainTone(id)}>
+                {CHAIN_LABEL[id]} {hasAnyStats ? `${fmt(byChain[id]?.stats?.rechargeBem ?? 0)}` : '—'}
+              </Tag>
+            ))}
+          />
+          <Row
+            k={t('收款钱包余额', 'Treasury balance')}
+            v={hasAnyStats ? `${fmt(bemSum('treasuryBal'))} BEM` : '—'}
+            tags={MAINNET_IDS.map((id) => (
+              <Tag key={id} tone={chainTone(id)}>
+                {CHAIN_LABEL[id]} {hasAnyStats ? `${fmt(byChain[id]?.stats?.treasuryBal ?? 0)}` : '—'}
+              </Tag>
+            ))}
+          />
+          <div className="space-y-1.5 border-t border-line/60 pt-3">
+            <span className="text-mute">{t('收款地址', 'Treasury')}</span>
+            <div className="flex flex-col gap-1.5">
+              {MAINNET_IDS.map((id) => {
+                const bem = bemNetwork(id);
+                return (
+                  <div key={id} className="flex flex-wrap items-center gap-2">
+                    <Tag tone={chainTone(id)}>{CHAIN_LABEL[id]}</Tag>
+                    <span className="font-mono text-[12px] font-semibold text-ink" title={bem?.treasury}>
+                      {bem ? short(bem.treasury, 8) : '—'}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </Panel>
+
+        <Panel title={t('快照信息', 'Snapshot')} icon={Database} bodyClass="p-5 space-y-3 text-sm">
+          {MAINNET_IDS.map((id) => {
+            const s = byChain[id]?.stats;
+            return (
+              <div key={id} className="space-y-1.5 rounded-2xl bg-panel-2/50 px-3 py-2.5">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Tag tone={chainTone(id)}>{CHAIN_LABEL[id]}</Tag>
+                  {byChain[id]?.job?.status === 'running' && (
+                    <Tag tone="copper" icon={Loader2}>{t('扫链中', 'Scanning')}</Tag>
+                  )}
+                </div>
+                <Row k={t('入库时间', 'Saved at')} v={when(s?.createdAt)} />
+                <Row k={t('扫描模式', 'Scan mode')} v={modeLabel(s?.scanMode)} />
+                <Row
+                  k={t('进度', 'Progress')}
+                  v={s?.scannedTo
+                    ? `#${s.scannedTo}${s.head ? ` / #${s.head}` : ''}${s.complete === false ? t('（未完成）', ' (partial)') : ''}`
+                    : '—'}
+                />
+                <Row k={t('扫链 RPC', 'Scan RPC')} v={s?.rpcHost ?? '—'} />
+              </div>
+            );
+          })}
+        </Panel>
       </div>
+
+      <Panel className="mt-6" title={t('历史快照', 'History')} icon={History} bodyClass="p-4">
+        {historyRows.length === 0 ? (
+          <p className="px-1 py-2 text-sm text-mute">{t('还没有快照。', 'No snapshots yet.')}</p>
+        ) : (
+          <ul className="divide-y divide-line/70">
+            {historyRows.map(({ id, h }) => (
+              <li key={`${id}-${h.id ?? `${h.createdAt}-${h.scannedTo}`}`} className="flex flex-wrap items-center justify-between gap-2 px-1 py-2.5 text-sm">
+                <span className="flex flex-wrap items-center gap-2 font-mono text-[12px] text-mute">
+                  <Tag tone={chainTone(id)}>{CHAIN_LABEL[id]}</Tag>
+                  {when(h.createdAt)}
+                  {h.scanMode ? ` · ${modeLabel(h.scanMode)}` : ''}
+                  {h.complete === false ? t(' · 分片', ' · partial') : ''}
+                </span>
+                <span className="tabular-nums text-ink">
+                  {t('猫', 'cats')} {fmt(h.cats)} · {t('注册', 'reg')} {fmt(h.registered)} · {t('玩', 'play')} {fmt(h.players)} · {t('充', 'pay')} {fmt(h.rechargeUsers)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Panel>
     </div>
   );
 }
 
-function Row({ k, v }: { k: string; v: ReactNode }) {
+function Row({ k, v, tags }: { k: string; v: ReactNode; tags?: ReactNode }) {
   return (
-    <div className="flex items-baseline justify-between gap-3">
-      <span className="text-mute">{k}</span>
-      <span className="font-semibold tabular-nums text-ink">{v}</span>
+    <div className="flex flex-col gap-1.5">
+      <div className="flex items-baseline justify-between gap-3">
+        <span className="text-mute">{k}</span>
+        <span className="font-semibold tabular-nums text-ink">{v}</span>
+      </div>
+      {tags && <div className="flex flex-wrap justify-end gap-1.5">{tags}</div>}
     </div>
   );
 }

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ComponentType, type ReactElement, type ReactNode } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import {
-  ArrowRight, Cable, Cpu, Egg, Fish, Flag, RotateCcw, ScrollText, Shield, Swords, Trophy, WandSparkles, X, Zap, type LucideProps,
+  ArrowRight, Cable, ChevronLeft, ChevronRight, Cpu, Egg, Fish, Flag, RotateCcw, ScrollText, Shield, Swords, Trophy, WandSparkles, X, Zap, type LucideProps,
 } from 'lucide-react';
 import { Button, Empty, ErrBar, PAGE, PageHeader, Panel, Tag, cn } from '../components/ui.tsx';
 import { Link, go, useRoute } from '../router.tsx';
@@ -26,6 +26,26 @@ const MOVE_ICON: ComponentType<LucideProps>[] = [Swords, Shield, WandSparkles];
 const FUSION = 3;
 /** 一回合揭晓动画的时长：跟 BattleFx 的节拍对齐，再留一点余量看清伤害数字 */
 const REVEAL_MS = Math.round(BEAT.total * 1000) + 200;
+/** 切磋对手每页条数（超过后分页，交互对齐广场动态） */
+const SPAR_PAGE = 12;
+
+/** 页码窗口：当前页附近若干号，两端保留首尾 */
+function pageWindow(current: number, total: number, radius = 2): (number | '…')[] {
+  if (total <= 1) return total === 1 ? [1] : [];
+  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
+  const set = new Set<number>([1, total]);
+  for (let i = current - radius; i <= current + radius; i++) {
+    if (i >= 1 && i <= total) set.add(i);
+  }
+  const sorted = [...set].sort((a, b) => a - b);
+  const out: (number | '…')[] = [];
+  for (let i = 0; i < sorted.length; i++) {
+    const n = sorted[i]!;
+    if (i > 0 && n - sorted[i - 1]! > 1) out.push('…');
+    out.push(n);
+  }
+  return out;
+}
 
 /** 结算弹框：冲击波 + 星屑 + 标题砸入；胜利再加金光与彩带 */
 function BattleResultModal({
@@ -714,6 +734,7 @@ export function Train() {
   const r = useRoute();
   const wide = useWide();
   const [tick, setTick] = useState(0);
+  const [rivalPage, setRivalPage] = useState(1);
   const [err, setErr] = useState('');
   const [fight, setFight] = useState<Fight | null>(null);
   const [myId, setMyId] = useState<number | null>(() => (r.query.get('me') ? Number(r.query.get('me')) : null));
@@ -744,8 +765,19 @@ export function Train() {
   const bonds = useMemo(() => social.bonds(), [tick]);
   const me: LocalPet | undefined = pets.find((p) => p.id === myId) ?? pets[0];
   const rivals = useMemo(() => social.sparTargets(me?.id), [tick, me?.id]);
+  const rivalPages = Math.max(1, Math.ceil(rivals.length / SPAR_PAGE));
+  const rivalsPage = useMemo(() => {
+    const page = Math.min(Math.max(1, rivalPage), rivalPages);
+    const start = (page - 1) * SPAR_PAGE;
+    return rivals.slice(start, start + SPAR_PAGE);
+  }, [rivals, rivalPage, rivalPages]);
   const myHeart = me ? heartOf(me.circuitId, me.rarity) : undefined;
   const partner = bonds.find((b) => b.key === partnerKey) ?? bonds[0];
+
+  useEffect(() => { setRivalPage(1); }, [me?.id]);
+  useEffect(() => {
+    setRivalPage((p) => Math.min(Math.max(1, p), rivalPages));
+  }, [rivalPages]);
 
   const vs = r.query.get('vs');
   const challenge = useMemo(() => {
@@ -1270,12 +1302,14 @@ export function Train() {
         </ul>
       </Panel>
 
-      <Panel title={t('切磋对手', 'Spar rivals')} icon={Trophy} className="mt-6" bodyClass="p-4">
-        <p className="mb-3 text-[12px] text-pretty text-mute">
-          {t('自家其他芯宠、今日路过访客，以及邻居都会出现在这里；等级、胜场、心情会随对战变化。', 'Your other Chipets, today’s passers-by, and neighbors show up here. Level, wins, and mood shift after each spar.')}
-        </p>
-        <ul className="grid grid-cols-2 gap-3 md:grid-cols-3">
-          {rivals.map((p) => {
+      <Panel title={t('切磋对手', 'Spar rivals')} icon={Trophy} className="mt-6" bodyClass="p-0">
+        <div className="px-4 pt-4">
+          <p className="mb-3 text-[12px] text-pretty text-mute">
+            {t('自家其他芯宠、今日路过访客，以及邻居都会出现在这里；等级、胜场、心情会随对战变化。', 'Your other Chipets, today’s passers-by, and neighbors show up here. Level, wins, and mood shift after each spar.')}
+          </p>
+        </div>
+        <ul className="grid grid-cols-2 gap-3 px-4 pb-4 md:grid-cols-3">
+          {rivalsPage.map((p) => {
             const o = npcOpp(p);
             const ph = phenotypeOf(p.cpu, p.circuitId, p.rarity);
             const visitor = !p.mine && p.id <= -101;
@@ -1299,6 +1333,61 @@ export function Train() {
             );
           })}
         </ul>
+        {rivalPages > 1 && (
+          <nav
+            aria-label={t('切磋对手分页', 'Spar rivals pagination')}
+            className="flex flex-wrap items-center justify-end gap-3 border-t border-line/70 bg-substrate/40 px-4 py-3"
+          >
+            <span className="mr-auto font-mono text-[11px] tabular-nums text-faint">
+              {t(`第 ${Math.min(rivalPage, rivalPages)} / ${rivalPages} 页`, `Page ${Math.min(rivalPage, rivalPages)} / ${rivalPages}`)}
+            </span>
+            <div className="inline-flex items-center gap-0.5 rounded-full bg-panel p-1 shadow-sm ring-1 ring-line/80">
+              <button
+                type="button"
+                disabled={rivalPage <= 1}
+                onClick={() => setRivalPage((p) => Math.max(1, p - 1))}
+                aria-label={t('上一页', 'Previous page')}
+                className="inline-flex h-8 items-center gap-1 rounded-full px-2.5 text-[12px] font-semibold text-mute transition enabled:hover:bg-panel-2 enabled:hover:text-ink disabled:cursor-not-allowed disabled:opacity-35"
+              >
+                <ChevronLeft className="size-3.5" />
+                {t('上一页', 'Prev')}
+              </button>
+              <div className="flex items-center gap-0.5 px-0.5">
+                {pageWindow(Math.min(rivalPage, rivalPages), rivalPages).map((item, i) => (
+                  item === '…' ? (
+                    <span key={`e${i}`} className="grid size-8 place-items-center font-mono text-xs text-faint" aria-hidden>…</span>
+                  ) : (
+                    <button
+                      key={item}
+                      type="button"
+                      aria-label={t(`第 ${item} 页`, `Page ${item}`)}
+                      aria-current={item === rivalPage ? 'page' : undefined}
+                      onClick={() => setRivalPage(item)}
+                      className={cn(
+                        'grid size-8 place-items-center rounded-full font-mono text-[12px] tabular-nums transition',
+                        item === rivalPage
+                          ? 'bg-copper font-bold text-white shadow-sm shadow-copper/30'
+                          : 'text-mute hover:bg-panel-2 hover:text-ink',
+                      )}
+                    >
+                      {item}
+                    </button>
+                  )
+                ))}
+              </div>
+              <button
+                type="button"
+                disabled={rivalPage >= rivalPages}
+                onClick={() => setRivalPage((p) => Math.min(rivalPages, p + 1))}
+                aria-label={t('下一页', 'Next page')}
+                className="inline-flex h-8 items-center gap-1 rounded-full px-2.5 text-[12px] font-semibold text-mute transition enabled:hover:bg-panel-2 enabled:hover:text-ink disabled:cursor-not-allowed disabled:opacity-35"
+              >
+                {t('下一页', 'Next')}
+                <ChevronRight className="size-3.5" />
+              </button>
+            </div>
+          </nav>
+        )}
       </Panel>
     </div>
   );

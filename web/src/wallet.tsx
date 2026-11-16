@@ -69,7 +69,7 @@ const guide = (create: CreateWallet, name: string, note: Txt): GuideWallet => {
 /** 一个钱包都没检测到时，引导用户安装的常用钱包。 */
 export const GUIDE_WALLETS: GuideWallet[] = [
   guide(okxWallet, 'OKX Wallet', both('X Layer 官方钱包，推荐', 'Official X Layer wallet, recommended')),
-  guide(binanceWallet, 'Binance Wallet', both('币安 Web3 钱包，BSC 首选', 'Binance Web3 wallet, best for BSC')),
+  guide(binanceWallet, 'Binance Wallet', both('币安 Web3 钱包', 'Binance Web3 wallet')),
   guide(metaMaskWallet, 'MetaMask', both('最常用的以太坊钱包', 'The most widely used EVM wallet')),
   guide(rabbyWallet, 'Rabby', both('多链插件，交易前预览', 'Multi-chain, previews every transaction')),
   guide(bitgetWallet, 'Bitget Wallet', both('多链 Web3 钱包', 'Multi-chain Web3 wallet')),

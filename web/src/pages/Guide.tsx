@@ -156,8 +156,8 @@ export function Guide() {
             </ul>
             <Callout>
               {t(
-                '本地演示里，浏览器按与链上 eval 同一套规则逐门仿真。换到 X Layer / BSC 并连接钱包后，实验室的悬赏会走合约。',
-                'In the local demo the browser simulates gate by gate with the same rules as on-chain eval. On X Layer / BSC with a wallet connected, Lab bounties go through the contract.',
+                '本地演示里，浏览器按与链上 eval 同一套规则逐门仿真。换到 X Layer 并连接钱包后，实验室的悬赏会走合约。',
+                'In the local demo the browser simulates gate by gate with the same rules as on-chain eval. On X Layer with a wallet connected, Lab bounties go through the contract.',
               )}
             </Callout>
           </Sec>
@@ -382,7 +382,7 @@ export function Guide() {
                 {t(`演示余额：本地 fork / 未连钱包时可每日领取 ${FAUCET_AMOUNT} 演示 BEM。`, `Demo balance: on the local fork or without a wallet, claim ${FAUCET_AMOUNT} demo BEM once per day.`)}
               </Bullet>
               <Bullet>
-                {t('切到 X Layer 或 BSC 并连上钱包后，商店会读该链真实 BEM 余额，购买优先走链上转账。', 'On X Layer or BSC with a wallet connected, the Shop reads that chain’s real BEM and prefers on-chain transfers.')}
+                {t('切到 X Layer 并连上钱包后，商店会读该链真实 BEM 余额，购买优先走链上转账。', 'On X Layer with a wallet connected, the Shop reads that chain’s real BEM and prefers on-chain transfers.')}
               </Bullet>
               <Bullet>
                 {t('不对战门票、不强制连钱包才能养成。', 'No battle tickets, and raising never requires a wallet.')}
@@ -398,11 +398,11 @@ export function Guide() {
             id="network"
             icon={Cpu}
             title={t('网络、语言与钱包', 'Network, language and wallet')}
-            lead={t('右上角可切换 X Layer / BSC / 本地演示链，以及中英文。', 'Top-right switches X Layer / BSC / the local demo chain, plus Chinese and English.')}
+            lead={t('右上角可切换 X Layer / 本地演示链，以及中英文。', 'Top-right switches X Layer / the local demo chain, plus Chinese and English.')}
           >
             <ul className="space-y-2">
               <Bullet>{t('本地 fork：不连钱包也能孵化、养成、对战、逛广场。', 'Local fork: hatch, raise, battle and roam the Plaza without a wallet.')}</Bullet>
-              <Bullet>{t('主网（X Layer / BSC）：连接钱包后可参与实验室悬赏与链上流程。', 'Mainnets (X Layer / BSC): connect a wallet to join Lab bounties and on-chain flows.')}</Bullet>
+              <Bullet>{t('主网（X Layer）：连接钱包后可参与实验室悬赏与链上流程。', 'Mainnet (X Layer): connect a wallet to join Lab bounties and on-chain flows.')}</Bullet>
               <Bullet>{t('语言切换立即生效；电路与对战结果不随语言改变。', 'Language switches instantly; circuits and battle outcomes do not change with language.')}</Bullet>
             </ul>
             <div className="flex flex-wrap gap-2 pt-1">
