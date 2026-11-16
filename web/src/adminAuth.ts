@@ -162,3 +162,76 @@ export async function adminStatsHistory(chainId: number, limit = 10) {
   }
   return data as { chainId: number; items: AdminStatsPayload[] };
 }
+
+export type ArchivedPet = {
+  chainId: number;
+  petId: number;
+  owner: string;
+  name: string;
+  cpu: string;
+  circuitId: string;
+  rarity: number;
+  energy: number;
+  mood: number;
+  intimacy: number;
+  level: number;
+  lastFeed: number;
+  lastPlay: number;
+  gates: number | null;
+  nIn: number | null;
+  nOut: number | null;
+  firstSeen: number;
+  updatedAt: number;
+};
+
+export async function adminCats(chainId: number, page = 1, pageSize = 20) {
+  const q = new URLSearchParams({
+    chainId: String(chainId),
+    page: String(page),
+    pageSize: String(pageSize),
+  });
+  const r = await fetch(apiURL(`/api/admin/cats?${q}`), { cache: 'no-store', credentials: 'include' });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) {
+    const err = new Error(data.error || `HTTP ${r.status}`) as Error & { status?: number; code?: string };
+    err.status = r.status;
+    err.code = data.code;
+    throw err;
+  }
+  return data as {
+    chainId: number;
+    archived: number;
+    items: ArchivedPet[];
+    total: number;
+    page: number;
+    pageSize: number;
+    pages: number;
+  };
+}
+
+/** 从链上全量拉取宠物属性写入 SQLite（可能较慢） */
+export async function adminSyncCats(chainId: number) {
+  const q = new URLSearchParams({ chainId: String(chainId) });
+  const r = await fetch(apiURL(`/api/admin/cats/sync?${q}`), {
+    method: 'POST',
+    cache: 'no-store',
+    credentials: 'include',
+  });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) {
+    const err = new Error(data.error || `HTTP ${r.status}`) as Error & { status?: number; code?: string };
+    err.status = r.status;
+    err.code = data.code;
+    throw err;
+  }
+  return data as {
+    ok: boolean;
+    chainId: number;
+    nextId: number;
+    totalOnChain: number;
+    synced: number;
+    cursor: number;
+    complete: boolean;
+    archived: number;
+  };
+}

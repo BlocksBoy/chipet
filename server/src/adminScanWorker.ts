@@ -12,6 +12,7 @@ import {
   type AdminStatsRow,
 } from './adminDb.ts';
 import { chainCtx, resetChainCtx, rpcHostLabel } from './chain.ts';
+import { syncChipetPetsFully } from './petSync.ts';
 
 export type AdminScanJobStatus = 'idle' | 'running' | 'done' | 'error';
 
@@ -89,6 +90,12 @@ export function startAdminScanJob(opts: {
         job.updatedAt = Date.now();
         checkpoint = next;
         if (stats.complete) {
+          // 扫链完成后把全量宠物属性落库（特征/能量等存档）
+          try {
+            await syncChipetPetsFully(client, chainId, chipet);
+          } catch (e) {
+            console.warn('[admin] pet archive sync failed', chainId, e);
+          }
           job.status = 'done';
           job.updatedAt = Date.now();
           return;

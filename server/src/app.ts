@@ -16,6 +16,8 @@ import { listAdminStatsHistory } from './adminDb.ts';
 import { adminStatsPayload, startAdminScanJob } from './adminScanWorker.ts';
 import { countWalletUsers, overlayRegisteredStats, registerWallet } from './walletUsers.ts';
 import { overlayRechargeStats, recordRecharge } from './rechargeEvents.ts';
+import { countArchivedPets, listArchivedPets } from './petArchive.ts';
+import { syncChipetPetsFully } from './petSync.ts';
 
 export interface AppDeps {
   ctx?: (chainId?: number) => ChainCtx;
@@ -220,6 +222,30 @@ export function createApp(deps: AppDeps = {}) {
     if (chainId !== 196 && chainId !== 56) throw new HttpError(400, 'unsupported chainId');
     const limit = Number(c.req.query('limit') ?? 20);
     return json(c, { chainId, items: listAdminStatsHistory(chainId, Number.isFinite(limit) ? limit : 20) });
+  });
+
+  // ---------------------------------------------------------------- 芯宠存档（全量属性落库 + 分页列表）
+
+  app.get('/api/admin/cats', requireAdmin(), (c) => {
+    const chainId = Number(c.req.query('chainId') ?? process.env.CHAIN_ID ?? 196);
+    if (chainId !== 196 && chainId !== 56) throw new HttpError(400, 'unsupported chainId');
+    const page = Number(c.req.query('page') ?? 1);
+    const pageSize = Number(c.req.query('pageSize') ?? 20);
+    const list = listArchivedPets(chainId, {
+      page: Number.isFinite(page) ? page : 1,
+      pageSize: Number.isFinite(pageSize) ? pageSize : 20,
+    });
+    return json(c, { chainId, archived: countArchivedPets(chainId), ...list });
+  });
+
+  app.post('/api/admin/cats/sync', requireAdmin(), async (c) => {
+    const chainId = Number(c.req.query('chainId') ?? process.env.CHAIN_ID ?? 196);
+    if (chainId !== 196 && chainId !== 56) throw new HttpError(400, 'unsupported chainId');
+    resetChainCtx(chainId);
+    const x = ctxOf(chainId);
+    if (!x.deployment?.chipet) throw new HttpError(404, 'chipet not deployed on this chain');
+    const result = await syncChipetPetsFully(x.client, chainId, x.deployment.chipet);
+    return json(c, { ok: true, ...result });
   });
 
   app.get('/api/examples', (c) => json(c, { ...EXAMPLES, fullAdderNand9: { title: '9 门全加器（NAND 手写）', src: FULL_ADDER_NAND9 } }));

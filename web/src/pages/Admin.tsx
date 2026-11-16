@@ -10,6 +10,7 @@ import {
   coalesceAdminStats,
   type AdminScanJob, type AdminStatsPayload,
 } from '../adminAuth.ts';
+import { Link } from '../router.tsx';
 import { short } from '../format.ts';
 
 function addressExplorerUrl(chainId: number, addr: string): string | null {
@@ -371,11 +372,20 @@ export function Admin() {
     label: string;
     key: 'rechargeUsers' | 'registered' | 'players' | 'cats';
     swatch: string;
+    href?: string;
+    hrefLabel?: string;
   }[] = [
     { icon: Coins, label: t('充值人数', 'Recharge users'), key: 'rechargeUsers', swatch: 'bg-copper' },
     { icon: Users, label: t('注册人数', 'Registered'), key: 'registered', swatch: 'bg-si' },
     { icon: Swords, label: t('游玩人数', 'Players'), key: 'players', swatch: 'bg-gold' },
-    { icon: Cat, label: t('猫咪数量', 'Cats hatched'), key: 'cats', swatch: 'bg-copper-dim' },
+    {
+      icon: Cat,
+      label: t('猫咪数量', 'Cats hatched'),
+      key: 'cats',
+      swatch: 'bg-copper-dim',
+      href: '/admin/cats',
+      hrefLabel: t('查看存档列表', 'View archive'),
+    },
   ];
 
   const pctOf = (part: number, total: number) =>
@@ -435,7 +445,7 @@ export function Admin() {
       )}
 
       <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
-        {metrics.map(({ icon: I, label, key, swatch }) => {
+        {metrics.map(({ icon: I, label, key, swatch, href, hrefLabel }) => {
           const isReg = key === 'registered';
           const total = isReg ? registeredTotal : MAINNET_IDS.reduce((s, id) => s + num(id, key), 0);
           return (
@@ -445,6 +455,8 @@ export function Admin() {
               swatch={swatch}
               label={label}
               total={hasAnyStats ? fmt(total) : '—'}
+              href={href}
+              hrefLabel={hrefLabel}
               parts={MAINNET_IDS.map((id) => {
                 const n = isReg ? registeredOnChain(id) : num(id, key);
                 return {
@@ -645,6 +657,8 @@ function BreakdownCard({
   swatch,
   icon,
   compact,
+  href,
+  hrefLabel,
 }: {
   label: string;
   total: ReactNode;
@@ -652,6 +666,8 @@ function BreakdownCard({
   swatch: string;
   icon?: ReactNode;
   compact?: boolean;
+  href?: string;
+  hrefLabel?: string;
 }) {
   return (
     <div className={cn('rounded-2xl border border-line/80 bg-panel shadow-sm shadow-si/5', compact ? 'px-4 py-3' : 'px-4 py-4 sm:px-5')}>
@@ -684,6 +700,16 @@ function BreakdownCard({
           </div>
         ))}
       </div>
+      {href && (
+        <div className="mt-3 border-t border-dashed border-line/80 pt-3">
+          <Link
+            to={href}
+            className="inline-flex items-center gap-1 text-sm font-semibold text-copper hover:underline"
+          >
+            {hrefLabel ?? '→'}
+          </Link>
+        </div>
+      )}
     </div>
   );
 }
