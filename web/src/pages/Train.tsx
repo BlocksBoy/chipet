@@ -741,9 +741,9 @@ export function Train() {
   }, [fight?.end]);
 
   const pets = useMemo(() => localChipet.list(), [tick]);
-  const neighbors = useMemo(() => social.neighbors(), [tick]);
   const bonds = useMemo(() => social.bonds(), [tick]);
   const me: LocalPet | undefined = pets.find((p) => p.id === myId) ?? pets[0];
+  const rivals = useMemo(() => social.sparTargets(me?.id), [tick, me?.id]);
   const myHeart = me ? heartOf(me.circuitId, me.rarity) : undefined;
   const partner = bonds.find((b) => b.key === partnerKey) ?? bonds[0];
 
@@ -751,8 +751,10 @@ export function Train() {
   const challenge = useMemo(() => {
     if (!vs) return undefined;
     const p = social.getByRouteId(Number(vs));
-    return p && !p.mine ? npcOpp(p) : undefined;
-  }, [vs, tick]);
+    // 可挑战邻居 / 访客 / 自家其他芯宠（不能打当前出战那只）
+    if (!p || (p.mine && p.id === me?.id)) return undefined;
+    return npcOpp(p);
+  }, [vs, tick, me?.id]);
 
   useEffect(() => () => timers.current.forEach((t) => window.clearTimeout(t)), []);
   const later = (fn: () => void, ms: number) => { timers.current.push(window.setTimeout(fn, ms)); };
@@ -795,6 +797,11 @@ export function Train() {
     const result = forced ?? (f.myHp <= 0 && f.opHp <= 0 ? 'draw' : f.opHp <= 0 ? 'win' : 'lose');
     const xp = xpFor(result, f.opp.level);
     const { pet, ups } = localChipet.finishBattle(f.petId, result, xp);
+    // 和自家另一只切磋时，对方也结算胜负（不扣对方能量）
+    if (f.opp.pet?.mine) {
+      const oppResult = result === 'win' ? 'lose' : result === 'lose' ? 'win' : 'draw';
+      localChipet.finishBattle(f.opp.pet.id, oppResult, Math.max(1, Math.floor(xp * 0.5)));
+    }
     const { fish } = social.recordBattle({
       myId: f.petId,
       myName: f.petName,
@@ -1263,22 +1270,29 @@ export function Train() {
         </ul>
       </Panel>
 
-      <Panel title={t('邻居切磋', 'Spar with neighbors')} icon={Trophy} className="mt-6" bodyClass="p-4">
+      <Panel title={t('切磋对手', 'Spar rivals')} icon={Trophy} className="mt-6" bodyClass="p-4">
+        <p className="mb-3 text-[12px] text-pretty text-mute">
+          {t('自家其他芯宠、今日路过访客，以及邻居都会出现在这里；等级、胜场、心情会随对战变化。', 'Your other Chipets, today’s passers-by, and neighbors show up here. Level, wins, and mood shift after each spar.')}
+        </p>
         <ul className="grid grid-cols-2 gap-3 md:grid-cols-3">
-          {neighbors.map((p) => {
+          {rivals.map((p) => {
             const o = npcOpp(p);
             const ph = phenotypeOf(p.cpu, p.circuitId, p.rarity);
+            const visitor = !p.mine && p.id <= -101;
             return (
               <li key={p.key} className={cn('flex flex-col overflow-hidden rounded-3xl border', challenge?.key === p.key ? 'border-copper ring-2 ring-copper/30' : 'border-line/70')}>
                 <div className="relative grid place-items-center pt-3 pb-1" style={{ backgroundColor: ph.bg }}>
                   <span className="absolute top-2 left-3 font-mono text-[11px] text-mute">Lv.{p.level}</span>
                   <span className="absolute top-2 right-3 font-mono text-[11px] text-mute">{t(`${p.wins} 胜`, plural(p.wins, 'win'))}</span>
+                  {p.mine && <Tag tone="copper" className="absolute bottom-2 left-2">{t('我的', 'Mine')}</Tag>}
+                  {visitor && <Tag className="absolute bottom-2 left-2">{t('今日路过', 'Passing')}</Tag>}
                   <PetAvatar cpu={p.cpu} circuitId={p.circuitId} rarity={p.rarity} mood={p.mood} size={104} />
                 </div>
                 <div className="flex flex-1 flex-col bg-panel px-3 py-3">
                   <div className="truncate font-semibold text-ink">{p.name} <span className="text-[11px] font-normal text-mute">{p.owner}</span></div>
                   <HeartLine heart={o.heart} className="mt-1" />
-                  <div className="mt-1 font-mono text-[11px] text-mute">{t(`体力 ${o.maxHp} · ${ph.vibe}，爱出${MOVES[o.fav]!.name}`, `HP ${o.maxHp} · ${ph.vibe}, likes ${MOVES[o.fav]!.name}`)}</div>
+                  <div className="mt-1 font-mono text-[11px] text-mute">{t(`体力 ${o.maxHp} · 心情 ${p.mood} · 能量 ${p.energy}`, `HP ${o.maxHp} · mood ${p.mood} · energy ${p.energy}`)}</div>
+                  <div className="mt-0.5 font-mono text-[11px] text-faint">{t(`${ph.vibe}，爱出${MOVES[o.fav]!.name}`, `${ph.vibe}, likes ${MOVES[o.fav]!.name}`)}</div>
                   <Button size="sm" variant="si" className="mt-2.5 w-full" icon={Swords} disabled={tired} onClick={() => start(o)}>{t('切磋', 'Spar')}</Button>
                 </div>
               </li>

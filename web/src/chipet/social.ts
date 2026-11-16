@@ -106,6 +106,48 @@ const NEIGHBORS: Neighbor[] = [
 ];
 const npc = (id: number) => NEIGHBORS.find((n) => n.id === id)!;
 
+/** 每日路过访客的名字池；身份按日期哈希轮换，切磋名单会天天变。 */
+const VISITOR_POOL: { name: Txt; owner: Txt }[] = [
+  { name: both('糯米', 'Mochi'), owner: both('路过的焊工', 'PassingSolderer') },
+  { name: both('电容', 'Cap'), owner: both('飞线旅人', 'JumperNomad') },
+  { name: both('锡豆', 'Solderbean'), owner: both('板边观察员', 'BoardsideWatcher') },
+  { name: both('灯芯', 'Wick'), owner: both('夜测工程师', 'NightTester') },
+  { name: both('磁喵', 'Magmeow'), owner: both('示波器猫', 'ScopeCat') },
+  { name: both('跳线', 'Jumper'), owner: both('面包板玩家', 'Breadboarder') },
+  { name: both('铜豆', 'Copperbean'), owner: both('回流炉旁', 'ByTheOven') },
+  { name: both('噪点', 'Noise'), owner: both('射频夜行者', 'RFNightOwl') },
+  { name: both('晶振', 'Xtal'), owner: both('时序控', 'TimingNerd') },
+  { name: both('地线', 'GND'), owner: both('实验室值日生', 'LabDuty') },
+];
+
+/** 今天路过的 3 只访客芯宠（负 id -101..-103），跨天换脸换数值。 */
+function visitorsForDay(day = DAY()): Neighbor[] {
+  return [0, 1, 2].map((slot) => {
+    const h = hashStr(`${day}:vis:${slot}`);
+    const pool = VISITOR_POOL[(h >> 3) % VISITOR_POOL.length]!;
+    const rarity = ((h % 100) < 8 ? 2 : (h % 100) < 35 ? 1 : 0) as Rarity;
+    const level = 1 + (h % 8);
+    const wins = level + (h % 5);
+    return {
+      id: -101 - slot,
+      name: pool.name,
+      owner: pool.owner,
+      cpu: MOCK_CPU,
+      circuitId: BigInt(1000 + (h % 9000)),
+      rarity,
+      energy: 55 + (h % 40),
+      mood: 50 + ((h >> 4) % 45),
+      intimacy: 5 + (h % 40),
+      level,
+      wins,
+    };
+  });
+}
+
+function findNpcNeighbor(id: number): Neighbor | undefined {
+  return NEIGHBORS.find((n) => n.id === id) ?? visitorsForDay().find((n) => n.id === id);
+}
+
 const REPLIES: Txt[] = [
   both('咕噜～被你摸得很舒服。', 'Purr~ that feels so nice.'),
   both('芯片暖暖的，再来一下！', 'My chip is all warm. One more time!'),
@@ -200,15 +242,16 @@ function npcLevelOf(baseLevel: number, baseWins: number, wins: number) {
   return Math.min(12, Math.max(baseLevel, baseLevel + Math.max(0, Math.floor((wins - baseWins) / 3))));
 }
 
-/** 取出或初始化邻居活数据；跨天会轻微抖动心情/能量，偶尔多一场胜场，看起来像在线活动。 */
-function ensureNpcLive(s: SocialState, n: Neighbor): { live: NpcLive; dirty: boolean } {
+/** 取出或初始化邻居活数据；跨天会轻微抖动心情/能量，偶尔多一场胜场，看起来像在线活动。
+ *  路过访客（refreshIdentity）跨天整只换新，从当日模板重开。 */
+function ensureNpcLive(s: SocialState, n: Neighbor, opts?: { refreshIdentity?: boolean }): { live: NpcLive; dirty: boolean } {
   if (!s.npcLive) s.npcLive = {};
   const key = npcKey(n.id);
   const today = DAY();
   let live = s.npcLive[key];
   let dirty = false;
   if (!live) {
-    const migrated = s.npcWins[key] ?? 0;
+    const migrated = opts?.refreshIdentity ? 0 : (s.npcWins[key] ?? 0);
     live = {
       day: today,
       level: n.level,
@@ -222,14 +265,24 @@ function ensureNpcLive(s: SocialState, n: Neighbor): { live: NpcLive; dirty: boo
     dirty = true;
   }
   if (live.day !== today) {
-    const h = hashStr(`${key}:${today}`);
-    live.day = today;
-    live.mood = clamp(50 + (h % 46), 40, 100);
-    live.energy = clamp(45 + ((h >> 5) % 51), 30, 100);
-    if (h % 4 === 0) live.wins += 1;
-    if (h % 7 === 0) live.intimacy = clamp(live.intimacy + 1, 0, 99);
-    live.level = npcLevelOf(n.level, n.wins, live.wins);
-    dirty = true;
+    if (opts?.refreshIdentity) {
+      live.day = today;
+      live.level = n.level;
+      live.wins = n.wins;
+      live.mood = n.mood;
+      live.energy = n.energy;
+      live.intimacy = n.intimacy;
+      dirty = true;
+    } else {
+      const h = hashStr(`${key}:${today}`);
+      live.day = today;
+      live.mood = clamp(50 + (h % 46), 40, 100);
+      live.energy = clamp(45 + ((h >> 5) % 51), 30, 100);
+      if (h % 4 === 0) live.wins += 1;
+      if (h % 7 === 0) live.intimacy = clamp(live.intimacy + 1, 0, 99);
+      live.level = npcLevelOf(n.level, n.wins, live.wins);
+      dirty = true;
+    }
   }
   return { live, dirty };
 }
@@ -318,9 +371,9 @@ function toPublic(p: LocalPet, owner: Text): PublicPet {
   };
 }
 
-function npcPublic(n: Neighbor, s: SocialState): { pet: PublicPet; dirty: boolean } {
+function npcPublic(n: Neighbor, s: SocialState, opts?: { refreshIdentity?: boolean }): { pet: PublicPet; dirty: boolean } {
   const { name, owner } = n;
-  const { live, dirty } = ensureNpcLive(s, n);
+  const { live, dirty } = ensureNpcLive(s, n, opts);
   return {
     dirty,
     pet: {
@@ -343,11 +396,11 @@ function npcPublic(n: Neighbor, s: SocialState): { pet: PublicPet; dirty: boolea
 
 /** 一只宠物在两种语言下的名字（玩家自己的宠只有一个名字）。 */
 function namesOf(pet: PublicPet): Txt {
-  return NEIGHBORS.find((n) => npcKey(n.id) === pet.key)?.name ?? both(pet.name, pet.name);
+  return findNpcNeighbor(pet.id)?.name ?? both(pet.name, pet.name);
 }
 
 function ownerOf(pet: PublicPet): Text {
-  return NEIGHBORS.find((n) => npcKey(n.id) === pet.key)?.owner ?? pet.owner;
+  return findNpcNeighbor(pet.id)?.owner ?? pet.owner;
 }
 
 const pick = <T,>(xs: T[]) => xs[Math.floor(Math.random() * xs.length)]!;
@@ -408,16 +461,45 @@ export const social = {
     const s = load();
     const mine = localChipet.list().map((p) => toPublic(p, me(s)));
     let dirty = false;
+    const visitors = visitorsForDay().map((n) => {
+      const { pet, dirty: d } = npcPublic(n, s, { refreshIdentity: true });
+      dirty ||= d;
+      return pet;
+    });
     const npcs = NEIGHBORS.map((n) => {
       const { pet, dirty: d } = npcPublic(n, s);
       dirty ||= d;
       return pet;
     });
     if (dirty) save(s);
-    return [...mine, ...npcs];
+    return [...mine, ...visitors, ...npcs];
   },
   neighbors(): PublicPet[] {
     return this.allPets().filter((p) => !p.mine);
+  },
+  /**
+   * 切磋对手池：自家其他芯宠（真实数据）+ 今日访客 + 固定邻居。
+   * excludeMineId 为当前出战宠，避免自己打自己。
+   */
+  sparTargets(excludeMineId?: number): PublicPet[] {
+    const s = load();
+    const mine = localChipet
+      .list()
+      .filter((p) => p.id !== excludeMineId)
+      .map((p) => toPublic(p, me(s)));
+    let dirty = false;
+    const visitors = visitorsForDay().map((n) => {
+      const { pet, dirty: d } = npcPublic(n, s, { refreshIdentity: true });
+      dirty ||= d;
+      return pet;
+    });
+    const npcs = NEIGHBORS.map((n) => {
+      const { pet, dirty: d } = npcPublic(n, s);
+      dirty ||= d;
+      return pet;
+    });
+    if (dirty) save(s);
+    return [...mine, ...visitors, ...npcs];
   },
   getPet(key: string): PublicPet | undefined {
     return this.allPets().find((p) => p.key === key);
@@ -604,18 +686,19 @@ export const social = {
         fish = 1;
       }
     }
-    if (!a.wildId && a.opKey) {
+    if (!a.wildId && a.opKey?.startsWith('npc:')) {
       const nid = Number(a.opKey.replace(/^npc:/, ''));
-      const n = Number.isFinite(nid) ? NEIGHBORS.find((x) => x.id === nid) : undefined;
+      const n = Number.isFinite(nid) ? findNpcNeighbor(nid) : undefined;
       if (n) {
-        const { live } = ensureNpcLive(s, n);
+        const isVisitor = n.id <= -101;
+        const { live } = ensureNpcLive(s, n, isVisitor ? { refreshIdentity: true } : undefined);
         if (a.result === 'lose') {
           live.wins += 1;
           live.mood = clamp(live.mood + 8, 40, 100);
           live.energy = clamp(live.energy - 12, 20, 100);
           live.intimacy = clamp(live.intimacy + 1, 0, 99);
           live.level = npcLevelOf(n.level, n.wins, live.wins);
-          s.npcWins[a.opKey] = Math.max(0, live.wins - n.wins);
+          if (!isVisitor) s.npcWins[a.opKey] = Math.max(0, live.wins - n.wins);
         } else if (a.result === 'win') {
           live.mood = clamp(live.mood - 10, 30, 100);
           live.energy = clamp(live.energy - 18, 15, 100);
