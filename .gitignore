@@ -3,8 +3,6 @@ dist/
 .env
 .env.*
 !.env.example
-!deploy/.env.deploy.example
-deploy/.env.deploy.local
 contracts/out/
 contracts/cache/
 contracts/broadcast/
@@ -14,5 +12,6 @@ server/data/
 .cache
 .cache
 docs/
+deploy/
 web/dist-deweb
 contracts/deweb
