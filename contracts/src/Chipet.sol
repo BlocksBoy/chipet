@@ -34,6 +34,8 @@ contract Chipet is ERC721, Ownable, ReentrancyGuard {
 
     Template[] public templates;
     mapping(uint256 => Pet) public pets;
+    /// @notice 名字字节哈希 → petId；0 表示未占用。精确匹配（"Q" ≠ "q"）。
+    mapping(bytes32 => uint256) public nameToPetId;
     uint256 public nextId = 1;
 
     uint256 public hatchPrice;
@@ -54,6 +56,7 @@ contract Chipet is ERC721, Ownable, ReentrancyGuard {
 
     error EmptyName();
     error NameTooLong();
+    error NameTaken();
     error BadPayment();
     error NoTemplate();
     error NotPetOwner();
@@ -113,9 +116,12 @@ contract Chipet is ERC721, Ownable, ReentrancyGuard {
     function hatch(string calldata name) external payable nonReentrant returns (uint256 petId) {
         _validateName(name);
         if (msg.value != hatchPrice) revert BadPayment();
+        bytes32 key = _nameKey(name);
+        if (nameToPetId[key] != 0) revert NameTaken();
 
         (, Template memory t) = _pick();
         petId = nextId++;
+        nameToPetId[key] = petId;
         pets[petId] = Pet({
             cpu: t.cpu,
             circuitId: t.circuitId,
@@ -161,6 +167,13 @@ contract Chipet is ERC721, Ownable, ReentrancyGuard {
     function rename(uint256 petId, string calldata name) external {
         _validateName(name);
         Pet storage p = _owned(petId);
+        bytes32 oldKey = _nameKey(p.name);
+        bytes32 newKey = _nameKey(name);
+        if (oldKey != newKey) {
+            if (nameToPetId[newKey] != 0) revert NameTaken();
+            delete nameToPetId[oldKey];
+            nameToPetId[newKey] = petId;
+        }
         p.name = name;
         emit Renamed(petId, name);
     }
@@ -181,6 +194,13 @@ contract Chipet is ERC721, Ownable, ReentrancyGuard {
     }
 
     // ─── views ───────────────────────────────────────────────
+
+    /// @notice 名字是否可占用（合法长度且未被占用）。精确字节匹配。
+    function nameAvailable(string calldata name) external view returns (bool) {
+        bytes memory b = bytes(name);
+        if (b.length == 0 || b.length > 32) return false;
+        return nameToPetId[keccak256(b)] == 0;
+    }
 
     function petOf(uint256 petId) external view returns (Pet memory) {
         require(_ownerOf(petId) != address(0), "no pet");
@@ -210,6 +230,10 @@ contract Chipet is ERC721, Ownable, ReentrancyGuard {
     function _owned(uint256 petId) internal view returns (Pet storage p) {
         if (ownerOf(petId) != msg.sender) revert NotPetOwner();
         p = pets[petId];
+    }
+
+    function _nameKey(string memory name) internal pure returns (bytes32) {
+        return keccak256(bytes(name));
     }
 
     function _validateName(string calldata name) internal pure {

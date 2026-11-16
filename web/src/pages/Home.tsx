@@ -9,7 +9,7 @@ import { PetAvatar } from '../chipet/PetAvatar.tsx';
 import { KittyEgg } from '../chipet/KittyEgg.tsx';
 import { FxOverlay, type ChipImpulse } from '../chipet/FxOverlay.tsx';
 import { SceneStage } from '../chipet/SceneStage.tsx';
-import { hatchChipet, petsOfOwner } from '@tapearena/chain';
+import { hatchChipet, nameAvailable, petsOfOwner } from '@tapearena/chain';
 import { localChipet } from '../chipet/store.ts';
 import { cattributes, phenotypeOf, SPECIES_COUNT, typeLabel } from '../chipet/phenotype.ts';
 import { heartOf } from '../chipet/heart.ts';
@@ -138,6 +138,10 @@ export function Home() {
       }
       // 免费普通蛋永远可本地敲，不强制连钱包；已连接且合约在线时才上链铸造
       if (onChain && chipet && account) {
+        if (!(await nameAvailable(pub, chipet, n))) {
+          notify('err', t('这个名字已被占用，换一个吧', 'That name is taken — pick another'));
+          return;
+        }
         await run(t('孵化芯宠', 'Hatch'), async (step) => {
           const s = await signer();
           const hatchedOn = await hatchChipet(s, chipet, n, undefined, step);

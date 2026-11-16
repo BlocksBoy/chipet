@@ -82,4 +82,37 @@ contract ChipetTest is Base {
         vm.expectRevert(Chipet.BadPayment.selector);
         chipet.hatch{value: hatchPrice - 1}("x");
     }
+
+    function test_duplicateNameReverts() public {
+        vm.deal(bob, 1 ether);
+        vm.deal(carol, 1 ether);
+        vm.prank(bob);
+        chipet.hatch{value: hatchPrice}("Q");
+        assertFalse(chipet.nameAvailable("Q"));
+        assertTrue(chipet.nameAvailable("q")); // 精确字节："Q" ≠ "q"
+        vm.prank(carol);
+        vm.expectRevert(Chipet.NameTaken.selector);
+        chipet.hatch{value: hatchPrice}("Q");
+    }
+
+    function test_renameReleasesOldName() public {
+        vm.deal(bob, 1 ether);
+        vm.deal(carol, 1 ether);
+        vm.prank(bob);
+        uint256 id = chipet.hatch{value: hatchPrice}("Alpha");
+        vm.prank(bob);
+        chipet.rename(id, "Beta");
+        assertTrue(chipet.nameAvailable("Alpha"));
+        assertFalse(chipet.nameAvailable("Beta"));
+        // 别人可以占用已释放的旧名
+        vm.prank(carol);
+        chipet.hatch{value: hatchPrice}("Alpha");
+        // 改成已被占用的名会失败
+        vm.prank(bob);
+        vm.expectRevert(Chipet.NameTaken.selector);
+        chipet.rename(id, "Alpha");
+        // 改成自己当前名（同字节）允许
+        vm.prank(bob);
+        chipet.rename(id, "Beta");
+    }
 }

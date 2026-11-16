@@ -234,6 +234,15 @@ export async function hatchPrice(client: PublicClient, chipet: Address): Promise
   return client.readContract({ address: chipet, abi: chipetAbi, functionName: 'hatchPrice' });
 }
 
+/** 链上名字是否可占用（精确字节匹配；旧合约无此函数时返回 true，由 hatch 自行失败）。 */
+export async function nameAvailable(client: PublicClient, chipet: Address, name: string): Promise<boolean> {
+  try {
+    return await client.readContract({ address: chipet, abi: chipetAbi, functionName: 'nameAvailable', args: [name] });
+  } catch {
+    return true;
+  }
+}
+
 export async function readPet(client: PublicClient, chipet: Address, petId: number): Promise<ChipetPet> {
   const p = await client.readContract({ address: chipet, abi: chipetAbi, functionName: 'petOf', args: [BigInt(petId)] });
   return mapPet(petId, p);

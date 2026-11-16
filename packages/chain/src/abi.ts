@@ -117,6 +117,8 @@ export const chipetAbi = parseAbi([
   'function nextId() view returns (uint256)',
   'function templateCount() view returns (uint256)',
   'function addTemplate(address cpu, uint64 circuitId, uint8 rarity, uint16 weight) returns (uint256 index)',
+  'function nameAvailable(string name) view returns (bool)',
+  'function nameToPetId(bytes32) view returns (uint256)',
   `function petOf(uint256 petId) view returns (${chipetPetTuple})`,
   'function petsOfOwner(address owner) view returns (uint256[])',
   'function geneHint(uint256 petId) view returns (address cpu, uint64 circuitId, uint8 rarity, uint32 gates, uint32 nIn, uint32 nOut)',
@@ -125,6 +127,9 @@ export const chipetAbi = parseAbi([
   'event Hatched(uint256 indexed petId, address indexed owner, address cpu, uint64 circuitId, uint8 rarity, string name)',
   'event Fed(uint256 indexed petId, uint16 energy, uint32 intimacy)',
   'event Played(uint256 indexed petId, uint16 mood, uint32 intimacy)',
+  'error NameTaken()',
+  'error EmptyName()',
+  'error NameTooLong()',
 ]);
 
 export const erc20Abi = parseAbi([
