@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { formatUnits } from 'viem';
-import { CHAIN_LABEL, transferErc20 } from '@tapearena/chain';
+import { CHAIN_LABEL, MAINNET_IDS, transferErc20 } from '@tapearena/chain';
 import {
   ArrowUpRight, Cable, Coins, Egg, Fish, History, Sparkles, Zap,
 } from 'lucide-react';
@@ -34,6 +34,8 @@ export function Shop() {
   const bemNet = bem.forChain(chainId);
   const chainLabel = CHAIN_LABEL[chainId] ?? String(chainId);
   const useChainPay = !!bemNet && !!account;
+  /** 演示水龙头只在本地 fork；主网连钱包后走链上 BEM */
+  const isLocalFork = !MAINNET_IDS.includes(chainId);
 
   useEffect(() => {
     if (!account || !bemNet) { setChainBal(null); return; }
@@ -113,6 +115,10 @@ export function Shop() {
   };
 
   const claimFaucet = () => {
+    if (!isLocalFork) {
+      notify('err', t('只有本地 fork 网络才能领取演示 BEM', 'Demo BEM can only be claimed on the local fork'));
+      return;
+    }
     setBusy('faucet');
     try {
       const bal = bem.faucet();
@@ -146,11 +152,20 @@ export function Shop() {
             <span className="mb-1 font-mono text-sm text-mute">BEM</span>
           </div>
           <p className="mt-2 text-xs text-mute">
-            {t('本地 fork / 未连钱包时用演示 BEM 购买。', 'Used for purchases on the local fork or when no wallet is connected.')}
+            {t('仅本地 fork 可领取与使用演示 BEM；主网请连钱包用链上余额。', 'Demo BEM is only for the local fork. On mainnet, connect a wallet and use on-chain BEM.')}
           </p>
           <div className="mt-4 flex flex-wrap gap-2">
-            <Button size="sm" icon={Sparkles} disabled={busy !== null || !bem.canFaucet()} onClick={claimFaucet}>
-              {bem.canFaucet() ? t(`领取 ${FAUCET_AMOUNT} 演示 BEM`, `Claim ${FAUCET_AMOUNT} demo BEM`) : t('今日已领', 'Claimed today')}
+            <Button
+              size="sm"
+              icon={Sparkles}
+              disabled={busy !== null || !isLocalFork || !bem.canFaucet()}
+              onClick={claimFaucet}
+            >
+              {!isLocalFork
+                ? t('仅本地 fork 可领', 'Local fork only')
+                : bem.canFaucet()
+                  ? t(`领取 ${FAUCET_AMOUNT} 演示 BEM`, `Claim ${FAUCET_AMOUNT} demo BEM`)
+                  : t('今日已领', 'Claimed today')}
             </Button>
             {!account && bemNet && (
               <Button size="sm" variant="ghost" onClick={connect}>{t('连接钱包看链上余额', 'Connect to see on-chain balance')}</Button>

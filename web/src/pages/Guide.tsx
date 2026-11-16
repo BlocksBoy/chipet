@@ -379,7 +379,7 @@ export function Guide() {
             </div>
             <ul className="space-y-2">
               <Bullet>
-                {t(`演示余额：本地 fork / 未连钱包时可每日领取 ${FAUCET_AMOUNT} 演示 BEM。`, `Demo balance: on the local fork or without a wallet, claim ${FAUCET_AMOUNT} demo BEM once per day.`)}
+                {t(`演示余额：仅本地 fork 可每日领取 ${FAUCET_AMOUNT} 演示 BEM；主网连钱包后用链上余额。`, `Demo balance: claim ${FAUCET_AMOUNT} demo BEM once per day only on the local fork. On mainnet with a wallet, use on-chain BEM.`)}
               </Bullet>
               <Bullet>
                 {t('切到 X Layer 并连上钱包后，商店会读该链真实 BEM 余额，购买优先走链上转账。', 'On X Layer with a wallet connected, the Shop reads that chain’s real BEM and prefers on-chain transfers.')}

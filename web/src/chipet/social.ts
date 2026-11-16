@@ -534,16 +534,9 @@ export const social = {
   neighbors(): PublicPet[] {
     return this.allPets().filter((p) => !p.mine);
   },
-  /**
-   * 切磋对手池：自家其他芯宠（真实数据）+ 今日访客 + 固定邻居。
-   * excludeMineId 为当前出战宠，避免自己打自己。
-   */
-  sparTargets(excludeMineId?: number): PublicPet[] {
+  /** 切磋对手池：今日访客 + 固定邻居（不含自家芯宠）。 */
+  sparTargets(): PublicPet[] {
     const s = load();
-    const mine = localChipet
-      .list()
-      .filter((p) => p.id !== excludeMineId)
-      .map((p) => toPublic(p, me(s)));
     let dirty = false;
     const visitors = visitorsForDay().map((n) => {
       const { pet, dirty: d } = npcPublic(n, s, { refreshIdentity: true });
@@ -556,7 +549,7 @@ export const social = {
       return pet;
     });
     if (dirty) save(s);
-    return [...mine, ...visitors, ...npcs];
+    return [...visitors, ...npcs];
   },
   getPet(key: string): PublicPet | undefined {
     return this.allPets().find((p) => p.key === key);

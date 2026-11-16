@@ -764,7 +764,7 @@ export function Train() {
   const pets = useMemo(() => localChipet.list(), [tick]);
   const bonds = useMemo(() => social.bonds(), [tick]);
   const me: LocalPet | undefined = pets.find((p) => p.id === myId) ?? pets[0];
-  const rivals = useMemo(() => social.sparTargets(me?.id), [tick, me?.id]);
+  const rivals = useMemo(() => social.sparTargets(), [tick]);
   const rivalPages = Math.max(1, Math.ceil(rivals.length / SPAR_PAGE));
   const rivalsPage = useMemo(() => {
     const page = Math.min(Math.max(1, rivalPage), rivalPages);
@@ -783,10 +783,10 @@ export function Train() {
   const challenge = useMemo(() => {
     if (!vs) return undefined;
     const p = social.getByRouteId(Number(vs));
-    // 可挑战邻居 / 访客 / 自家其他芯宠（不能打当前出战那只）
-    if (!p || (p.mine && p.id === me?.id)) return undefined;
+    // 只能切磋别人的芯宠（邻居 / 访客）
+    if (!p || p.mine) return undefined;
     return npcOpp(p);
-  }, [vs, tick, me?.id]);
+  }, [vs, tick]);
 
   useEffect(() => () => timers.current.forEach((t) => window.clearTimeout(t)), []);
   const later = (fn: () => void, ms: number) => { timers.current.push(window.setTimeout(fn, ms)); };
@@ -829,11 +829,6 @@ export function Train() {
     const result = forced ?? (f.myHp <= 0 && f.opHp <= 0 ? 'draw' : f.opHp <= 0 ? 'win' : 'lose');
     const xp = xpFor(result, f.opp.level);
     const { pet, ups } = localChipet.finishBattle(f.petId, result, xp);
-    // 和自家另一只切磋时，对方也结算胜负（不扣对方能量）
-    if (f.opp.pet?.mine) {
-      const oppResult = result === 'win' ? 'lose' : result === 'lose' ? 'win' : 'draw';
-      localChipet.finishBattle(f.opp.pet.id, oppResult, Math.max(1, Math.floor(xp * 0.5)));
-    }
     const { fish } = social.recordBattle({
       myId: f.petId,
       myName: f.petName,
@@ -1305,7 +1300,7 @@ export function Train() {
       <Panel title={t('切磋对手', 'Spar rivals')} icon={Trophy} className="mt-6" bodyClass="p-0">
         <div className="px-4 pt-4">
           <p className="mb-3 text-[12px] text-pretty text-mute">
-            {t('自家其他芯宠、今日路过访客，以及邻居都会出现在这里；等级、胜场、心情会随对战变化。', 'Your other Chipets, today’s passers-by, and neighbors show up here. Level, wins, and mood shift after each spar.')}
+            {t('今日路过访客和邻居会出现在这里；只能和别人的芯宠切磋。等级、胜场、心情会随对战变化。', 'Today’s passers-by and neighbors show up here — you can only spar with others’ Chipets. Level, wins, and mood shift after each spar.')}
           </p>
         </div>
         <ul className="grid grid-cols-2 gap-3 px-4 pb-4 md:grid-cols-3">
@@ -1318,7 +1313,6 @@ export function Train() {
                 <div className="relative grid place-items-center pt-3 pb-1" style={{ backgroundColor: ph.bg }}>
                   <span className="absolute top-2 left-3 font-mono text-[11px] text-mute">Lv.{p.level}</span>
                   <span className="absolute top-2 right-3 font-mono text-[11px] text-mute">{t(`${p.wins} 胜`, plural(p.wins, 'win'))}</span>
-                  {p.mine && <Tag tone="copper" className="absolute bottom-2 left-2">{t('我的', 'Mine')}</Tag>}
                   {visitor && <Tag className="absolute bottom-2 left-2">{t('今日路过', 'Passing')}</Tag>}
                   <PetAvatar cpu={p.cpu} circuitId={p.circuitId} rarity={p.rarity} mood={p.mood} size={104} />
                 </div>
