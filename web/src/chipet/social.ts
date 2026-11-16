@@ -90,8 +90,47 @@ const DAY = () => new Date().toISOString().slice(0, 10);
 export const MAX_BONDS = 3;
 export const maxBonds = () => bem.bondSlots();
 
-/** 没改过昵称的玩家，按当前语言显示默认名。 */
-const DEFAULT_NAME = both('旅行者', 'Traveler');
+/** 旧默认名：加载时换成随机网名。 */
+const LEGACY_NAMES = new Set(['', '旅行者', 'Traveler']);
+
+/** 进场随机昵称池：偏轻、好念的网络名。 */
+const NAME_POOL: Txt[] = [
+  both('薄荷糖', 'MintCandy'),
+  both('晚风邮差', 'DuskPost'),
+  both('云端猫', 'CloudCat'),
+  both('汽水泡', 'SodaBubble'),
+  both('月光比特', 'MoonBit'),
+  both('糖纸猫', 'CandyWrap'),
+  both('青柠派', 'LimePie'),
+  both('软软芯', 'SoftCore'),
+  both('星尘焊工', 'StarSolder'),
+  both('橘子海', 'OrangeSea'),
+  both('白噪音', 'SoftNoise'),
+  both('雨停了', 'RainCleared'),
+  both('北极光', 'Aurora'),
+  both('奶油电路', 'CreamCircuit'),
+  both('跳跳豆', 'JumpBean'),
+  both('雾里行', 'InTheMist'),
+  both('半颗糖', 'HalfCandy'),
+  both('蓝莓派', 'BerryPie'),
+  both('小灯塔', 'TinyBeacon'),
+  both('萤火芯', 'FireflyCore'),
+  both('空山新雨', 'FreshRain'),
+  both('芝士片', 'CheeseSlice'),
+  both('暖手宝', 'HandWarmer'),
+  both('像素糖', 'PixelCandy'),
+  both('南风起', 'SouthWind'),
+  both('可可豆', 'CocoaBean'),
+  both('玻璃猫', 'GlassCat'),
+  both('夜航灯', 'NightLamp'),
+  both('小电路', 'TinyCircuit'),
+  both('松露芯', 'TruffleCore'),
+];
+
+function pickRandomName(): string {
+  const n = NAME_POOL[Math.floor(Math.random() * NAME_POOL.length)]!;
+  return txt(n);
+}
 
 type Neighbor = Omit<PublicPet, 'mine' | 'key' | 'name' | 'owner'> & { name: Txt; owner: Txt };
 
@@ -203,7 +242,7 @@ function seedNotes(): GuestNote[] {
 function defaultState(): SocialState {
   const code = `CHIP-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
   return {
-    displayName: '',
+    displayName: pickRandomName(),
     friendCode: code,
     pats: Object.fromEntries(NEIGHBORS.map((n) => [`npc:${n.id}`, 3 + Math.floor(Math.random() * 40)])),
     myPatsToday: {},
@@ -305,7 +344,7 @@ function upgradeSeeds(s: SocialState) {
   s.activities = s.activities.map((a) => {
     const seed = acts.get(a.id);
     if (seed && typeof a.text === 'string') return { ...seed, at: a.at };
-    return { ...a, actor: a.actor === DEFAULT_NAME.zh ? DEFAULT_NAME : a.actor, text: a.kind === 'hatch' ? upgradeHatchText(a.text) : a.text };
+    return { ...a, actor: a.actor === '旅行者' ? both('旅行者', 'Traveler') : a.actor, text: a.kind === 'hatch' ? upgradeHatchText(a.text) : a.text };
   });
   const notes = new Map(seedNotes().map((n) => [n.id, n]));
   const key = 'npc:-3';
@@ -317,15 +356,32 @@ function upgradeSeeds(s: SocialState) {
   }
 }
 
+/** 空名或旧「旅行者」→ 抽一个随机网名并落盘。 */
+function ensureDisplayName(s: SocialState): boolean {
+  if (!LEGACY_NAMES.has(s.displayName)) return false;
+  s.displayName = pickRandomName();
+  return true;
+}
+
 function load(): SocialState {
   try {
     const raw = localStorage.getItem(KEY);
-    if (!raw) return defaultState();
-    const s: SocialState = { ...defaultState(), ...JSON.parse(raw) };
+    if (!raw) {
+      const s = defaultState();
+      save(s);
+      return s;
+    }
+    const parsed = JSON.parse(raw) as Partial<SocialState>;
+    const s: SocialState = { ...defaultState(), ...parsed };
+    // 旧存档空名会被上面的随机名盖掉，需按存档原值再判一次
+    if (LEGACY_NAMES.has(parsed.displayName ?? '')) s.displayName = '';
     upgradeSeeds(s);
+    if (ensureDisplayName(s)) save(s);
     return s;
   } catch {
-    return defaultState();
+    const s = defaultState();
+    save(s);
+    return s;
   }
 }
 
@@ -333,9 +389,9 @@ function save(s: SocialState) {
   localStorage.setItem(KEY, JSON.stringify(s));
 }
 
-/** 我的昵称：没改过就跟着语言走。 */
+/** 我的昵称（进场已随机；可手动改）。 */
 function me(s: SocialState): Text {
-  return !s.displayName || s.displayName === DEFAULT_NAME.zh || s.displayName === DEFAULT_NAME.en ? DEFAULT_NAME : s.displayName;
+  return s.displayName || pickRandomName();
 }
 
 function pushAct(s: SocialState, act: Omit<Activity, 'id' | 'at'>) {
@@ -791,7 +847,7 @@ export const social = {
       key: shareKeyOf(data.c, data.u),
       id: shareDisplayId(data.c),
       name: data.n.slice(0, 32) || tr('芯喵', 'Chipet'),
-      owner: data.o.slice(0, 24) || tr('旅行者', 'Traveler'),
+      owner: data.o.slice(0, 24) || tr('芯友', 'ChipFriend'),
       cpu: (data.u || MOCK_CPU) as Address,
       circuitId: cid,
       rarity,
@@ -914,7 +970,7 @@ function decodeSharePet(token: string): SharePayload | null {
       const cid = base36ToBigInt(m[1]!);
       const name = utf8FromB64url(m[4]!).slice(0, 32) || tr('芯喵', 'Chipet');
       const cpu = cpuFromCode(m[3]!.toLowerCase());
-      return { n: name, o: tr('旅行者', 'Traveler'), c: cid.toString(), u: cpu, r: Number(m[2]) };
+      return { n: name, o: tr('芯友', 'ChipFriend'), c: cid.toString(), u: cpu, r: Number(m[2]) };
     } catch {
       return null;
     }
