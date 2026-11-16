@@ -1,9 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { createApp } from '../src/app.ts';
-import { closeAdminDb } from '../src/adminDb.ts';
+import { closeAdminRedis } from '../src/adminAuth.ts';
 import type { ChainCtx } from '../src/chain.ts';
 import type { PublicClient } from 'viem';
 import { ChainLibrary } from '@tapearena/chain';
@@ -12,21 +9,19 @@ const offline = new ChainLibrary({} as PublicClient);
 const ctx = (): ChainCtx => ({ chainId: 31337, client: {} as PublicClient, lib: offline, deployment: undefined });
 
 describe('admin auth', () => {
-  let dir: string;
-  const prevDb = process.env.ADMIN_DB_PATH;
+  const prevRedis = process.env.REDIS_URL;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     process.env.ADMIN_TOKEN = 'test-admin-token-32chars-xxxxxx';
-    closeAdminDb();
-    dir = mkdtempSync(join(tmpdir(), 'chipet-admin-auth-'));
-    process.env.ADMIN_DB_PATH = join(dir, 'admin.sqlite');
+    // 测试走内存会话，不依赖 Redis / SQLite
+    delete process.env.REDIS_URL;
+    await closeAdminRedis();
   });
 
-  afterEach(() => {
-    closeAdminDb();
-    rmSync(dir, { recursive: true, force: true });
-    if (prevDb === undefined) delete process.env.ADMIN_DB_PATH;
-    else process.env.ADMIN_DB_PATH = prevDb;
+  afterEach(async () => {
+    await closeAdminRedis();
+    if (prevRedis === undefined) delete process.env.REDIS_URL;
+    else process.env.REDIS_URL = prevRedis;
   });
 
   it('拒绝未配置口令的登录', async () => {

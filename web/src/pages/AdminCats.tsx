@@ -11,7 +11,7 @@ import {
   type ArchivedPet,
 } from '../adminAuth.ts';
 
-const PAGE_SIZE = 20;
+const PAGE_SIZE = 12;
 
 function rarityLabel(r: number, t: (zh: string, en: string) => string) {
   if (r === 2) return t('限定', 'Exclusive');
@@ -148,8 +148,8 @@ export function AdminCats() {
               <h1 className="font-display text-2xl font-bold text-ink">{t('猫咪存档', 'Cat archive')}</h1>
               <p className="mt-0.5 text-sm text-mute">
                 {t(
-                  '全链芯宠属性一张表；「链」列区分来源。每页 20 条。',
-                  'All-chain Chipet archive in one table; Chain column marks the source. 20 per page.',
+                  '全链芯宠属性一张表；「链」列区分来源。每页 12 条。',
+                  'All-chain Chipet archive in one table; Chain column marks the source. 12 per page.',
                 )}
               </p>
             </div>
@@ -174,7 +174,6 @@ export function AdminCats() {
           <table className="w-full min-w-[980px] text-left text-sm">
             <thead className="border-b border-line/80 bg-panel-2/60 text-[11px] font-mono uppercase tracking-wide text-faint">
               <tr>
-                <th className="px-4 py-3 font-medium">{t('链', 'Chain')}</th>
                 <th className="px-4 py-3 font-medium">ID</th>
                 <th className="px-4 py-3 font-medium">{t('名字', 'Name')}</th>
                 <th className="px-4 py-3 font-medium">{t('稀有度', 'Rarity')}</th>
@@ -182,6 +181,7 @@ export function AdminCats() {
                 <th className="px-4 py-3 font-medium">{t('属性', 'Stats')}</th>
                 <th className="px-4 py-3 font-medium">{t('电路', 'Circuit')}</th>
                 <th className="px-4 py-3 font-medium">{t('更新', 'Updated')}</th>
+                <th className="px-4 py-3 font-medium">{t('链', 'Chain')}</th>
               </tr>
             </thead>
             <tbody>
@@ -203,11 +203,6 @@ export function AdminCats() {
                 const url = explorer(p.chainId, p.owner);
                 return (
                   <tr key={`${p.chainId}-${p.petId}`} className="border-b border-line/50 last:border-0 hover:bg-panel-2/40">
-                    <td className="px-4 py-3">
-                      <Tag tone={p.chainId === 56 ? 'gold' : 'si'}>
-                        {CHAIN_LABEL[p.chainId] ?? p.chainId}
-                      </Tag>
-                    </td>
                     <td className="px-4 py-3 font-mono tabular-nums text-ink">#{p.petId}</td>
                     <td className="px-4 py-3 font-semibold text-ink">{p.name || '—'}</td>
                     <td className="px-4 py-3">
@@ -229,6 +224,11 @@ export function AdminCats() {
                       {p.nIn != null && p.nOut != null ? ` · ${p.nIn}→${p.nOut}` : ''}
                     </td>
                     <td className="px-4 py-3 text-xs text-faint">{when(p.updatedAt)}</td>
+                    <td className="px-4 py-3">
+                      <Tag tone={p.chainId === 56 ? 'gold' : 'si'}>
+                        {CHAIN_LABEL[p.chainId] ?? p.chainId}
+                      </Tag>
+                    </td>
                   </tr>
                 );
               })}

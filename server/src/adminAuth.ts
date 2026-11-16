@@ -2,31 +2,59 @@
  * 运营后台鉴权（对齐 hbtc-mechanism）：
  * - ADMIN_TOKEN 只存在服务端环境变量，登录后发 HttpOnly Cookie
  * - 口令不进 localStorage；失败尝试按 IP 限流
- * - 会话写入 SQLite（与 admin.sqlite 同库），部署重启容器后 Cookie 仍有效
+ * - 会话存 Redis（REDIS_URL）；未配置时回落进程内存（仅本地/测试）
  */
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import type { Context, MiddlewareHandler, Next } from 'hono';
 import { getCookie, setCookie, deleteCookie } from 'hono/cookie';
-import { getAdminDb } from './adminDb.ts';
+import { createClient, type RedisClientType } from 'redis';
 import { HttpError } from './chain.ts';
 
 export const ADMIN_COOKIE = 'chipet_admin';
 export const ADMIN_SESSION_TTL_SEC = 48 * 3600;
 export const MIN_ADMIN_TOKEN_LEN = 16;
 
+const SESS_PREFIX = 'chipet:admin:sess:';
+
 /** 每 IP：15 分钟窗口最多 10 次失败（登录或鉴权失败）。 */
 const FAIL_LIMIT = 10;
 const FAIL_WINDOW_MS = 15 * 60_000;
 const fails = new Map<string, { n: number; resetAt: number }>();
 
-function ensureSessionsTable() {
-  getAdminDb().exec(`
-    CREATE TABLE IF NOT EXISTS admin_sessions (
-      id TEXT PRIMARY KEY,
-      expires_at INTEGER NOT NULL
-    );
-    CREATE INDEX IF NOT EXISTS idx_admin_sessions_exp ON admin_sessions(expires_at);
-  `);
+/** 无 REDIS_URL 时的内存回落（vitest / 本地未起 Redis） */
+const memorySessions = new Map<string, number>();
+
+let redisClient: RedisClientType | null = null;
+let redisConnecting: Promise<RedisClientType | null> | null = null;
+
+function sessKey(id: string) {
+  return `${SESS_PREFIX}${id}`;
+}
+
+async function getRedis(): Promise<RedisClientType | null> {
+  const url = (process.env.REDIS_URL ?? '').trim();
+  if (!url) return null;
+  if (redisClient?.isOpen) return redisClient;
+  if (redisConnecting) return redisConnecting;
+  redisConnecting = (async () => {
+    const c = createClient({ url }) as RedisClientType;
+    c.on('error', (e) => console.error('[redis]', e));
+    await c.connect();
+    redisClient = c;
+    return c;
+  })().finally(() => {
+    redisConnecting = null;
+  });
+  return redisConnecting;
+}
+
+/** 测试用：断开 Redis 单例 */
+export async function closeAdminRedis(): Promise<void> {
+  if (redisClient?.isOpen) {
+    try { await redisClient.quit(); } catch { /* ignore */ }
+  }
+  redisClient = null;
+  memorySessions.clear();
 }
 
 export function adminTokenConfigured(): boolean {
@@ -68,35 +96,45 @@ export function allowFailAttempt(ip: string): boolean {
   return true;
 }
 
-export function createSession(): string {
-  ensureSessionsTable();
+export async function createSession(): Promise<string> {
   const id = randomBytes(32).toString('hex');
-  const exp = Date.now() + ADMIN_SESSION_TTL_SEC * 1000;
-  getAdminDb().prepare(`INSERT INTO admin_sessions (id, expires_at) VALUES (?, ?)`).run(id, exp);
+  const r = await getRedis();
+  if (r) {
+    await r.set(sessKey(id), '1', { EX: ADMIN_SESSION_TTL_SEC });
+  } else {
+    memorySessions.set(id, Date.now() + ADMIN_SESSION_TTL_SEC * 1000);
+  }
   return id;
 }
 
-export function sessionValid(id: string | undefined): boolean {
+export async function sessionValid(id: string | undefined): Promise<boolean> {
   if (!id) return false;
-  ensureSessionsTable();
-  const row = getAdminDb()
-    .prepare(`SELECT expires_at FROM admin_sessions WHERE id = ?`)
-    .get(id) as { expires_at: number } | undefined;
-  if (!row) return false;
-  if (Date.now() > Number(row.expires_at)) {
-    getAdminDb().prepare(`DELETE FROM admin_sessions WHERE id = ?`).run(id);
+  const r = await getRedis();
+  if (r) {
+    const n = await r.exists(sessKey(id));
+    if (!n) return false;
+    // 滑动续期
+    await r.expire(sessKey(id), ADMIN_SESSION_TTL_SEC);
+    return true;
+  }
+  const exp = memorySessions.get(id);
+  if (exp == null) return false;
+  if (Date.now() > exp) {
+    memorySessions.delete(id);
     return false;
   }
-  // 滑动续期
-  const exp = Date.now() + ADMIN_SESSION_TTL_SEC * 1000;
-  getAdminDb().prepare(`UPDATE admin_sessions SET expires_at = ? WHERE id = ?`).run(exp, id);
+  memorySessions.set(id, Date.now() + ADMIN_SESSION_TTL_SEC * 1000);
   return true;
 }
 
-export function revokeSession(id: string | undefined) {
+export async function revokeSession(id: string | undefined): Promise<void> {
   if (!id) return;
-  ensureSessionsTable();
-  getAdminDb().prepare(`DELETE FROM admin_sessions WHERE id = ?`).run(id);
+  const r = await getRedis();
+  if (r) {
+    await r.del(sessKey(id));
+    return;
+  }
+  memorySessions.delete(id);
 }
 
 function cookieSecure(c: Context): boolean {
@@ -139,7 +177,7 @@ export function requireAdmin(): MiddlewareHandler {
     }
     const cookie = readAdminSession(c);
     const bearer = bearerToken(c);
-    if (sessionValid(cookie) || tokenMatches(getAdminToken(), bearer)) {
+    if ((await sessionValid(cookie)) || tokenMatches(getAdminToken(), bearer)) {
       await next();
       return;
     }

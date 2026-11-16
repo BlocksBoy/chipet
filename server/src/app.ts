@@ -101,19 +101,23 @@ export function createApp(deps: AppDeps = {}) {
       }
       throw new HttpError(401, 'invalid admin token');
     }
-    const id = createSession();
+    const id = await createSession();
     setAdminSessionCookie(c, id);
     return json(c, { ok: true, expiresIn: ADMIN_SESSION_TTL_SEC });
   });
 
-  app.post('/api/admin/logout', (c) => {
-    revokeSession(readAdminSession(c));
+  app.post('/api/admin/logout', async (c) => {
+    await revokeSession(readAdminSession(c));
     clearAdminSessionCookie(c);
     return json(c, { ok: true });
   });
 
-  app.get('/api/admin/session', requireAdmin(), (c) =>
-    json(c, { ok: true, expiresIn: ADMIN_SESSION_TTL_SEC, session: sessionValid(readAdminSession(c)) }));
+  app.get('/api/admin/session', requireAdmin(), async (c) =>
+    json(c, {
+      ok: true,
+      expiresIn: ADMIN_SESSION_TTL_SEC,
+      session: await sessionValid(readAdminSession(c)),
+    }));
 
   // ---------------------------------------------------------------- 钱包连接注册（公开；新地址计入注册人数）
 

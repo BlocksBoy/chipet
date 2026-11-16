@@ -14,6 +14,7 @@
     "@tapearena/chain": "*",
     "@tapearena/netlist": "*",
     "hono": "^4.6.0",
+    "redis": "^6.3.1",
     "viem": "^2.21.0"
   },
   "devDependencies": {
