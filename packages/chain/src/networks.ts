@@ -48,16 +48,29 @@ export const BSC_BEM = '0x5ce033b2bfca3af30b3e8c8457deaf776a8b695a' as Address;
 /** X Layer / BSC 上 BEM 均为 8 位小数。 */
 export const BEM_DECIMALS = 8;
 
+/** Chipet 商店收款：各链 Chipet 部署人钱包（EOA，BEM 直接进账可转出，不经工厂锁仓）。 */
+export const XLAYER_CHIPET_TREASURY = '0xBd435f285916F437A2971D62233F08d1f1434e00' as Address;
+export const BSC_CHIPET_TREASURY = '0x231705a35dB8A4264742d9660F8b45Ad7A4966d5' as Address;
+
+/** 运营后台白名单：两链 Chipet 部署人。 */
+export const CHIPET_ADMINS: readonly Address[] = [XLAYER_CHIPET_TREASURY, BSC_CHIPET_TREASURY];
+
+export function isChipetAdmin(addr?: Address | null): boolean {
+  if (!addr) return false;
+  const a = addr.toLowerCase();
+  return CHIPET_ADMINS.some((x) => x.toLowerCase() === a);
+}
+
 export interface BemNetwork {
   token: Address;
-  /** 商店收款地址：暂用该链 TapeOut 工厂 */
+  /** 商店收款地址：Chipet 部署人钱包 */
   treasury: Address;
   decimals: number;
 }
 
 export const BEM_BY_CHAIN: Partial<Record<number, BemNetwork>> = {
-  196: { token: XLAYER_BEM, treasury: XLAYER_TAPEOUT_FACTORY, decimals: BEM_DECIMALS },
-  56: { token: BSC_BEM, treasury: BSC_TAPEOUT_FACTORY, decimals: BEM_DECIMALS },
+  196: { token: XLAYER_BEM, treasury: XLAYER_CHIPET_TREASURY, decimals: BEM_DECIMALS },
+  56: { token: BSC_BEM, treasury: BSC_CHIPET_TREASURY, decimals: BEM_DECIMALS },
 };
 
 export function bemNetwork(chainId: number): BemNetwork | undefined {

@@ -18,6 +18,7 @@ import { Library } from './pages/Library.tsx';
 import { NewBounty } from './pages/NewBounty.tsx';
 import { Guide } from './pages/Guide.tsx';
 import { Shop } from './pages/Shop.tsx';
+import { Admin } from './pages/Admin.tsx';
 
 function App() {
   const r = useRoute();
@@ -25,7 +26,8 @@ function App() {
   useLang();
   const [a, b] = r.parts;
   let page;
-  if (a === 'pet' && b === 's' && r.parts[2]) page = <PetPage share={r.parts[2]} />;
+  if (a === 'admin') page = <Admin />;
+  else if (a === 'pet' && b === 's' && r.parts[2]) page = <PetPage share={r.parts[2]} />;
   else if (a === 'pet' && b) page = <PetPage id={Number(b)} />;
   else if (a === 'plaza') page = <Plaza />;
   else if (a === 'dex') page = <Dex />;

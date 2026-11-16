@@ -29,7 +29,7 @@ export function chainCtx(chainId = Number(process.env.CHAIN_ID ?? 196)): ChainCt
 }
 
 export class HttpError extends Error {
-  constructor(public status: 400 | 404 | 422 | 502 | 503, message: string) { super(message); }
+  constructor(public status: 400 | 401 | 404 | 422 | 429 | 502 | 503, message: string) { super(message); }
 }
 
 export function arenaOf(c: ChainCtx): Address {

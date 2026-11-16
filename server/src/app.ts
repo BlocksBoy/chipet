@@ -3,10 +3,15 @@ import { cors } from 'hono/cors';
 import { streamSSE } from 'hono/streaming';
 import { zeroAddress, type Address } from 'viem';
 import { EXAMPLES, FULL_ADDER_NAND9, generateVectors, HdlError, toHex, type Library, type Resolved } from '@tapearena/netlist';
-import { bountyPhase, type Bounty } from '@tapearena/chain';
+import { bountyPhase, loadAdminStats, type Bounty } from '@tapearena/chain';
 import { bountiesOf, bountyOf, chainCtx, componentsOf, HttpError, type ChainCtx } from './chain.ts';
 import { build, challengeHint, precheck, simulate, summary, vectorsFor } from '@tapearena/chain';
 import { designLoop, openAIChat, type ChatFn, type DesignTarget } from './ai.ts';
+import {
+  ADMIN_SESSION_TTL_SEC, adminTokenConfigured, allowFailAttempt, clearAdminSessionCookie,
+  clientIp, createSession, getAdminToken, readAdminSession, requireAdmin, revokeSession,
+  sessionValid, setAdminSessionCookie, tokenMatches,
+} from './adminAuth.ts';
 
 export interface AppDeps {
   ctx?: (chainId?: number) => ChainCtx;
@@ -45,17 +50,72 @@ export function createApp(deps: AppDeps = {}) {
   }
 
   const app = new Hono();
-  app.use('*', cors());
+  const corsOrigin = process.env.CORS_ORIGIN?.split(',').map((s) => s.trim()).filter(Boolean);
+  app.use('*', cors({
+    origin: corsOrigin?.length ? corsOrigin : (origin) => origin || '*',
+    credentials: true,
+    allowHeaders: ['Content-Type', 'Authorization'],
+    allowMethods: ['GET', 'POST', 'OPTIONS'],
+  }));
 
   app.onError((err, c) => {
-    if (err instanceof HttpError) return json(c, { error: err.message }, err.status);
+    if (err instanceof HttpError) {
+      const code = err.status === 401 ? 'unauthorized'
+        : err.status === 429 ? 'rate_limited'
+          : err.status === 503 ? 'admin_disabled'
+            : undefined;
+      return json(c, { error: err.message, ...(code ? { code } : {}) }, err.status);
+    }
     if (err instanceof HdlError) return json(c, { error: err.message, line: err.line, col: err.col }, 422);
     return json(c, { error: err.message }, 500);
   });
 
   app.get('/api/health', (c) => {
     const x = pick(c);
-    return json(c, { ok: true, chainId: x.chainId, deployment: x.deployment ?? null, ai: Boolean(process.env.AI_API_KEY) || Boolean(deps.chat) });
+    return json(c, {
+      ok: true,
+      chainId: x.chainId,
+      deployment: x.deployment ?? null,
+      ai: Boolean(process.env.AI_API_KEY) || Boolean(deps.chat),
+      admin: adminTokenConfigured(),
+    });
+  });
+
+  // ---------------------------------------------------------------- 运营后台（ADMIN_TOKEN → HttpOnly 会话）
+
+  app.post('/api/admin/login', async (c) => {
+    if (!adminTokenConfigured()) throw new HttpError(503, 'admin is not configured');
+    const b = await body<{ token?: string }>(c);
+    const token = (b.token ?? '').trim();
+    if (!token) throw new HttpError(400, 'token required');
+    if (!tokenMatches(getAdminToken(), token)) {
+      if (!allowFailAttempt(clientIp(c))) {
+        c.header('Retry-After', '900');
+        throw new HttpError(429, 'too many failed attempts, try again later');
+      }
+      throw new HttpError(401, 'invalid admin token');
+    }
+    const id = createSession();
+    setAdminSessionCookie(c, id);
+    return json(c, { ok: true, expiresIn: ADMIN_SESSION_TTL_SEC });
+  });
+
+  app.post('/api/admin/logout', (c) => {
+    revokeSession(readAdminSession(c));
+    clearAdminSessionCookie(c);
+    return json(c, { ok: true });
+  });
+
+  app.get('/api/admin/session', requireAdmin(), (c) =>
+    json(c, { ok: true, expiresIn: ADMIN_SESSION_TTL_SEC, session: sessionValid(readAdminSession(c)) }));
+
+  app.get('/api/admin/stats', requireAdmin(), async (c) => {
+    const chainId = Number(c.req.query('chainId') ?? process.env.CHAIN_ID ?? 196);
+    if (chainId !== 196 && chainId !== 56) throw new HttpError(400, 'unsupported chainId');
+    const x = ctxOf(chainId);
+    if (!x.deployment?.chipet) throw new HttpError(404, 'chipet not deployed on this chain');
+    const stats = await loadAdminStats(x.client, chainId, x.deployment.chipet);
+    return json(c, stats);
   });
 
   app.get('/api/examples', (c) => json(c, { ...EXAMPLES, fullAdderNand9: { title: '9 门全加器（NAND 手写）', src: FULL_ADDER_NAND9 } }));
