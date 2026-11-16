@@ -124,7 +124,8 @@ const VISITOR_POOL: { name: Txt; owner: Txt }[] = [
 function visitorsForDay(day = DAY()): Neighbor[] {
   return [0, 1, 2].map((slot) => {
     const h = hashStr(`${day}:vis:${slot}`);
-    const pool = VISITOR_POOL[(h >> 3) % VISITOR_POOL.length]!;
+    // 必须用 >>>：>> 会把高位哈希变成负数，导致 VISITOR_POOL[负下标] === undefined，广场/训练场整页白屏
+    const pool = VISITOR_POOL[(h >>> 3) % VISITOR_POOL.length]!;
     const rarity = ((h % 100) < 8 ? 2 : (h % 100) < 35 ? 1 : 0) as Rarity;
     const level = 1 + (h % 8);
     const wins = level + (h % 5);
@@ -136,7 +137,7 @@ function visitorsForDay(day = DAY()): Neighbor[] {
       circuitId: BigInt(1000 + (h % 9000)),
       rarity,
       energy: 55 + (h % 40),
-      mood: 50 + ((h >> 4) % 45),
+      mood: 50 + ((h >>> 4) % 45),
       intimacy: 5 + (h % 40),
       level,
       wins,
@@ -277,7 +278,7 @@ function ensureNpcLive(s: SocialState, n: Neighbor, opts?: { refreshIdentity?: b
       const h = hashStr(`${key}:${today}`);
       live.day = today;
       live.mood = clamp(50 + (h % 46), 40, 100);
-      live.energy = clamp(45 + ((h >> 5) % 51), 30, 100);
+      live.energy = clamp(45 + ((h >>> 5) % 51), 30, 100);
       if (h % 4 === 0) live.wins += 1;
       if (h % 7 === 0) live.intimacy = clamp(live.intimacy + 1, 0, 99);
       live.level = npcLevelOf(n.level, n.wins, live.wins);
