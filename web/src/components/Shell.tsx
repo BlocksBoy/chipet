@@ -352,9 +352,6 @@ export function Shell({ children }: { children: ReactNode }) {
                 tapeout.net<ExternalLink className="size-3 shrink-0" />
               </a>
             </div>
-            <span className="min-w-0 text-pretty lg:ml-auto">
-              {t('外形由电路身份派生 · 对战功率由电路逐门算出', 'Looks derive from the circuit identity · battle power is computed gate by gate')}
-            </span>
           </div>
         </div>
       </footer>

@@ -249,7 +249,7 @@ export function Home() {
               </Button>
             </div>
 
-            <div className="mt-8 max-w-md lg:mt-auto lg:pt-6">
+            <div className="mt-5 max-w-md sm:mt-6">
               <p className="text-sm text-pretty text-mute sm:text-base">
                 {t(
                   '像加密猫一样：每只芯喵都有独特毛色、瞳色与花纹。心脏是一枚 TapeOut 电路——给它通电、带它对战，每一步都是这枚电路算出来的。',
@@ -264,7 +264,34 @@ export function Home() {
                   )}
                 </p>
               )}
-              <p className="mt-4 text-xs text-pretty text-faint">
+              <ol className="mt-5 flex w-fit max-w-full flex-wrap items-center gap-1 rounded-full bg-panel-2/80 p-1 ring-1 ring-line/70 sm:mt-6" aria-label={t('四步玩法', 'Four-step loop')}>
+                {STEPS.map(({ icon: I, n, t: title }, i) => {
+                  const first = pets[0];
+                  const goStep = () => {
+                    if (i === 0) document.getElementById(NAME_INPUT_ID)?.focus();
+                    else if (i === 1) first ? go(`/pet/${first.id}`) : document.getElementById(NAME_INPUT_ID)?.focus();
+                    else if (i === 2) go('/train');
+                    else go('/plaza');
+                  };
+                  return (
+                    <li key={n} className="flex items-center gap-1">
+                      {i > 0 && <span className="mx-0.5 size-1 shrink-0 rounded-full bg-si/35" aria-hidden />}
+                      <button
+                        type="button"
+                        onClick={goStep}
+                        className="inline-flex items-center gap-1.5 rounded-full bg-panel px-2.5 py-1.5 text-[12px] font-semibold text-ink shadow-sm ring-1 ring-line/60 transition hover:-translate-y-0.5 hover:ring-si/40"
+                      >
+                        <span className="grid size-5 place-items-center rounded-full bg-si/10 text-si">
+                          <I className="size-3" />
+                        </span>
+                        <span className="font-mono text-[10px] font-medium text-faint">{n}</span>
+                        <span>{txt(title)}</span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ol>
+              <p className="mt-3 text-xs text-pretty text-faint">
                 {t('外形由电路身份派生 · 对战功率由电路逐门算出', 'Looks from circuit identity · battle power computed gate by gate')}
               </p>
             </div>
