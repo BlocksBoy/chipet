@@ -273,7 +273,7 @@ export function PetPage({ id, share: shareToken }: { id?: number; share?: string
           <span className="grid size-7 place-items-center rounded-full bg-white/20 shadow-inner ring-1 ring-white/30 transition group-hover:bg-white/28">
             <Share2 className="size-3.5" strokeWidth={2.25} />
           </span>
-          {t('分享撸猫链接', 'Share petting link')}
+          {t('分享撸猫链接', 'Share link')}
         </button>
       </div>
 
@@ -367,8 +367,8 @@ export function PetPage({ id, share: shareToken }: { id?: number; share?: string
                 <>
                   <Button size="lg" icon={Swords} onClick={() => go(`/train?vs=${pet.id}`)}>{t('切磋一场', 'Spar')}</Button>
                   {bonded
-                    ? <Button size="lg" variant="ghost" icon={Cable} onClick={() => document.getElementById('fusion')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>{t('已牵线 · 看合体电路', 'Linked · see fusion circuit')}</Button>
-                    : <Button size="lg" variant="si" icon={Cable} disabled={!lead} onClick={doBond}>{t('牵线（1 鱼干）', 'Link up (1 fish treat)')}</Button>}
+                    ? <Button size="lg" variant="ghost" icon={Cable} onClick={() => document.getElementById('fusion')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>{t('已牵线 · 看合体电路', 'Linked · view fusion')}</Button>
+                    : <Button size="lg" variant="si" icon={Cable} disabled={!lead} onClick={doBond}>{t('牵线（1 鱼干）', 'Link (1 treat)')}</Button>}
                 </>
               )}
             </div>
@@ -445,7 +445,7 @@ export function PetPage({ id, share: shareToken }: { id?: number; share?: string
 
           {!pet.mine && (
             <div id="fusion" className="scroll-mt-24">
-              <Panel title={t('牵线 · 合体电路', 'Link up · fusion circuit')} icon={Cable} bodyClass="p-5 sm:p-6"
+              <Panel title={t('牵线 · 合体电路', 'Link · fusion circuit')} icon={Cable} bodyClass="p-5 sm:p-6"
                 right={<span className="font-mono text-[11px] text-mute">{t('线友', 'Wire pals')} {bonds.length}/{maxBonds()}</span>}>
                 {!lead ? (
                   <p className="text-sm text-mute">{t(`先在家园孵一只芯喵，才能和「${pet.name}」牵线。`, `Hatch a kitty at Home first, then you can link up with ${pet.name}.`)}</p>
@@ -470,7 +470,7 @@ export function PetPage({ id, share: shareToken }: { id?: number; share?: string
                           <Button variant="ghost" icon={Unlink} onClick={doUnbond}>{t('松开这根线', 'Unlink')}</Button>
                         </>
                       ) : (
-                        <Button variant="si" icon={Cable} onClick={doBond}>{t('牵线（1 鱼干）', 'Link up (1 fish treat)')}</Button>
+                        <Button variant="si" icon={Cable} onClick={doBond}>{t('牵线（1 鱼干）', 'Link (1 treat)')}</Button>
                       )}
                     </div>
                   </>

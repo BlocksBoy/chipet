@@ -119,9 +119,9 @@ const BOND_HI: Txt[] = [
 
 const QUEST_DEFS = [
   { id: 'checkin', label: both('每日签到', 'Daily check-in'), goal: 1 },
-  { id: 'power', label: both('给芯喵通电玩耍一次', 'Power-play your kitty once'), goal: 1 },
-  { id: 'battle', label: both('赢一场电路对战', 'Win a circuit battle'), goal: 1 },
-  { id: 'visit', label: both('摸摸 2 位邻居的芯喵', "Pat 2 neighbors' kitties"), goal: 2 },
+  { id: 'power', label: both('给芯喵通电玩耍一次', 'Power-play once'), goal: 1 },
+  { id: 'battle', label: both('赢一场电路对战', 'Win a battle'), goal: 1 },
+  { id: 'visit', label: both('摸摸 2 位邻居的芯喵', 'Pat 2 neighbors'), goal: 2 },
 ] as const;
 export type QuestId = (typeof QUEST_DEFS)[number]['id'];
 

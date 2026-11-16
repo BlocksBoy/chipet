@@ -694,15 +694,15 @@ function FighterCard({ side, name, level, hp, max, bg, reveal, dmg, move, power,
 }
 
 const RULES: [ComponentType<LucideProps>, Txt, Txt][] = [
-  [Cpu, both('电路出功率', 'Circuits make the power'), both(
+  [Cpu, both('电路出功率', 'Circuit power'), both(
     '每回合，随机位流进心脏电路，三招各算出一个功率——亮几盏灯就是几点。',
     'Each round random bits flow into the heart circuit and every move gets a power value: the more lamps light up, the harder it hits.',
   )],
-  [Swords, both('你来选招', 'You pick the move'), both(
+  [Swords, both('你来选招', 'Pick a move'), both(
     '进攻克技巧、技巧克防御、防御克进攻。你看得见自己的功率，看不见对手要出什么。',
     'Attack beats Trick, Trick beats Defend, Defend beats Attack. You can see your own power, but not what your opponent will play.',
   )],
-  [Zap, both('克制翻倍', 'Counters hit double'), both(
+  [Zap, both('克制翻倍', 'Counters double'), both(
     '克制对手，伤害翻倍、对手减半。牵过线的线友还能帮你放一次合体技。',
     'Counter your opponent to deal double damage and take half. A linked wire pal can also fire one fusion move for you.',
   )],

@@ -37,8 +37,8 @@ const STEPS = [
     p: both('每回合由心脏电路算出三招的功率。进攻、防御、技巧互相克制，去打芯片里的 Bug。', 'Each round the heart circuit computes the power of three moves. Attack, Defend and Trick counter each other as you fight the bugs inside the chip.'),
   },
   {
-    icon: Cable, n: '04', t: both('牵线', 'Link up'),
-    p: both('和邻居牵线，两颗心脏互相引用、串成合体电路，每场对战能放一次无视克制的合体技。', 'Link up with a neighbor: the two hearts reference each other as one fusion circuit, good for one triangle-ignoring move per battle.'),
+    icon: Cable, n: '04', t: both('牵线', 'Link'),
+    p: both('和邻居牵线，两颗心脏互相引用、串成合体电路，每场对战能放一次无视克制的合体技。', 'Link with a neighbor: the two hearts reference each other as one fusion circuit, good for one triangle-ignoring move per battle.'),
   },
 ] as const;
 
@@ -242,10 +242,10 @@ export function Home() {
             </h1>
 
             <div className="mt-5 flex flex-wrap items-center gap-2 sm:mt-6">
-              <Tag tone="si" icon={Fish}>{t('小鱼干', 'Fish treats')} {profile.fish}</Tag>
+              <Tag tone="si" icon={Fish}>{t('小鱼干', 'Treats')} {profile.fish}</Tag>
               <Tag tone="copper">{t(`连续签到 ${profile.streak} 天`, `${profile.streak}-day streak`)}</Tag>
               <Button size="sm" variant="ghost" disabled={profile.checkedIn} onClick={checkin}>
-                {profile.checkedIn ? t('今日已签到', 'Checked in today') : t('每日签到领鱼干', 'Check in for fish treats')}
+                {profile.checkedIn ? t('今日已签到', 'Checked in') : t('每日签到领鱼干', 'Daily check-in')}
               </Button>
             </div>
 
@@ -264,37 +264,37 @@ export function Home() {
                   )}
                 </p>
               )}
-              <ol className="mt-5 flex w-fit max-w-full flex-wrap items-center gap-1 rounded-full bg-panel-2/80 p-1 ring-1 ring-line/70 sm:mt-6" aria-label={t('四步玩法', 'Four-step loop')}>
-                {STEPS.map(({ icon: I, n, t: title }, i) => {
-                  const first = pets[0];
-                  const goStep = () => {
-                    if (i === 0) document.getElementById(NAME_INPUT_ID)?.focus();
-                    else if (i === 1) first ? go(`/pet/${first.id}`) : document.getElementById(NAME_INPUT_ID)?.focus();
-                    else if (i === 2) go('/train');
-                    else go('/plaza');
-                  };
-                  return (
-                    <li key={n} className="flex items-center gap-1">
-                      {i > 0 && <span className="mx-0.5 size-1 shrink-0 rounded-full bg-si/35" aria-hidden />}
-                      <button
-                        type="button"
-                        onClick={goStep}
-                        className="inline-flex items-center gap-1.5 rounded-full bg-panel px-2.5 py-1.5 text-[12px] font-semibold text-ink shadow-sm ring-1 ring-line/60 transition hover:-translate-y-0.5 hover:ring-si/40"
-                      >
-                        <span className="grid size-5 place-items-center rounded-full bg-si/10 text-si">
-                          <I className="size-3" />
-                        </span>
-                        <span className="font-mono text-[10px] font-medium text-faint">{n}</span>
-                        <span>{txt(title)}</span>
-                      </button>
-                    </li>
-                  );
-                })}
-              </ol>
-              <p className="mt-3 text-xs text-pretty text-faint">
-                {t('外形由电路身份派生 · 对战功率由电路逐门算出', 'Looks from circuit identity · battle power computed gate by gate')}
-              </p>
             </div>
+            <ol className="mt-5 flex w-full max-w-xl flex-wrap items-center gap-1 rounded-[1.25rem] bg-panel-2/80 p-1 ring-1 ring-line/70 sm:mt-6 sm:w-fit sm:flex-nowrap sm:rounded-full" aria-label={t('四步玩法', 'Four-step loop')}>
+              {STEPS.map(({ icon: I, n, t: title }, i) => {
+                const first = pets[0];
+                const goStep = () => {
+                  if (i === 0) document.getElementById(NAME_INPUT_ID)?.focus();
+                  else if (i === 1) first ? go(`/pet/${first.id}`) : document.getElementById(NAME_INPUT_ID)?.focus();
+                  else if (i === 2) go('/train');
+                  else go('/plaza');
+                };
+                return (
+                  <li key={n} className="flex min-w-0 items-center gap-1 max-sm:basis-[calc(50%-0.125rem)] max-sm:grow">
+                    {i > 0 && <span className="mx-0.5 hidden size-1 shrink-0 rounded-full bg-si/35 sm:block" aria-hidden />}
+                    <button
+                      type="button"
+                      onClick={goStep}
+                      className="inline-flex w-full min-w-0 items-center justify-center gap-1 rounded-full bg-panel px-2 py-1.5 text-[11px] font-semibold whitespace-nowrap text-ink shadow-sm ring-1 ring-line/60 transition hover:-translate-y-0.5 hover:ring-si/40 sm:w-auto sm:justify-start sm:gap-1.5 sm:px-2.5 sm:text-[12px]"
+                    >
+                      <span className="grid size-5 shrink-0 place-items-center rounded-full bg-si/10 text-si">
+                        <I className="size-3" />
+                      </span>
+                      <span className="font-mono text-[10px] font-medium text-faint">{n}</span>
+                      <span className="truncate">{txt(title)}</span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ol>
+            <p className="mt-3 max-w-md text-xs text-pretty text-faint">
+              {t('外形由电路身份派生 · 对战功率由电路逐门算出', 'Looks from circuit identity · battle power computed gate by gate')}
+            </p>
           </div>
 
           <SceneStage
@@ -493,8 +493,8 @@ export function Home() {
             : i === 1
               ? [first ? t(`去看「${first.name}」`, `Visit ${first.name}`) : t('先孵一只', 'Hatch one first'), () => (first ? go(`/pet/${first.id}`) : document.getElementById(NAME_INPUT_ID)?.focus())] as const
               : i === 2
-                ? [t('去训练场', 'Go to Training'), () => go('/train')] as const
-                : [t('去广场', 'Go to the Plaza'), () => go('/plaza')] as const;
+                ? [t('去训练场', 'Go to Train'), () => go('/train')] as const
+                : [t('去广场', 'Go to Plaza'), () => go('/plaza')] as const;
           return (
             <li key={n} className="flex flex-col rounded-3xl border border-line/80 bg-panel p-5 shadow-sm shadow-si/5">
               <div className="flex items-center gap-3">

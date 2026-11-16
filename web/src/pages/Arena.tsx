@@ -87,7 +87,7 @@ const STEPS = [
     p: both('提交即判：向量全过才入榜，门数少者领先，同门数先到先得。', 'Judged on submit: only circuits that pass every vector are ranked. Fewest gates leads; ties go to the earliest.'),
   },
   {
-    icon: ShieldCheck, n: '04', t: both('挑战与分润', 'Challenge & royalties'), b: both('反例取消资格', 'Counterexamples disqualify'),
+    icon: ShieldCheck, n: '04', t: both('挑战与分润', 'Challenge'), b: both('反例取消资格', 'Counterexamples disqualify'),
     p: both('向量外的错误也能被反例挑战；冠军引用的组件自动分到版税。', 'Bugs outside the vectors can still be challenged with a counterexample; components used by the winner earn royalties automatically.'),
   },
 ];

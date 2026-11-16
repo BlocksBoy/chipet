@@ -88,7 +88,7 @@ export function Plaza() {
         desc={t('摸邻居的芯宠、牵线组合体电路、切磋一场，比一比谁更受欢迎。', 'Pat your neighbors\' Chipets, link up into fusion circuits, spar, and see who\'s the most popular.')}
         right={
           <Button icon={CalendarCheck} variant={profile.checkedIn ? 'ghost' : 'primary'} disabled={profile.checkedIn} onClick={checkin}>
-            {profile.checkedIn ? t('今日已签到', 'Checked in today') : t('每日签到领鱼干', 'Check in for fish treats')}
+            {profile.checkedIn ? t('今日已签到', 'Checked in') : t('每日签到领鱼干', 'Daily check-in')}
           </Button>
         }
       />

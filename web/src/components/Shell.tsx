@@ -57,7 +57,7 @@ export function Logo({ className = 'size-7' }: { className?: string }) {
 const NAV = [
   { to: '/', key: '', label: both('家园', 'Home'), icon: Home },
   { to: '/plaza', key: 'plaza', label: both('广场', 'Plaza'), icon: Users },
-  { to: '/train', key: 'train', label: both('训练场', 'Training'), icon: Swords },
+  { to: '/train', key: 'train', label: both('训练场', 'Train'), icon: Swords },
   { to: '/dex', key: 'dex', label: both('图鉴', 'Dex'), icon: BookOpen },
   { to: '/lab', key: 'lab', label: both('实验室', 'Lab'), icon: FlaskConical },
 ];
@@ -114,7 +114,7 @@ function NetworkSwitch() {
         onClick={() => setOpen((o) => !o)}
         className={cn('flex h-8 items-center gap-1 rounded-full border bg-panel pr-1.5 pl-1 font-mono text-xs text-ink transition-colors hover:border-si sm:h-9 sm:gap-1.5 sm:pr-2.5 sm:pl-1.5', open ? 'border-si' : 'border-line')}>
         <ChainIcon id={chainId} className="size-5 sm:size-6" />
-        <span className="hidden whitespace-nowrap sm:inline">{chainLabel(chainId)}</span>
+        <span className="hidden whitespace-nowrap xl:inline">{chainLabel(chainId)}</span>
         <ChevronDown className={cn('size-3.5 text-mute transition-transform', open && 'rotate-180')} />
       </button>
       {open && (
@@ -183,7 +183,7 @@ const LAB_NAV = [
   { to: '/lab', key: '', label: both('擂台', 'Arena'), icon: Trophy },
   { to: '/lab/studio', key: 'studio', label: both('设计器', 'Studio'), icon: PenTool },
   { to: '/lab/library', key: 'library', label: both('组件库', 'Library'), icon: Blocks },
-  { to: '/lab/new', key: 'new', label: both('发布悬赏', 'Post a bounty'), icon: Plus },
+  { to: '/lab/new', key: 'new', label: both('发布悬赏', 'Post bounty'), icon: Plus },
 ];
 
 /** 实验室二级导航：桌面左侧栏，手机顶部横滑。 */
@@ -236,7 +236,7 @@ export function Shell({ children }: { children: ReactNode }) {
             ))}
           </nav>
           <div className="min-w-0 flex-1" />
-          <div className="flex min-w-0 shrink items-center gap-0.5 sm:gap-2">
+          <div className="flex shrink-0 items-center gap-0.5 sm:gap-1.5 lg:gap-2">
             <Link
               to="/guide"
               title={t('玩法手册', 'Playbook')}
@@ -263,9 +263,9 @@ export function Shell({ children }: { children: ReactNode }) {
               <span className="truncate tabular-nums">{bem.demoBal()}</span>
               <span className="hidden sm:inline">BEM</span>
             </Link>
-            <LangSwitch />
             <NetworkSwitch />
             <WalletButton />
+            <LangSwitch />
           </div>
         </div>
       </header>
