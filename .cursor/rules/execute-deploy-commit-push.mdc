@@ -7,18 +7,33 @@ alwaysApply: true
 
 当用户只说 **执行**（或明确说按「执行」约定来）时，按顺序做完下面三步，不要再确认：
 
-## 1. 部署前后端
+## 执行顺序（防审批 Abort）
 
-本仓库 Chipet 线上为弗吉尼亚静态站（`chipet.web3book.io`）：
+远程部署的 Auto-review 审批若把「前端+API」捆成一条长命令，容易在 spawn 阶段被 Abort。
+因此必须拆成**独立 Shell 调用**，每步单独申请权限；本地 commit 可先做（不依赖远程审批）。
 
-```bash
-./deploy/ssh-deploy-frontend.sh
-```
+推荐顺序：
+
+1. **先本地 commit**（有改动时）
+2. **只跑前端部署**（单独一条命令）
+3. **只跑 API 部署**（有后端/compose/Caddy 改动时再跑，单独一条）
+4. **再 push**
+
+## 1. 部署
 
 配置在 `deploy/.env.deploy.local`（弗吉尼亚 `43.165.64.16`，密钥 `virginia_bot.pem`）。
 
-- 若 Caddy/证书异常，再跑 `./deploy/ssh-deploy-caddy.sh`。
-- 若本次改动包含需单独发布的后端服务且已有对应脚本，一并部署；当前主站无独立后端容器时，以前端部署为准。
+```bash
+# 调用 A：仅前端（不要与 API 写在同一条 shell）
+./deploy/ssh-deploy-frontend.sh
+
+# 调用 B：仅 API（有 server/packages/deploy 相关改动时）
+./deploy/ssh-deploy-api.sh
+```
+
+- 禁止 `./deploy/ssh-deploy-frontend.sh && ./deploy/ssh-deploy-api.sh` 这种串联。
+- 若 Caddy/证书异常，再单独跑 `./deploy/ssh-deploy-caddy.sh`。
+- `deploy/` 目录 gitignore，compose/Caddy 改动靠 API/Caddy 脚本上传到服务器。
 
 ## 2. 提交代码
 
