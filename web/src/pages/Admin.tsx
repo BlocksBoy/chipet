@@ -7,6 +7,7 @@ import { Button, PAGE, Panel, Tag, cn } from '../components/ui.tsx';
 import { useT } from '../i18n.ts';
 import {
   adminLogin, adminLogout, adminSession, adminStartScan, adminStats, adminStatsHistory,
+  coalesceAdminStats,
   type AdminScanJob, type AdminStatsPayload,
 } from '../adminAuth.ts';
 import { short } from '../format.ts';
@@ -101,7 +102,7 @@ export function Admin() {
             const wasRunning = prev[r.id]?.job?.status === 'running';
             next[r.id] = {
               ...(prev[r.id] ?? emptyBundle()),
-              stats: r.s.empty ? null : r.s,
+              stats: coalesceAdminStats(r.s),
               job: r.s.job ?? null,
               err: r.s.job?.status === 'error' ? (r.s.job.error || t('扫链失败', 'Scan failed')) : '',
               progress: running
@@ -152,7 +153,7 @@ export function Admin() {
           if (isRunning) running = true;
           next[id] = {
             ...(prev[id] ?? emptyBundle()),
-            stats: s.empty ? null : s,
+            stats: coalesceAdminStats(s),
             job: s.job ?? null,
             history,
             err: s.job?.status === 'error' ? (s.job.error || t('扫链失败', 'Scan failed')) : '',
@@ -222,7 +223,7 @@ export function Admin() {
           next[id] = {
             ...(prev[id] ?? emptyBundle()),
             job: r.job,
-            stats: r.stats && !r.stats.empty ? r.stats : (prev[id]?.stats ?? null),
+            stats: r.stats ? (coalesceAdminStats(r.stats) ?? prev[id]?.stats ?? null) : (prev[id]?.stats ?? null),
             progress: r.job.status === 'running' ? starting : '',
             err: '',
           };
@@ -345,6 +346,11 @@ export function Admin() {
 
   const num = (id: number, key: 'rechargeUsers' | 'registered' | 'players' | 'cats' | 'rechargeTxs') =>
     byChain[id]?.stats?.[key] ?? 0;
+  const registeredOnChain = (id: number) =>
+    Number(byChain[id]?.stats?.registeredOnChain ?? 0);
+  // 注册人数是全局独立地址，不能按链相加
+  const registeredTotal = Math.max(0, ...MAINNET_IDS.map((id) =>
+    Number(byChain[id]?.stats?.walletRegistered ?? byChain[id]?.stats?.registered ?? 0)));
   const bemSum = (key: 'rechargeBem' | 'treasuryBal') =>
     MAINNET_IDS.reduce((s, id) => s + Number(byChain[id]?.stats?.[key] ?? 0), 0);
   const hasAnyStats = MAINNET_IDS.some((id) => byChain[id]?.stats);
@@ -430,7 +436,8 @@ export function Admin() {
 
       <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
         {metrics.map(({ icon: I, label, key, swatch }) => {
-          const total = MAINNET_IDS.reduce((s, id) => s + num(id, key), 0);
+          const isReg = key === 'registered';
+          const total = isReg ? registeredTotal : MAINNET_IDS.reduce((s, id) => s + num(id, key), 0);
           return (
             <BreakdownCard
               key={key}
@@ -438,12 +445,15 @@ export function Admin() {
               swatch={swatch}
               label={label}
               total={hasAnyStats ? fmt(total) : '—'}
-              parts={MAINNET_IDS.map((id) => ({
-                id,
-                label: CHAIN_LABEL[id] ?? String(id),
-                value: hasAnyStats ? fmt(num(id, key)) : '—',
-                pct: hasAnyStats ? pctOf(num(id, key), total) : undefined,
-              }))}
+              parts={MAINNET_IDS.map((id) => {
+                const n = isReg ? registeredOnChain(id) : num(id, key);
+                return {
+                  id,
+                  label: CHAIN_LABEL[id] ?? String(id),
+                  value: hasAnyStats ? fmt(n) : '—',
+                  pct: hasAnyStats ? pctOf(n, isReg ? Math.max(total, MAINNET_IDS.reduce((s, cid) => s + registeredOnChain(cid), 0)) : total) : undefined,
+                };
+              })}
             />
           );
         })}

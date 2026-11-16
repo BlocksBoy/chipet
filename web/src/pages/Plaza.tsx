@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { Cable, CalendarCheck, Check, ChevronLeft, ChevronRight, Fish, Flame, Hand, Pencil, Sparkles, Swords, ThumbsUp, Trophy, Users } from 'lucide-react';
 import { Button, Input, PAGE, PageHeader, Panel, Segmented, StatBand, Tag, cn } from '../components/ui.tsx';
 import { go } from '../router.tsx';
@@ -6,7 +6,7 @@ import { useApp } from '../state.tsx';
 import { PetAvatar } from '../chipet/PetAvatar.tsx';
 import { ACT_ICON, actTone, PetCard, routeIdOf, timeAgo } from '../chipet/PetCard.tsx';
 import { heartOf } from '../chipet/heart.ts';
-import { maxBonds, social } from '../chipet/social.ts';
+import { getSocialRev, maxBonds, social, subscribeSocial } from '../chipet/social.ts';
 import { plural, txt, useLang, useT } from '../i18n.ts';
 
 /** 广场动态每页条数 */
@@ -40,18 +40,20 @@ export function Plaza() {
   const [editing, setEditing] = useState(false);
   const [tick, setTick] = useState(0);
   const [feedPage, setFeedPage] = useState(1);
-  const profile = useMemo(() => social.profile(), [tick, lang]);
-  const activities = useMemo(() => social.activities(), [tick]);
+  const socialRev = useSyncExternalStore(subscribeSocial, getSocialRev, getSocialRev);
+  const profile = useMemo(() => social.profile(), [tick, lang, socialRev]);
+  const activities = useMemo(() => social.activities(), [tick, socialRev]);
   const feedPages = Math.max(1, Math.ceil(activities.length / FEED_PAGE));
   const feed = useMemo(() => {
     const page = Math.min(Math.max(1, feedPage), feedPages);
     const start = (page - 1) * FEED_PAGE;
     return activities.slice(start, start + FEED_PAGE);
   }, [activities, feedPage, feedPages]);
-  const hot = useMemo(() => social.leaderboard('pats').slice(0, 6), [tick]);
-  const ranks = useMemo(() => social.leaderboard(rankKind), [tick, rankKind]);
-  const bonds = useMemo(() => social.bonds(), [tick]);
-  const neighbors = useMemo(() => social.neighbors(), [tick]);
+  // 热门：综合热度现算；排行：按单项指标现算
+  const hot = useMemo(() => social.leaderboard('heat').slice(0, 6), [tick, socialRev]);
+  const ranks = useMemo(() => social.leaderboard(rankKind), [tick, socialRev, rankKind]);
+  const bonds = useMemo(() => social.bonds(), [tick, socialRev]);
+  const neighbors = useMemo(() => social.neighbors(), [tick, socialRev]);
   const top = ranks[0]?.score || 1;
 
   useEffect(() => { setFeedPage(1); }, [tick, tab]);
@@ -204,27 +206,38 @@ export function Plaza() {
           )}
 
           {tab === 'hot' && (
-            <ul className="mt-4 grid grid-cols-2 gap-4 md:grid-cols-3">
-              {hot.map(({ pet, score }, i) => (
-                <li key={pet.key}>
-                  <PetCard
-                    pet={pet}
-                    name={pet.name}
-                    sub={`${pet.owner} · ${heartOf(pet.circuitId, pet.rarity).name}`}
-                    badge={`#${i + 1}`}
-                    size={112}
-                    tags={<><Tag tone="copper" icon={Hand}>{score}</Tag><Tag tone="gold" icon={Trophy}>{t(`${pet.wins} 胜`, plural(pet.wins, 'win'))}</Tag></>}
-                    onClick={() => go(`/pet/${pet.id}`)}
-                    footer={
-                      <>
-                        <Button size="sm" variant="ghost" className="flex-1" onClick={() => go(`/pet/${pet.id}`)}>{t('串门', 'Visit')}</Button>
-                        {!pet.mine && <Button size="sm" className="flex-1" icon={Swords} onClick={() => go(`/train?vs=${pet.id}`)}>{t('切磋', 'Spar')}</Button>}
-                      </>
-                    }
-                  />
-                </li>
-              ))}
-            </ul>
+            <div className="mt-4">
+              <p className="mb-3 text-[12px] text-pretty text-mute">
+                {t('热度按摸头、串门、胜场、亲密、等级与近两日动态综合现算，摸一摸排行就会变。', 'Heat is live-scored from pats, visits, wins, affection, level, and last-two-days activity — pat someone and the ranking moves.')}
+              </p>
+              <ul className="grid grid-cols-2 gap-4 md:grid-cols-3">
+                {hot.map(({ pet, score, pats }, i) => (
+                  <li key={pet.key}>
+                    <PetCard
+                      pet={pet}
+                      name={pet.name}
+                      sub={`${pet.owner} · ${heartOf(pet.circuitId, pet.rarity).name}`}
+                      badge={`#${i + 1}`}
+                      size={112}
+                      tags={(
+                        <>
+                          <Tag tone="copper" icon={Flame}>{t(`热度 ${score}`, `Heat ${score}`)}</Tag>
+                          <Tag tone="faint" icon={Hand}>{pats}</Tag>
+                          <Tag tone="gold" icon={Trophy}>{t(`${pet.wins} 胜`, plural(pet.wins, 'win'))}</Tag>
+                        </>
+                      )}
+                      onClick={() => go(`/pet/${pet.id}`)}
+                      footer={
+                        <>
+                          <Button size="sm" variant="ghost" className="flex-1" onClick={() => go(`/pet/${pet.id}`)}>{t('串门', 'Visit')}</Button>
+                          {!pet.mine && <Button size="sm" className="flex-1" icon={Swords} onClick={() => go(`/train?vs=${pet.id}`)}>{t('切磋', 'Spar')}</Button>}
+                        </>
+                      }
+                    />
+                  </li>
+                ))}
+              </ul>
+            </div>
           )}
 
           {tab === 'rank' && (

@@ -6,7 +6,7 @@ import { EXAMPLES, FULL_ADDER_NAND9, generateVectors, HdlError, toHex, type Libr
 import { bountyPhase, type Bounty } from '@tapearena/chain';
 import { bountiesOf, bountyOf, chainCtx, componentsOf, HttpError, resetChainCtx, rpcHostLabel, type ChainCtx } from './chain.ts';
 import { build, challengeHint, precheck, simulate, summary, vectorsFor } from '@tapearena/chain';
-import { designLoop, openAIChat, type ChatFn, type DesignTarget } from './ai.ts';
+import { designLoop, openAIChat, petTalk, type ChatFn, type DesignTarget, type PetTalkInput } from './ai.ts';
 import {
   ADMIN_SESSION_TTL_SEC, adminTokenConfigured, allowFailAttempt, clearAdminSessionCookie,
   clientIp, createSession, getAdminToken, readAdminSession, requireAdmin, revokeSession,
@@ -14,6 +14,8 @@ import {
 } from './adminAuth.ts';
 import { listAdminStatsHistory } from './adminDb.ts';
 import { adminStatsPayload, startAdminScanJob } from './adminScanWorker.ts';
+import { countWalletUsers, countWalletUsersByChain, registerWallet } from './walletUsers.ts';
+import { overlayRechargeStats, recordRecharge } from './rechargeEvents.ts';
 
 export interface AppDeps {
   ctx?: (chainId?: number) => ChainCtx;
@@ -111,20 +113,88 @@ export function createApp(deps: AppDeps = {}) {
   app.get('/api/admin/session', requireAdmin(), (c) =>
     json(c, { ok: true, expiresIn: ADMIN_SESSION_TTL_SEC, session: sessionValid(readAdminSession(c)) }));
 
+  // ---------------------------------------------------------------- 钱包连接注册（公开；新地址计入注册人数）
+
+  app.post('/api/users/register', async (c) => {
+    const b = await body<{ address?: string; chainId?: number }>(c);
+    need(b.address, 'address');
+    const chainId = Number(b.chainId ?? 0);
+    try {
+      const r = registerWallet(String(b.address), Number.isFinite(chainId) ? chainId : 0);
+      return json(c, { ok: true, isNew: r.isNew, registered: r.total });
+    } catch (e) {
+      throw new HttpError(400, e instanceof Error ? e.message : 'invalid address');
+    }
+  });
+
+  app.get('/api/users/count', (c) => json(c, { registered: countWalletUsers() }));
+
+  // ---------------------------------------------------------------- 商店充值上报（公开；txHash 去重）
+
+  app.post('/api/recharges/report', async (c) => {
+    const b = await body<{
+      address?: string;
+      chainId?: number;
+      txHash?: string;
+      amountRaw?: string;
+      sku?: string;
+    }>(c);
+    need(b.address, 'address');
+    need(b.txHash, 'txHash');
+    need(b.amountRaw, 'amountRaw');
+    need(b.chainId, 'chainId');
+    try {
+      const r = recordRecharge({
+        address: String(b.address),
+        chainId: Number(b.chainId),
+        txHash: String(b.txHash),
+        amountRaw: String(b.amountRaw),
+        sku: b.sku ? String(b.sku) : undefined,
+      });
+      const overlay = overlayRechargeStats(Number(b.chainId));
+      return json(c, { ok: true, isNew: r.isNew, ...overlay });
+    } catch (e) {
+      throw new HttpError(400, e instanceof Error ? e.message : 'invalid recharge');
+    }
+  });
+
   // 读库 + 任务状态（永不在请求里跑长扫链，避免 Cloudflare/Caddy 502）
   app.get('/api/admin/stats', requireAdmin(), (c) => {
     const chainId = Number(c.req.query('chainId') ?? process.env.CHAIN_ID ?? 196);
     if (chainId !== 196 && chainId !== 56) throw new HttpError(400, 'unsupported chainId');
     const { stats, job } = adminStatsPayload(chainId);
+    const walletRegistered = countWalletUsers();
+    const registeredOnChain = countWalletUsersByChain(chainId);
+    const recharge = overlayRechargeStats(chainId);
     if (!stats) {
       return json(c, {
         chainId,
         empty: true,
         job,
+        // 扫链未完成时也能看钱包注册 / 上报充值
+        registered: walletRegistered,
+        registeredOnChain,
+        walletRegistered,
+        rechargeUsers: recharge.rechargeUsers,
+        rechargeTxs: recharge.rechargeTxs,
+        rechargeBem: recharge.rechargeBem,
+        reportedTxs: recharge.reportedTxs,
         note: '尚无快照。点「增量入库」启动后台扫链（首次会全量分片）。',
       });
     }
-    return json(c, { ...stats, job });
+    return json(c, {
+      ...stats,
+      // 看板「注册人数」= 连过钱包的独立地址（非扫链孵化地址）
+      registered: walletRegistered,
+      registeredOnChain,
+      walletRegistered,
+      // 充值 = 历史扫链冻结 + 商店成功上报
+      rechargeUsers: recharge.rechargeUsers,
+      rechargeTxs: recharge.rechargeTxs,
+      rechargeBem: recharge.rechargeBem,
+      reportedTxs: recharge.reportedTxs,
+      job,
+    });
   });
 
   // 启动后台扫链（立即返回；前端轮询 /api/admin/stats）
@@ -220,6 +290,31 @@ export function createApp(deps: AppDeps = {}) {
   // ---------------------------------------------------------------- 组件库
 
   app.get('/api/components', async (c) => json(c, await componentsOf(pick(c))));
+
+  // ---------------------------------------------------------------- AI 芯宠说话
+
+  app.post('/api/ai/pet-talk', async (c) => {
+    if (!process.env.AI_API_KEY && !deps.chat) throw new HttpError(503, 'AI 未配置');
+    const req = await body<PetTalkInput>(c);
+    need(req.name, 'name');
+    const line = await petTalk(
+      {
+        name: String(req.name).slice(0, 32),
+        species: req.species ? String(req.species).slice(0, 24) : undefined,
+        vibe: req.vibe ? String(req.vibe).slice(0, 24) : undefined,
+        rarity: Number(req.rarity) || 0,
+        mood: Number(req.mood),
+        energy: Number(req.energy),
+        intimacy: Number(req.intimacy),
+        level: Number(req.level),
+        wins: Number(req.wins),
+        mine: Boolean(req.mine),
+        owner: req.owner ? String(req.owner).slice(0, 32) : undefined,
+      },
+      deps.chat,
+    );
+    return json(c, { line });
+  });
 
   // ---------------------------------------------------------------- AI 设计
 

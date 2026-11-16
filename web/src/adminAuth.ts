@@ -30,11 +30,17 @@ export type AdminStatsPayload = {
   id?: number;
   chainId: number;
   cats: number;
+  /** 全局独立钱包地址数（连钱包注册；非扫链孵化地址） */
   registered: number;
+  /** 本链最近一次连接归因的地址数 */
+  registeredOnChain?: number;
+  walletRegistered?: number;
   players: number;
   rechargeUsers: number;
   rechargeTxs: number;
   rechargeBem: string;
+  /** 商店主动上报的笔数（不含历史扫链冻结） */
+  reportedTxs?: number;
   treasuryBal: string;
   scannedTo: string;
   scannedFrom?: string;
@@ -48,6 +54,33 @@ export type AdminStatsPayload = {
   empty?: boolean;
   job?: AdminScanJob;
 };
+
+/** empty 扫链快照仍可能带钱包注册 / 上报充值，归一成可展示的 stats。 */
+export function coalesceAdminStats(s: AdminStatsPayload): AdminStatsPayload | null {
+  if (!s.empty) return s;
+  const registered = Number(s.walletRegistered ?? s.registered ?? 0);
+  const rechargeTxs = Number(s.rechargeTxs ?? 0);
+  const rechargeUsers = Number(s.rechargeUsers ?? 0);
+  if (!registered && !s.registeredOnChain && !rechargeTxs && !rechargeUsers) return null;
+  return {
+    chainId: s.chainId,
+    empty: true,
+    cats: 0,
+    registered,
+    registeredOnChain: Number(s.registeredOnChain ?? 0),
+    walletRegistered: registered,
+    players: 0,
+    rechargeUsers,
+    rechargeTxs,
+    rechargeBem: String(s.rechargeBem ?? '0'),
+    reportedTxs: Number(s.reportedTxs ?? 0),
+    treasuryBal: '0',
+    scannedTo: '0',
+    rpcHost: '',
+    note: s.note ?? '',
+    job: s.job,
+  };
+}
 
 export async function adminLogin(token: string) {
   const r = await fetch(apiURL('/api/admin/login'), {

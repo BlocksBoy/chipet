@@ -69,7 +69,8 @@ export function startAdminScanJob(opts: {
 
   runner.promise = (async () => {
     try {
-      let checkpoint = full ? null : getAdminScanCheckpoint(chainId);
+      const existingCp = getAdminScanCheckpoint(chainId);
+      let checkpoint = full ? null : existingCp;
       let first = true;
       for (;;) {
         const { stats, checkpoint: next } = await loadAdminStats(client, chainId, chipet, {
@@ -77,6 +78,9 @@ export function startAdminScanJob(opts: {
           checkpoint,
           full: first && full,
           budgetMs: SLICE_MS,
+          // 商店充值由前端成功后上报，不再扫 BEM Transfer，减轻 RPC 压力
+          skipTransfers: true,
+          rechargeSeed: existingCp,
         });
         first = false;
         saveAdminScanCheckpoint(chainId, next);

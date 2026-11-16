@@ -23,22 +23,120 @@ for i in 0..3 { ... }            # 闭区间循环，下标可写 i+1、i*2 等
 export interface ChatMessage { role: 'system' | 'user' | 'assistant'; content: string }
 export type ChatFn = (messages: ChatMessage[]) => Promise<string>;
 
-export function openAIChat(opts = {
+const AI_DEFAULTS = {
   baseUrl: process.env.AI_BASE_URL ?? 'https://api.openai.com/v1',
   apiKey: process.env.AI_API_KEY ?? '',
   model: process.env.AI_MODEL ?? 'gpt-4o-mini',
-}): ChatFn {
-  return async (messages) => {
-    if (!opts.apiKey) throw new Error('未配置 AI_API_KEY');
-    const res = await fetch(`${opts.baseUrl.replace(/\/$/, '')}/chat/completions`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', authorization: `Bearer ${opts.apiKey}` },
-      body: JSON.stringify({ model: opts.model, messages, temperature: 0.2 }),
-    });
-    if (!res.ok) throw new Error(`AI 接口返回 ${res.status}: ${(await res.text()).slice(0, 200)}`);
-    const j = (await res.json()) as { choices?: { message?: { content?: string } }[] };
-    return j.choices?.[0]?.message?.content ?? '';
-  };
+};
+
+export async function chatOnce(
+  messages: ChatMessage[],
+  opts: { baseUrl?: string; apiKey?: string; model?: string; temperature?: number } = {},
+): Promise<string> {
+  const baseUrl = opts.baseUrl ?? AI_DEFAULTS.baseUrl;
+  const apiKey = opts.apiKey ?? AI_DEFAULTS.apiKey;
+  const model = opts.model ?? AI_DEFAULTS.model;
+  if (!apiKey) throw new Error('未配置 AI_API_KEY');
+  const res = await fetch(`${baseUrl.replace(/\/$/, '')}/chat/completions`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', authorization: `Bearer ${apiKey}` },
+    body: JSON.stringify({ model, messages, temperature: opts.temperature ?? 0.2 }),
+  });
+  if (!res.ok) throw new Error(`AI 接口返回 ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  const j = (await res.json()) as { choices?: { message?: { content?: string } }[] };
+  return j.choices?.[0]?.message?.content ?? '';
+}
+
+export function openAIChat(opts = AI_DEFAULTS): ChatFn {
+  return (messages) => chatOnce(messages, { ...opts, temperature: 0.2 });
+}
+
+/** 芯宠说话：短句气泡，双语 JSON。 */
+export interface PetTalkInput {
+  name: string;
+  species?: string;
+  vibe?: string;
+  rarity?: number;
+  mood?: number;
+  energy?: number;
+  intimacy?: number;
+  level?: number;
+  wins?: number;
+  mine?: boolean;
+  owner?: string;
+}
+
+export interface PetTalkLine { zh: string; en: string }
+
+const PET_TALK_MAX = 48;
+
+function scrubLine(s: string): string {
+  return s
+    .replace(/```[\s\S]*?```/g, '')
+    .replace(/https?:\/\/\S+/gi, '')
+    .replace(/[\[\]_*`>#]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, PET_TALK_MAX);
+}
+
+function parsePetTalk(raw: string): PetTalkLine | null {
+  const m = raw.match(/\{[\s\S]*\}/);
+  if (!m) return null;
+  try {
+    const j = JSON.parse(m[0]) as { zh?: unknown; en?: unknown };
+    const zh = scrubLine(String(j.zh ?? ''));
+    const en = scrubLine(String(j.en ?? ''));
+    if (!zh || !en) return null;
+    return { zh, en };
+  } catch {
+    return null;
+  }
+}
+
+export async function petTalk(input: PetTalkInput, chat?: ChatFn): Promise<PetTalkLine> {
+  const rarity = input.rarity === 2 ? '限定 Exclusive' : input.rarity === 1 ? '珍奇 Fancy' : '普通 Normal';
+  const mood = Math.max(0, Math.min(100, Math.floor(input.mood ?? 70)));
+  const energy = Math.max(0, Math.min(100, Math.floor(input.energy ?? 70)));
+  const intimacy = Math.max(0, Math.floor(input.intimacy ?? 0));
+  const level = Math.max(1, Math.floor(input.level ?? 1));
+  const wins = Math.max(0, Math.floor(input.wins ?? 0));
+  const who = input.mine ? '对饲主说话' : `对来串门的访客说话（主人是 ${input.owner || '邻居'}）`;
+
+  const messages: ChatMessage[] = [
+    {
+      role: 'system',
+      content: [
+        '你是 Chipet（芯宠）世界里的一只电子芯喵，心脏是 TapeOut 电路。',
+        '用第一人称短句说话，可爱、轻电路梗，不要说教，不要提 AI/模型/提示词。',
+        '只输出一行 JSON：{"zh":"中文","en":"English"}，不要其它文字。',
+        `中英文各不超过 ${PET_TALK_MAX} 个字符，不要链接，不要表情符号堆砌。`,
+      ].join('\n'),
+    },
+    {
+      role: 'user',
+      content: [
+        `名字：${input.name}`,
+        `物种：${input.species || '芯喵'}`,
+        `性格：${input.vibe || '机灵'}`,
+        `稀有度：${rarity}`,
+        `等级 Lv.${level} · 胜场 ${wins}`,
+        `心情 ${mood}/100 · 能量 ${energy}/100 · 亲密度 ${intimacy}`,
+        `场景：${who}`,
+        '请说一句此刻会冒出来的话。',
+      ].join('\n'),
+    },
+  ];
+
+  // 测试可注入 chat；线上用更高温度让台词更活泼
+  const raw = chat ? await chat(messages) : await chatOnce(messages, { temperature: 0.95 });
+
+  const parsed = parsePetTalk(raw);
+  if (parsed) return parsed;
+  // 模型偶发不按 JSON 回：把整段当中文，英文复用清洗后文本
+  const fallback = scrubLine(raw.replace(/[{}"]/g, ' '));
+  if (!fallback) throw new Error('AI 没有生成有效台词');
+  return { zh: fallback, en: fallback };
 }
 
 /** 取回复里最后一个代码块；没有代码块时把以 circuit 开头的部分当源码。 */

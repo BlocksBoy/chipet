@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { Button, PAGE, PageHeader, Panel, SectionTitle, Tag, cn } from '../components/ui.tsx';
 import { Link, go } from '../router.tsx';
+import { reportRecharge } from '../api.ts';
 import { useApp } from '../state.tsx';
 import { txt, useT } from '../i18n.ts';
 import {
@@ -96,7 +97,15 @@ export function Shop() {
         }
         const ok = await run(t(`支付 ${info.price} BEM`, `Pay ${info.price} BEM`), async (step) => {
           const s = await signer();
-          await transferErc20(s, bemNet.token, bemNet.treasury, need, step);
+          const receipt = await transferErc20(s, bemNet.token, bemNet.treasury, need, step);
+          // 充值成功主动入库，看板即时 +1，扫链不再依赖 Transfer 日志
+          void reportRecharge({
+            address: s.account,
+            chainId,
+            txHash: receipt.transactionHash,
+            amountRaw: need.toString(),
+            sku,
+          });
           bem.recordChainSpend(sku);
           applySku(sku);
           return true;

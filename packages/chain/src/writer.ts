@@ -32,9 +32,9 @@ export async function ensureAllowance(s: Signer, token: Address, spender: Addres
   await send(s, { address: token, abi: erc20Abi, functionName: 'approve', args: [spender, maxUint256] } as never, L('授权代币', 'Approve token'), onStep);
 }
 
-/** 直接 transfer ERC20（商店扣 BEM 用，不需要 approve）。 */
+/** 直接 transfer ERC20（商店扣 BEM 用，不需要 approve）。成功返回收据（含 tx hash，供前端上报充值）。 */
 export async function transferErc20(s: Signer, token: Address, to: Address, amount: bigint, onStep?: Progress) {
-  await send(s, { address: token, abi: erc20Abi, functionName: 'transfer', args: [to, amount] } as never, L('转账代币', 'Transfer token'), onStep);
+  return send(s, { address: token, abi: erc20Abi, functionName: 'transfer', args: [to, amount] } as never, L('转账代币', 'Transfer token'), onStep);
 }
 
 /** 主网 Transistors 已升级为 BEM 付费，本地测试栈仍收原生币：读得到 BEM() 就走 ERC20。 */

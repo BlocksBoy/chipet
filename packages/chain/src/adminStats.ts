@@ -186,6 +186,13 @@ export async function loadAdminStats(
     full?: boolean;
     /** 单次调用最长耗时（毫秒）；超时则带着未完成 checkpoint 返回 */
     budgetMs?: number;
+    /**
+     * 跳过 BEM Transfer 扫日志（商店充值由前端成功后主动入库）。
+     * 仍扫 Hatched/Played；checkpoint 里充值字段保持上次冻结值。
+     */
+    skipTransfers?: boolean;
+    /** 全量重扫时用于保留历史充值基线（通常传旧 checkpoint） */
+    rechargeSeed?: AdminScanCheckpoint | null;
   },
 ): Promise<LoadAdminStatsResult> {
   const bem = bemNetwork(chainId);
@@ -194,9 +201,20 @@ export async function loadAdminStats(
   const head = await pub.getBlockNumber();
   const budgetMs = opts?.budgetMs;
   const deadline = budgetMs && budgetMs > 0 ? Date.now() + budgetMs : Number.POSITIVE_INFINITY;
+  const skipTransfers = !!opts?.skipTransfers;
 
-  const prev = opts?.full || !opts?.checkpoint ? emptyAdminCheckpoint() : opts.checkpoint;
+  const base = opts?.full || !opts?.checkpoint ? emptyAdminCheckpoint() : opts.checkpoint;
   const full = !!opts?.full || !opts?.checkpoint;
+  // 跳过 Transfer 时：全量也不清掉历史充值人数/笔数/金额
+  const seed = skipTransfers ? (opts.rechargeSeed ?? opts.checkpoint ?? null) : null;
+  const prev: AdminScanCheckpoint = seed
+    ? {
+      ...base,
+      rechargeTxs: seed.rechargeTxs,
+      rechargeBemRaw: seed.rechargeBemRaw,
+      payers: [...seed.payers],
+    }
+    : base;
 
   let from: bigint;
   let scanMode: AdminStats['scanMode'];
@@ -239,7 +257,7 @@ export async function loadAdminStats(
       const b = a + chunk - 1n > head ? head : a + chunk - 1n;
       const newPlayed: string[] = [];
 
-      if (bem && receivers.length) {
+      if (!skipTransfers && bem && receivers.length) {
         for (const to of receivers) {
           const logs = await getLogsSafe(pub, {
             address: bem.token,
@@ -303,13 +321,14 @@ export async function loadAdminStats(
     players: [...players],
   };
 
+  const transferNote = skipTransfers ? '（充值 Transfer 已跳过，由商店上报入库）' : '';
   const note = !complete
-    ? `分片扫链进行中：已至 #${checkpoint.scannedTo} / 链头 #${head}。后台会继续，页面可轮询。`
+    ? `分片扫链进行中：已至 #${checkpoint.scannedTo} / 链头 #${head}。后台会继续，页面可轮询。${transferNote}`
     : scanMode === 'incremental'
-      ? '增量扫链完成：接上次游标合并去重集合。'
+      ? `增量扫链完成：接上次游标合并去重集合。${transferNote}`
       : scanMode === 'noop'
         ? '链头未前进：未拉日志，仅刷新猫咪数与收款余额。'
-        : '全量扫链完成：从部署起点重建。';
+        : `全量扫链完成：从部署起点重建。${transferNote}`;
 
   const stats: AdminStats = {
     chainId,

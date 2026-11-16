@@ -681,16 +681,19 @@ export const social = {
     save(s);
     return note;
   },
-  talk(key: string) {
+  /** line 可由 AI 生成；缺省回落本地台词池。 */
+  talk(key: string, line?: Text) {
     const s = load();
     const pet = this.getPet(key);
     if (!pet) throw noPet();
-    const line = pick(REPLIES);
-    s.bubbles[key] = line;
+    const text = line ?? pick(REPLIES);
+    s.bubbles[key] = typeof text === 'string'
+      ? text.slice(0, 48)
+      : both(text.zh.slice(0, 48), text.en.slice(0, 48));
     const who = namesOf(pet);
     pushAct(s, { kind: 'talk', actor: me(s), petKey: key, petName: pet.name, text: both(`和「${who.zh}」说了会儿话`, `Had a chat with ${who.en}`) });
     save(s);
-    return line;
+    return s.bubbles[key]!;
   },
   bubble(key: string): Text {
     return load().bubbles[key] ?? '';
@@ -871,15 +874,32 @@ export const social = {
     save(s);
   },
 
-  leaderboard(kind: 'pats' | 'intimacy' | 'level' | 'wins') {
+  /**
+   * 排行：单项指标，或热门用综合热度（摸头 / 串门 / 胜场 / 亲密 / 等级 / 近两日动态）。
+   * 每次调用现算，配合 subscribeSocial 可在广场即时刷新。
+   */
+  leaderboard(kind: 'pats' | 'intimacy' | 'level' | 'wins' | 'heat') {
     const pets = this.allPets();
     const s = load();
+    const recentAt = Date.now() - 2 * 86400000;
+    const recentByPet = new Map<string, number>();
+    for (const a of s.activities) {
+      if (!a.petKey || a.at < recentAt) continue;
+      recentByPet.set(a.petKey, (recentByPet.get(a.petKey) ?? 0) + 1);
+    }
+    const scoreOf = (p: PublicPet) => {
+      if (kind === 'pats') return s.pats[p.key] ?? 0;
+      if (kind === 'intimacy') return p.intimacy;
+      if (kind === 'wins') return p.wins;
+      if (kind === 'level') return p.level;
+      const pats = s.pats[p.key] ?? 0;
+      const visits = s.visits[p.key] ?? 0;
+      const recent = recentByPet.get(p.key) ?? 0;
+      return pats * 3 + visits + p.wins * 2 + p.intimacy + p.level * 2 + recent * 4 + p.rarity * 5;
+    };
     return [...pets]
-      .map((p) => ({
-        pet: p,
-        score: kind === 'pats' ? (s.pats[p.key] ?? 0) : kind === 'intimacy' ? p.intimacy : kind === 'wins' ? p.wins : p.level,
-      }))
-      .sort((a, b) => b.score - a.score || b.pet.rarity - a.pet.rarity)
+      .map((p) => ({ pet: p, score: scoreOf(p), pats: s.pats[p.key] ?? 0, visits: s.visits[p.key] ?? 0 }))
+      .sort((a, b) => b.score - a.score || b.pet.rarity - a.pet.rarity || b.pet.wins - a.pet.wins)
       .slice(0, 10);
   },
   /**

@@ -20,7 +20,8 @@ import { cattributes, geneStory, phenotypeOf, typeLabel } from '../chipet/phenot
 import { maxBonds, social } from '../chipet/social.ts';
 import { ShareVisitModal } from '../chipet/ShareVisitModal.tsx';
 import { BEM_SKUS, bem } from '../chipet/bem.ts';
-import { plural, tr, txt, useLang, useT } from '../i18n.ts';
+import { both, plural, tr, txt, useLang, useT } from '../i18n.ts';
+import { aiPetTalk } from '../api.ts';
 import { useApp } from '../state.tsx';
 
 function fmtCd(ms: number) {
@@ -43,6 +44,7 @@ export function PetPage({ id, share: shareToken }: { id?: number; share?: string
   const [impulse, setImpulse] = useState<ChipImpulse>('idle');
   const [shareOpen, setShareOpen] = useState(false);
   const [shareUrl, setShareUrl] = useState('');
+  const [talking, setTalking] = useState(false);
 
   const pet = useMemo(
     () => (shareToken ? social.fromShareToken(shareToken) : id != null ? social.getByRouteId(id) : undefined),
@@ -208,12 +210,34 @@ export function PetPage({ id, share: shareToken }: { id?: number; share?: string
     } catch (e) { fail(e); }
   };
 
-  const doTalk = () => {
+  const doTalk = async () => {
+    if (talking) return;
+    setTalking(true);
+    setErr('');
     try {
-      social.talk(key);
+      let line: { zh: string; en: string } | undefined;
+      try {
+        line = await aiPetTalk({
+          name: pet.name,
+          species: ph.species,
+          vibe: ph.vibe,
+          rarity: pet.rarity,
+          mood,
+          energy,
+          intimacy,
+          level,
+          wins: pet.wins,
+          mine: pet.mine,
+          owner: pet.owner,
+        });
+      } catch {
+        // 无后端 / 未配密钥 / 超时：回落本地台词池
+      }
+      social.talk(key, line ? both(line.zh, line.en) : undefined);
       setTick((t) => t + 1);
       pulse('talk');
     } catch (e) { fail(e); }
+    finally { setTalking(false); }
   };
 
   const doBond = () => {
@@ -378,7 +402,9 @@ export function PetPage({ id, share: shareToken }: { id?: number; share?: string
                 {social.canPat(key) ? t('摸头杀', 'Pat') : t('今日已摸', 'Patted today')}
               </Button>
               <Button size="sm" variant="ghost" icon={Fish} disabled={!social.canGift(key)} onClick={doGift}>{t('送鱼干', 'Give fish')}</Button>
-              <Button size="sm" variant="ghost" icon={MessageCircle} onClick={doTalk}>{t('说话', 'Talk')}</Button>
+              <Button size="sm" variant="ghost" icon={MessageCircle} disabled={talking} onClick={() => void doTalk()}>
+                {talking ? t('想着…', 'Thinking…') : t('说话', 'Talk')}
+              </Button>
               <span className="ml-auto flex items-center gap-1.5 font-mono text-xs text-mute"><Fish className="size-3.5 text-si" />{t(`我的鱼干 ${profile.fish}`, `${plural(profile.fish, 'fish treat')} left`)}</span>
             </div>
 

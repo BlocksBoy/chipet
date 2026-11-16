@@ -4,6 +4,7 @@ import { useAccount, useConnectors, useSwitchChain } from 'wagmi';
 import { getWalletClient } from 'wagmi/actions';
 import { useConnectModal } from '@rainbow-me/rainbowkit';
 import { CHAINS, ChainLibrary, DEPLOYMENTS, type Deployment, type Signer } from '@tapearena/chain';
+import { registerWalletUser } from './api.ts';
 import { errMsg } from './format.ts';
 import { tr } from './i18n.ts';
 import { CHAIN_IDS } from './env.ts';
@@ -81,6 +82,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (connectors.length) openConnectModal?.();
     else setWalletGuide(true);
   }, [connectors.length, openConnectModal]);
+
+  // 连上钱包 → 后端登记独立地址；新地址计入运营看板「注册人数」
+  useEffect(() => {
+    if (!account) return;
+    void registerWalletUser(account, walletChainId ?? chainId);
+  }, [account, walletChainId, chainId]);
 
   const signer = useCallback(async (): Promise<Signer> => {
     if (!account) {
