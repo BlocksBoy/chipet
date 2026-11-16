@@ -184,12 +184,14 @@ export type ArchivedPet = {
   updatedAt: number;
 };
 
-export async function adminCats(chainId: number, page = 1, pageSize = 20) {
+/** 默认拉全链一张表；可传 chainId 过滤单链 */
+export async function adminCats(page = 1, pageSize = 20, chainId?: number) {
   const q = new URLSearchParams({
-    chainId: String(chainId),
     page: String(page),
     pageSize: String(pageSize),
   });
+  if (chainId != null) q.set('chainId', String(chainId));
+  else q.set('chainId', 'all');
   const r = await fetch(apiURL(`/api/admin/cats?${q}`), { cache: 'no-store', credentials: 'include' });
   const data = await r.json().catch(() => ({}));
   if (!r.ok) {
@@ -199,7 +201,7 @@ export async function adminCats(chainId: number, page = 1, pageSize = 20) {
     throw err;
   }
   return data as {
-    chainId: number;
+    chainId: number | 'all';
     archived: number;
     items: ArchivedPet[];
     total: number;
@@ -209,9 +211,11 @@ export async function adminCats(chainId: number, page = 1, pageSize = 20) {
   };
 }
 
-/** 从链上全量拉取宠物属性写入 SQLite（可能较慢） */
-export async function adminSyncCats(chainId: number) {
-  const q = new URLSearchParams({ chainId: String(chainId) });
+/** 从链上全量拉取宠物属性写入 SQLite；默认双链一起同步 */
+export async function adminSyncCats(chainId?: number) {
+  const q = new URLSearchParams();
+  if (chainId != null) q.set('chainId', String(chainId));
+  else q.set('chainId', 'all');
   const r = await fetch(apiURL(`/api/admin/cats/sync?${q}`), {
     method: 'POST',
     cache: 'no-store',
@@ -226,12 +230,7 @@ export async function adminSyncCats(chainId: number) {
   }
   return data as {
     ok: boolean;
-    chainId: number;
-    nextId: number;
-    totalOnChain: number;
-    synced: number;
-    cursor: number;
-    complete: boolean;
     archived: number;
+    results: Array<Record<string, unknown>>;
   };
 }

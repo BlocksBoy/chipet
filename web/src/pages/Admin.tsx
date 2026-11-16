@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import {
-  Cat, Check, Coins, Copy, Database, ExternalLink, History, KeyRound, Loader2, LogOut, RefreshCw, RotateCcw, ShieldCheck, Swords, Users,
+  Cat, Check, ChevronRight, Coins, Copy, Database, ExternalLink, History, KeyRound, Loader2, LogOut, RefreshCw, RotateCcw, ShieldCheck, Swords, Users,
 } from 'lucide-react';
 import { CHAINS, CHAIN_LABEL, MAINNET_IDS, bemNetwork } from '@tapearena/chain';
 import { Button, PAGE, Panel, Tag, cn } from '../components/ui.tsx';
@@ -384,7 +384,7 @@ export function Admin() {
       key: 'cats',
       swatch: 'bg-copper-dim',
       href: '/admin/cats',
-      hrefLabel: t('查看存档列表', 'View archive'),
+      hrefLabel: t('猫咪存档', 'Cat archive'),
     },
   ];
 
@@ -682,8 +682,19 @@ function BreakdownCard({
           )}
           <span className={cn('truncate font-semibold text-ink', compact ? 'text-sm' : 'text-[15px]')}>{label}</span>
         </div>
-        <span className={cn('shrink-0 font-display font-bold tabular-nums text-ink', compact ? 'text-lg' : 'text-2xl')}>
-          {total}
+        <span className="flex shrink-0 items-center gap-1">
+          <span className={cn('font-display font-bold tabular-nums text-ink', compact ? 'text-lg' : 'text-2xl')}>
+            {total}
+          </span>
+          {href && (
+            <Link
+              to={href}
+              aria-label={hrefLabel ?? 'Archive'}
+              className="grid size-8 place-items-center rounded-full text-mute transition hover:bg-panel-2 hover:text-copper"
+            >
+              <ChevronRight className="size-5" />
+            </Link>
+          )}
         </span>
       </div>
       <div className="mt-3 space-y-2 border-t border-dashed border-line/80 pt-3">
@@ -700,16 +711,6 @@ function BreakdownCard({
           </div>
         ))}
       </div>
-      {href && (
-        <div className="mt-3 border-t border-dashed border-line/80 pt-3">
-          <Link
-            to={href}
-            className="inline-flex items-center gap-1 text-sm font-semibold text-copper hover:underline"
-          >
-            {hrefLabel ?? '→'}
-          </Link>
-        </div>
-      )}
     </div>
   );
 }

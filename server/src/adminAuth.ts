@@ -2,24 +2,32 @@
  * 运营后台鉴权（对齐 hbtc-mechanism）：
  * - ADMIN_TOKEN 只存在服务端环境变量，登录后发 HttpOnly Cookie
  * - 口令不进 localStorage；失败尝试按 IP 限流
+ * - 会话写入 SQLite（与 admin.sqlite 同库），部署重启容器后 Cookie 仍有效
  */
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import type { Context, MiddlewareHandler, Next } from 'hono';
 import { getCookie, setCookie, deleteCookie } from 'hono/cookie';
+import { getAdminDb } from './adminDb.ts';
 import { HttpError } from './chain.ts';
 
 export const ADMIN_COOKIE = 'chipet_admin';
 export const ADMIN_SESSION_TTL_SEC = 48 * 3600;
 export const MIN_ADMIN_TOKEN_LEN = 16;
 
-type SessionStore = Map<string, number>;
-
-const sessions: SessionStore = new Map();
-
 /** 每 IP：15 分钟窗口最多 10 次失败（登录或鉴权失败）。 */
 const FAIL_LIMIT = 10;
 const FAIL_WINDOW_MS = 15 * 60_000;
 const fails = new Map<string, { n: number; resetAt: number }>();
+
+function ensureSessionsTable() {
+  getAdminDb().exec(`
+    CREATE TABLE IF NOT EXISTS admin_sessions (
+      id TEXT PRIMARY KEY,
+      expires_at INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_admin_sessions_exp ON admin_sessions(expires_at);
+  `);
+}
 
 export function adminTokenConfigured(): boolean {
   const t = process.env.ADMIN_TOKEN ?? '';
@@ -61,25 +69,34 @@ export function allowFailAttempt(ip: string): boolean {
 }
 
 export function createSession(): string {
+  ensureSessionsTable();
   const id = randomBytes(32).toString('hex');
-  sessions.set(id, Date.now() + ADMIN_SESSION_TTL_SEC * 1000);
+  const exp = Date.now() + ADMIN_SESSION_TTL_SEC * 1000;
+  getAdminDb().prepare(`INSERT INTO admin_sessions (id, expires_at) VALUES (?, ?)`).run(id, exp);
   return id;
 }
 
 export function sessionValid(id: string | undefined): boolean {
   if (!id) return false;
-  const exp = sessions.get(id);
-  if (exp == null) return false;
-  if (Date.now() > exp) {
-    sessions.delete(id);
+  ensureSessionsTable();
+  const row = getAdminDb()
+    .prepare(`SELECT expires_at FROM admin_sessions WHERE id = ?`)
+    .get(id) as { expires_at: number } | undefined;
+  if (!row) return false;
+  if (Date.now() > Number(row.expires_at)) {
+    getAdminDb().prepare(`DELETE FROM admin_sessions WHERE id = ?`).run(id);
     return false;
   }
-  sessions.set(id, Date.now() + ADMIN_SESSION_TTL_SEC * 1000);
+  // 滑动续期
+  const exp = Date.now() + ADMIN_SESSION_TTL_SEC * 1000;
+  getAdminDb().prepare(`UPDATE admin_sessions SET expires_at = ? WHERE id = ?`).run(exp, id);
   return true;
 }
 
 export function revokeSession(id: string | undefined) {
-  if (id) sessions.delete(id);
+  if (!id) return;
+  ensureSessionsTable();
+  getAdminDb().prepare(`DELETE FROM admin_sessions WHERE id = ?`).run(id);
 }
 
 function cookieSecure(c: Context): boolean {

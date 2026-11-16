@@ -45,13 +45,13 @@ describe('petArchive', () => {
     }
     expect(countArchivedPets(196)).toBe(25);
 
-    const p1 = listArchivedPets(196, { page: 1, pageSize: 20 });
+    const p1 = listArchivedPets({ chainId: 196, page: 1, pageSize: 20 });
     expect(p1.total).toBe(25);
     expect(p1.pages).toBe(2);
     expect(p1.items).toHaveLength(20);
     expect(p1.items[0]?.petId).toBe(25); // DESC
 
-    const p2 = listArchivedPets(196, { page: 2, pageSize: 20 });
+    const p2 = listArchivedPets({ chainId: 196, page: 2, pageSize: 20 });
     expect(p2.items).toHaveLength(5);
     expect(p2.items[0]?.petId).toBe(5);
 
@@ -73,8 +73,27 @@ describe('petArchive', () => {
       nIn: 4,
       nOut: 3,
     });
-    const again = listArchivedPets(196, { page: 1, pageSize: 1 });
+    upsertArchivedPet({
+      chainId: 56,
+      petId: 1,
+      owner: '0xcccccccccccccccccccccccccccccccccccccccc',
+      name: 'BscCat',
+      cpu: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      circuitId: 1,
+      rarity: 0,
+      energy: 10,
+      mood: 10,
+      intimacy: 1,
+      level: 1,
+      lastFeed: 1,
+      lastPlay: 1,
+    });
+    const again = listArchivedPets({ chainId: 196, page: 1, pageSize: 1 });
     expect(again.items[0]).toMatchObject({ petId: 25, name: 'Renamed', energy: 100, gates: 12 });
     expect(countArchivedPets(196)).toBe(25);
+    expect(countArchivedPets(null)).toBe(26);
+    const all = listArchivedPets({ page: 1, pageSize: 30 });
+    expect(all.total).toBe(26);
+    expect(all.items.some((x) => x.chainId === 56 && x.petId === 1)).toBe(true);
   });
 });

@@ -227,25 +227,42 @@ export function createApp(deps: AppDeps = {}) {
   // ---------------------------------------------------------------- 芯宠存档（全量属性落库 + 分页列表）
 
   app.get('/api/admin/cats', requireAdmin(), (c) => {
-    const chainId = Number(c.req.query('chainId') ?? process.env.CHAIN_ID ?? 196);
-    if (chainId !== 196 && chainId !== 56) throw new HttpError(400, 'unsupported chainId');
+    const rawChain = c.req.query('chainId');
+    const chainId = rawChain == null || rawChain === '' || rawChain === 'all'
+      ? null
+      : Number(rawChain);
+    if (chainId != null && chainId !== 196 && chainId !== 56) throw new HttpError(400, 'unsupported chainId');
     const page = Number(c.req.query('page') ?? 1);
     const pageSize = Number(c.req.query('pageSize') ?? 20);
-    const list = listArchivedPets(chainId, {
+    const list = listArchivedPets({
+      chainId,
       page: Number.isFinite(page) ? page : 1,
       pageSize: Number.isFinite(pageSize) ? pageSize : 20,
     });
-    return json(c, { chainId, archived: countArchivedPets(chainId), ...list });
+    return json(c, { chainId: chainId ?? 'all', archived: countArchivedPets(chainId), ...list });
   });
 
+  /** 同步单链；不传 chainId 则两条主网都同步 */
   app.post('/api/admin/cats/sync', requireAdmin(), async (c) => {
-    const chainId = Number(c.req.query('chainId') ?? process.env.CHAIN_ID ?? 196);
-    if (chainId !== 196 && chainId !== 56) throw new HttpError(400, 'unsupported chainId');
-    resetChainCtx(chainId);
-    const x = ctxOf(chainId);
-    if (!x.deployment?.chipet) throw new HttpError(404, 'chipet not deployed on this chain');
-    const result = await syncChipetPetsFully(x.client, chainId, x.deployment.chipet);
-    return json(c, { ok: true, ...result });
+    const rawChain = c.req.query('chainId');
+    const ids = rawChain == null || rawChain === '' || rawChain === 'all'
+      ? [196, 56]
+      : [Number(rawChain)];
+    for (const chainId of ids) {
+      if (chainId !== 196 && chainId !== 56) throw new HttpError(400, 'unsupported chainId');
+    }
+    const results = [];
+    for (const chainId of ids) {
+      resetChainCtx(chainId);
+      const x = ctxOf(chainId);
+      if (!x.deployment?.chipet) {
+        results.push({ chainId, ok: false, error: 'chipet not deployed' });
+        continue;
+      }
+      const result = await syncChipetPetsFully(x.client, chainId, x.deployment.chipet);
+      results.push({ ok: true, ...result });
+    }
+    return json(c, { ok: true, archived: countArchivedPets(null), results });
   });
 
   app.get('/api/examples', (c) => json(c, { ...EXAMPLES, fullAdderNand9: { title: '9 门全加器（NAND 手写）', src: FULL_ADDER_NAND9 } }));

@@ -146,31 +146,43 @@ export function upsertArchivedPet(input: PetArchiveInput): void {
   );
 }
 
-export function countArchivedPets(chainId: number): number {
+/** chainId 省略或 null 时统计全链 */
+export function countArchivedPets(chainId?: number | null): number {
   ensureTable();
+  if (chainId == null) {
+    const row = getAdminDb().prepare(`SELECT COUNT(*) AS n FROM chipet_pets`).get() as { n: number };
+    return Number(row?.n ?? 0);
+  }
   const row = getAdminDb()
     .prepare(`SELECT COUNT(*) AS n FROM chipet_pets WHERE chain_id = ?`)
     .get(chainId) as { n: number };
   return Number(row?.n ?? 0);
 }
 
+/** chainId 省略时一张表拉全链，行内带 chainId 区分 */
 export function listArchivedPets(
-  chainId: number,
-  opts?: { page?: number; pageSize?: number },
+  opts?: { chainId?: number | null; page?: number; pageSize?: number },
 ): { items: ArchivedPet[]; total: number; page: number; pageSize: number; pages: number } {
   ensureTable();
   const pageSize = Math.min(100, Math.max(1, Number(opts?.pageSize ?? 20) || 20));
   const page = Math.max(1, Number(opts?.page ?? 1) || 1);
-  const total = countArchivedPets(chainId);
+  const chainId = opts?.chainId;
+  const total = countArchivedPets(chainId ?? null);
   const pages = Math.max(1, Math.ceil(total / pageSize));
   const safePage = Math.min(page, pages);
   const offset = (safePage - 1) * pageSize;
-  const rows = getAdminDb().prepare(`
-    SELECT * FROM chipet_pets
-    WHERE chain_id = ?
-    ORDER BY pet_id DESC
-    LIMIT ? OFFSET ?
-  `).all(chainId, pageSize, offset) as Record<string, unknown>[];
+  const rows = (chainId == null
+    ? getAdminDb().prepare(`
+        SELECT * FROM chipet_pets
+        ORDER BY updated_at DESC, chain_id ASC, pet_id DESC
+        LIMIT ? OFFSET ?
+      `).all(pageSize, offset)
+    : getAdminDb().prepare(`
+        SELECT * FROM chipet_pets
+        WHERE chain_id = ?
+        ORDER BY pet_id DESC
+        LIMIT ? OFFSET ?
+      `).all(chainId, pageSize, offset)) as Record<string, unknown>[];
   return {
     items: rows.map(rowToPet),
     total,
