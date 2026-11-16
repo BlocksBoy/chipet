@@ -521,8 +521,8 @@ export function Home() {
           {feed.length === 0 ? (
             <p className="px-1 py-2 text-sm text-mute">{t('还没有动态，去孵化或摸摸邻居吧。', 'Nothing here yet. Hatch a kitty or go pat a neighbor.')}</p>
           ) : (
-            <ul className="max-h-[calc(20*3.35rem)] space-y-1 overflow-y-auto overscroll-contain pr-1 [scrollbar-gutter:stable]">
-              {feed.map((a) => {
+            <ul className="space-y-1">
+              {feed.slice(0, 10).map((a) => {
                 const I = ACT_ICON[a.kind] ?? Sparkles;
                 return (
                   <li key={a.id} className="min-h-[3.35rem]">

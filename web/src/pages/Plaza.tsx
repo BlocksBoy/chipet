@@ -146,7 +146,7 @@ export function Plaza() {
                   {feedPages > 1 && (
                     <nav
                       aria-label={t('动态分页', 'Feed pagination')}
-                      className="flex flex-wrap items-center justify-center gap-1.5 border-t border-line/70 px-4 py-3"
+                      className="flex flex-wrap items-center justify-end gap-1.5 border-t border-line/70 px-4 py-3"
                     >
                       <Button
                         size="sm"
