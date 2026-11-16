@@ -105,6 +105,41 @@ export async function registerWalletUser(address: string, chainId?: number): Pro
   }
 }
 
+/** 切磋对手：存档里其他玩家的链上猫（公开接口）。失败返回空列表。 */
+export interface RivalPetDto {
+  chainId: number;
+  petId: number;
+  owner: string;
+  name: string;
+  cpu: string;
+  circuitId: string;
+  rarity: number;
+  energy: number;
+  mood: number;
+  intimacy: number;
+  level: number;
+}
+
+export async function fetchRivals(opts?: {
+  exclude?: string;
+  chainId?: number | 'all';
+  limit?: number;
+}): Promise<RivalPetDto[]> {
+  if (DEWEB && !BASE) return [];
+  try {
+    const q = new URLSearchParams();
+    if (opts?.exclude) q.set('exclude', opts.exclude);
+    if (opts?.chainId != null) q.set('chainId', String(opts.chainId));
+    if (opts?.limit != null) q.set('limit', String(opts.limit));
+    const r = await fetch(`${BASE}/api/pets/rivals?${q}`);
+    if (!r.ok) return [];
+    const data = await r.json().catch(() => ({})) as { items?: RivalPetDto[] };
+    return Array.isArray(data.items) ? data.items : [];
+  } catch {
+    return [];
+  }
+}
+
 /** 芯宠说话：成功返回双语台词；失败抛错，由调用方回落本地台词池。 */
 export async function aiPetTalk(body: PetTalkBody, signal?: AbortSignal): Promise<{ zh: string; en: string }> {
   if (DEWEB && !BASE) throw new Error(tr('当前环境无 AI 后端', 'No AI backend in this build'));

@@ -16,7 +16,7 @@ import { listAdminStatsHistory } from './adminDb.ts';
 import { adminStatsPayload, decorateAdminStats, startAdminScanJob } from './adminScanWorker.ts';
 import { countWalletUsers, overlayRegisteredStats, registerWallet } from './walletUsers.ts';
 import { overlayRechargeStats, recordRecharge } from './rechargeEvents.ts';
-import { countArchivedPets, listArchivedPets } from './petArchive.ts';
+import { countArchivedPets, listArchivedPets, listRivalPets } from './petArchive.ts';
 import { syncChipetPetsFully } from './petSync.ts';
 
 export interface AppDeps {
@@ -134,6 +134,23 @@ export function createApp(deps: AppDeps = {}) {
   });
 
   app.get('/api/users/count', (c) => json(c, { registered: countWalletUsers() }));
+
+  // ---------------------------------------------------------------- 切磋对手（公开；存档里其他玩家的链上猫）
+  app.get('/api/pets/rivals', (c) => {
+    const rawChain = c.req.query('chainId');
+    const chainId = rawChain == null || rawChain === '' || rawChain === 'all'
+      ? null
+      : Number(rawChain);
+    if (chainId != null && chainId !== 196 && chainId !== 56) throw new HttpError(400, 'unsupported chainId');
+    const exclude = (c.req.query('exclude') ?? '').trim();
+    const limit = Number(c.req.query('limit') ?? 24);
+    const items = listRivalPets({
+      chainId,
+      excludeOwner: exclude || null,
+      limit: Number.isFinite(limit) ? limit : 24,
+    });
+    return json(c, { items });
+  });
 
   // ---------------------------------------------------------------- 商店充值上报（公开；txHash 去重）
 

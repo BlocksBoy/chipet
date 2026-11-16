@@ -5,6 +5,7 @@ import { getWalletClient } from 'wagmi/actions';
 import { useConnectModal } from '@rainbow-me/rainbowkit';
 import { CHAINS, ChainLibrary, DEPLOYMENTS, type Deployment, type Signer } from '@tapearena/chain';
 import { registerWalletUser } from './api.ts';
+import { social } from './chipet/social.ts';
 import { errMsg } from './format.ts';
 import { tr } from './i18n.ts';
 import { CHAIN_IDS } from './env.ts';
@@ -88,6 +89,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!account) return;
     void registerWalletUser(account, walletChainId ?? chainId);
   }, [account, walletChainId, chainId]);
+
+  // 切钱包时同步主人昵称：未自定义则重抽；已自定义按钱包记住
+  useEffect(() => {
+    social.bindAccount(account);
+  }, [account]);
 
   const signer = useCallback(async (): Promise<Signer> => {
     if (!account) {

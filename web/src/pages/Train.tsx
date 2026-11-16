@@ -3,6 +3,8 @@ import { AnimatePresence, motion } from 'motion/react';
 import {
   ArrowRight, Cable, ChevronLeft, ChevronRight, Cpu, Egg, Fish, Flag, RotateCcw, ScrollText, Shield, Swords, Trophy, WandSparkles, X, Zap, type LucideProps,
 } from 'lucide-react';
+import { useAccount } from 'wagmi';
+import { fetchRivals } from '../api.ts';
 import { Button, Empty, ErrBar, PAGE, PageHeader, Panel, Tag, cn } from '../components/ui.tsx';
 import { Link, go, useRoute } from '../router.tsx';
 import { PetAvatar } from '../chipet/PetAvatar.tsx';
@@ -17,8 +19,8 @@ import {
   type Clash, type Move, type Roll, type Wild,
 } from '../chipet/battle.ts';
 import { phenotypeOf } from '../chipet/phenotype.ts';
-import { BATTLE_ENERGY, localChipet, xpNeed, type LocalPet } from '../chipet/store.ts';
-import { social, type PublicPet } from '../chipet/social.ts';
+import { BATTLE_ENERGY, isChainPet, localChipet, xpNeed, type LocalPet } from '../chipet/store.ts';
+import { isOnchainPetKey, rivalFromArchive, social, type PublicPet } from '../chipet/social.ts';
 import { both, plural, tr, txt, useLang, useT, type Txt } from '../i18n.ts';
 
 const MOVE_ICON: ComponentType<LucideProps>[] = [Swords, Shield, WandSparkles];
@@ -733,6 +735,7 @@ export function Train() {
   const lang = useLang();
   const r = useRoute();
   const wide = useWide();
+  const { address } = useAccount();
   const [tick, setTick] = useState(0);
   const [rivalPage, setRivalPage] = useState(1);
   const [err, setErr] = useState('');
@@ -745,6 +748,22 @@ export function Train() {
   const flashSeq = useRef(0);
   const [flashes, setFlashes] = useState<{ id: number; slot: number; x: number; y: number }[]>([]);
   const [showResult, setShowResult] = useState(false);
+
+  /** 拉其他玩家的链上猫进切磋池；API 已按钱包排除，本地再挡同 id+同名的自家宠。 */
+  useEffect(() => {
+    let alive = true;
+    fetchRivals({ exclude: address, limit: 24 }).then((items) => {
+      if (!alive) return;
+      const localChain = localChipet.list().filter(isChainPet);
+      const pets = items.map(rivalFromArchive).filter((p) => {
+        const petId = Number(p.key.split(':')[2]);
+        return !localChain.some((lp) => lp.id === petId && lp.name === p.name);
+      });
+      social.setChainRivals(pets);
+      setTick((n) => n + 1);
+    });
+    return () => { alive = false; };
+  }, [address]);
 
   const sparkAt = (slot: number, e: { currentTarget: HTMLElement; clientX: number; clientY: number }) => {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -783,7 +802,7 @@ export function Train() {
   const challenge = useMemo(() => {
     if (!vs) return undefined;
     const p = social.getByRouteId(Number(vs));
-    // 只能切磋别人的芯宠（邻居 / 访客）
+    // 只能切磋别人的芯宠（链上玩家 / 邻居 / 访客）
     if (!p || p.mine) return undefined;
     return npcOpp(p);
   }, [vs, tick]);
@@ -1300,19 +1319,21 @@ export function Train() {
       <Panel title={t('切磋对手', 'Spar rivals')} icon={Trophy} className="mt-6" bodyClass="p-0">
         <div className="px-4 pt-4">
           <p className="mb-3 text-[12px] text-pretty text-mute">
-            {t('今日路过访客和邻居会出现在这里；只能和别人的芯宠切磋。等级、胜场、心情会随对战变化。', 'Today’s passers-by and neighbors show up here — you can only spar with others’ Chipets. Level, wins, and mood shift after each spar.')}
+            {t('优先展示其他玩家的链上芯宠；人少时再用路过访客和邻居补位。只能和别人的芯宠切磋。', 'Other players’ on-chain Chipets come first; passers-by and neighbors fill in when the list is short. You can only spar with others’ Chipets.')}
           </p>
         </div>
         <ul className="grid grid-cols-2 gap-3 px-4 pb-4 md:grid-cols-3">
           {rivalsPage.map((p) => {
             const o = npcOpp(p);
             const ph = phenotypeOf(p.cpu, p.circuitId, p.rarity);
-            const visitor = !p.mine && p.id <= -101;
+            const onchain = isOnchainPetKey(p.key);
+            const visitor = !p.mine && !onchain && p.id <= -101;
             return (
               <li key={p.key} className={cn('flex flex-col overflow-hidden rounded-3xl border', challenge?.key === p.key ? 'border-copper ring-2 ring-copper/30' : 'border-line/70')}>
                 <div className="relative grid place-items-center pt-3 pb-1" style={{ backgroundColor: ph.bg }}>
                   <span className="absolute top-2 left-3 font-mono text-[11px] text-mute">Lv.{p.level}</span>
                   <span className="absolute top-2 right-3 font-mono text-[11px] text-mute">{t(`${p.wins} 胜`, plural(p.wins, 'win'))}</span>
+                  {onchain && <Tag tone="si" className="absolute bottom-2 left-2">{t('链上', 'On-chain')}</Tag>}
                   {visitor && <Tag className="absolute bottom-2 left-2">{t('今日路过', 'Passing')}</Tag>}
                   <PetAvatar cpu={p.cpu} circuitId={p.circuitId} rarity={p.rarity} mood={p.mood} size={104} />
                 </div>

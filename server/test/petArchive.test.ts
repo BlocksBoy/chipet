@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { closeAdminDb } from '../src/adminDb.ts';
-import { countArchivedPets, listArchivedPets, upsertArchivedPet } from '../src/petArchive.ts';
+import { countArchivedPets, listArchivedPets, listRivalPets, upsertArchivedPet } from '../src/petArchive.ts';
 
 describe('petArchive', () => {
   let dir: string;
@@ -105,5 +105,13 @@ describe('petArchive', () => {
 
     const highE = listArchivedPets({ chainId: 196, energyMin: 71, page: 1, pageSize: 50 });
     expect(highE.items.every((x) => x.energy >= 71)).toBe(true);
+
+    const rivals = listRivalPets({
+      excludeOwner: '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+      limit: 10,
+    });
+    expect(rivals.every((x) => x.owner !== '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb')).toBe(true);
+    expect(rivals.some((x) => x.name === 'Renamed')).toBe(false);
+    expect(rivals.length).toBeGreaterThan(0);
   });
 });

@@ -43,6 +43,10 @@ export function Plaza() {
   useEffect(() => {
     setFeedPage((p) => Math.min(Math.max(1, p), feedPages));
   }, [feedPages]);
+  // 切钱包后主人名可能变了；非编辑中时跟档
+  useEffect(() => {
+    if (!editing) setName(profile.displayName);
+  }, [profile.displayName, editing]);
 
   const saveName = () => {
     social.setName(name);

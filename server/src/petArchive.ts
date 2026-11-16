@@ -156,6 +156,8 @@ export type PetArchiveListOpts = {
   levelMax?: number | null;
   energyMin?: number | null;
   energyMax?: number | null;
+  /** 排除某钱包地址（切磋对手不展示自己的猫） */
+  excludeOwner?: string | null;
 };
 
 function buildPetWhere(opts?: PetArchiveListOpts): { sql: string; params: unknown[] } {
@@ -164,6 +166,13 @@ function buildPetWhere(opts?: PetArchiveListOpts): { sql: string; params: unknow
   if (opts?.chainId != null) {
     parts.push('chain_id = ?');
     params.push(opts.chainId);
+  }
+  if (opts?.excludeOwner) {
+    const owner = String(opts.excludeOwner).trim().toLowerCase();
+    if (/^0x[a-f0-9]{40}$/.test(owner)) {
+      parts.push('owner != ?');
+      params.push(owner);
+    }
   }
   if (opts?.rarity != null && Number.isFinite(opts.rarity)) {
     parts.push('rarity = ?');
@@ -229,4 +238,25 @@ export function listArchivedPets(
     pageSize,
     pages,
   };
+}
+
+/** 公开切磋对手：最近更新的存档猫，可排除自己钱包；默认最多 24 只。 */
+export function listRivalPets(opts?: {
+  excludeOwner?: string | null;
+  chainId?: number | null;
+  limit?: number;
+}): ArchivedPet[] {
+  ensureTable();
+  const limit = Math.min(48, Math.max(1, Number(opts?.limit ?? 24) || 24));
+  const { sql, params } = buildPetWhere({
+    chainId: opts?.chainId ?? null,
+    excludeOwner: opts?.excludeOwner ?? null,
+  });
+  const rows = getAdminDb().prepare(`
+    SELECT * FROM chipet_pets
+    ${sql}
+    ORDER BY updated_at DESC, chain_id ASC, pet_id DESC
+    LIMIT ?
+  `).all(...params, limit) as Record<string, unknown>[];
+  return rows.map(rowToPet);
 }

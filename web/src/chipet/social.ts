@@ -1,4 +1,5 @@
 import type { Address } from 'viem';
+import { short } from '../format.ts';
 import { both, tr, txt, type Text, type Txt } from '../i18n.ts';
 import { WILDS } from './battle.ts';
 import type { Rarity } from './phenotype.ts';
@@ -7,6 +8,54 @@ import { prepareNote, scrubNoteText } from './noteGuard.ts';
 import { localChipet, type LocalPet } from './store.ts';
 
 const MOCK_CPU = '0x000000000000000000000000000000000000c111' as Address;
+
+/** 链上切磋对手缓存（来自 /api/pets/rivals）；负 id 编码避开 NPC -1..-103。 */
+let chainRivalsCache: PublicPet[] = [];
+
+/** route id：-(2_000_000 + chainId * 100_000 + petId) */
+export function onchainRouteId(chainId: number, petId: number): number {
+  return -(2_000_000 + chainId * 100_000 + petId);
+}
+
+export function onchainPetKey(chainId: number, petId: number): string {
+  return `onchain:${chainId}:${petId}`;
+}
+
+export function isOnchainPetKey(key: string): boolean {
+  return key.startsWith('onchain:');
+}
+
+/** 把存档 DTO 转成切磋用的 PublicPet */
+export function rivalFromArchive(p: {
+  chainId: number;
+  petId: number;
+  owner: string;
+  name: string;
+  cpu: string;
+  circuitId: string | number | bigint;
+  rarity: number;
+  energy: number;
+  mood: number;
+  intimacy: number;
+  level: number;
+}): PublicPet {
+  const rarity = (Math.max(0, Math.min(2, Math.trunc(p.rarity))) || 0) as Rarity;
+  return {
+    key: onchainPetKey(p.chainId, p.petId),
+    id: onchainRouteId(p.chainId, p.petId),
+    name: p.name || `Chipet #${p.petId}`,
+    owner: short(p.owner) || p.owner,
+    cpu: (p.cpu || MOCK_CPU) as Address,
+    circuitId: BigInt(p.circuitId),
+    rarity,
+    energy: Math.max(0, Math.min(100, Math.trunc(p.energy) || 0)),
+    mood: Math.max(0, Math.min(100, Math.trunc(p.mood) || 0)),
+    intimacy: Math.max(0, Math.trunc(p.intimacy) || 0),
+    level: Math.max(1, Math.trunc(p.level) || 1),
+    wins: Math.max(0, Math.trunc(p.level) - 1),
+    mine: false,
+  };
+}
 
 export interface PublicPet {
   key: string;
@@ -51,8 +100,20 @@ export interface Quest {
   claimed: boolean;
 }
 
+/** 按钱包记住的主人昵称：自定义名回切保留，未自定义则换钱包重抽。 */
+interface WalletIdentity {
+  displayName: string;
+  custom: boolean;
+}
+
 interface SocialState {
   displayName: string;
+  /** 当前昵称是否用户手改过（相对当前绑定钱包） */
+  nameCustomized: boolean;
+  /** 当前绑定的钱包（小写）；空串表示未连接 */
+  boundWallet: string;
+  /** 各钱包自己的昵称档案 */
+  walletIdentities: Record<string, WalletIdentity>;
   friendCode: string;
   pats: Record<string, number>;
   myPatsToday: Record<string, string>; // petKey -> YYYY-MM-DD
@@ -258,6 +319,9 @@ function defaultState(): SocialState {
   const code = `CHIP-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
   return {
     displayName: pickRandomName(),
+    nameCustomized: false,
+    boundWallet: '',
+    walletIdentities: {},
     friendCode: code,
     pats: Object.fromEntries(NEIGHBORS.map((n) => [`npc:${n.id}`, 3 + Math.floor(Math.random() * 40)])),
     myPatsToday: {},
@@ -391,6 +455,11 @@ function load(): SocialState {
     const s: SocialState = {
       ...base,
       ...parsed,
+      nameCustomized: Boolean(parsed.nameCustomized),
+      boundWallet: typeof parsed.boundWallet === 'string' ? parsed.boundWallet.toLowerCase() : '',
+      walletIdentities: parsed.walletIdentities && typeof parsed.walletIdentities === 'object'
+        ? { ...parsed.walletIdentities }
+        : {},
       // 嵌套对象浅合并会丢字段；任务进度必须单独规范化
       quest: normalizeQuest(parsed.quest ?? base.quest),
       pats: { ...base.pats, ...(parsed.pats ?? {}) },
@@ -537,12 +606,63 @@ function visitBack(s: SocialState, from: PublicPet, text: Txt) {
 export const social = {
   profile() {
     const s = load();
-    return { displayName: txt(me(s)), friendCode: s.friendCode, streak: s.streak, fish: s.fish, checkedIn: s.checkinDay === DAY() };
+    return {
+      displayName: txt(me(s)),
+      friendCode: s.friendCode,
+      streak: s.streak,
+      fish: s.fish,
+      checkedIn: s.checkinDay === DAY(),
+      nameCustomized: s.nameCustomized,
+      boundWallet: s.boundWallet,
+    };
   },
   setName(name: string) {
     const s = load();
-    s.displayName = name.trim().slice(0, 16) || s.displayName;
+    const next = name.trim().slice(0, 16);
+    if (!next) return;
+    s.displayName = next;
+    s.nameCustomized = true;
+    if (s.boundWallet) {
+      s.walletIdentities[s.boundWallet] = { displayName: next, custom: true };
+    }
     save(s);
+  },
+  /**
+   * 绑定当前钱包到主人昵称：
+   * - 该钱包曾自定义 → 恢复自定义名
+   * - 从未自定义 → 换到另一只钱包时重抽随机网名
+   * - 首次连接（此前未绑钱包）→ 保留现有随机名，不强制重抽
+   */
+  bindAccount(address: string | null | undefined) {
+    const s = load();
+    const next = (address ?? '').trim().toLowerCase();
+    // 断开连接：保留上次绑定，方便下次连上另一只时仍能判定「换了钱包」
+    if (!next) return s.displayName;
+
+    const prev = (s.boundWallet ?? '').toLowerCase();
+    if (next === prev) return s.displayName;
+
+    if (prev && s.nameCustomized && !LEGACY_NAMES.has(s.displayName)) {
+      s.walletIdentities[prev] = { displayName: s.displayName, custom: true };
+    }
+
+    s.boundWallet = next;
+    const saved = s.walletIdentities[next];
+    if (saved?.custom && saved.displayName && !LEGACY_NAMES.has(saved.displayName)) {
+      s.displayName = saved.displayName.slice(0, 16);
+      s.nameCustomized = true;
+    } else if (prev) {
+      // 从另一只钱包切过来，且这只没自定义 → 重抽
+      s.displayName = pickRandomName();
+      s.nameCustomized = false;
+      delete s.walletIdentities[next];
+    } else {
+      // 首次绑定：沿用当前展示名
+      if (LEGACY_NAMES.has(s.displayName)) s.displayName = pickRandomName();
+      s.nameCustomized = false;
+    }
+    save(s);
+    return s.displayName;
   },
   /** BEM 鱼干礼包等：直接加鱼干 */
   addFish(n: number) {
@@ -567,6 +687,13 @@ export const social = {
     save(s);
     return s;
   },
+  /** 写入链上切磋对手（Train 拉取 /api/pets/rivals 后调用）。 */
+  setChainRivals(pets: PublicPet[]) {
+    chainRivalsCache = pets.filter((p) => !p.mine && isOnchainPetKey(p.key));
+  },
+  chainRivals(): PublicPet[] {
+    return chainRivalsCache;
+  },
   allPets(): PublicPet[] {
     const s = load();
     const mine = localChipet.list().map((p) => toPublic(p, me(s)));
@@ -582,12 +709,12 @@ export const social = {
       return pet;
     });
     if (dirty) save(s);
-    return [...mine, ...visitors, ...npcs];
+    return [...mine, ...chainRivalsCache, ...visitors, ...npcs];
   },
   neighbors(): PublicPet[] {
     return this.allPets().filter((p) => !p.mine);
   },
-  /** 切磋对手池：今日访客 + 固定邻居（不含自家芯宠）。 */
+  /** 切磋对手池：链上其他玩家优先，不足再用今日访客 + 固定邻居补位。 */
   sparTargets(): PublicPet[] {
     const s = load();
     let dirty = false;
@@ -602,13 +729,20 @@ export const social = {
       return pet;
     });
     if (dirty) save(s);
-    return [...visitors, ...npcs];
+    const seen = new Set(chainRivalsCache.map((p) => p.key));
+    const filler = [...visitors, ...npcs].filter((p) => !seen.has(p.key));
+    return [...chainRivalsCache, ...filler];
   },
   getPet(key: string): PublicPet | undefined {
+    if (isOnchainPetKey(key)) return chainRivalsCache.find((p) => p.key === key);
     return this.allPets().find((p) => p.key === key);
   },
   getByRouteId(id: number): PublicPet | undefined {
-    if (id < 0) return this.getPet(npcKey(id));
+    if (id < 0) {
+      const chain = chainRivalsCache.find((p) => p.id === id);
+      if (chain) return chain;
+      return this.getPet(npcKey(id));
+    }
     const s = load();
     const p = localChipet.get(id);
     return p ? toPublic(p, me(s)) : undefined;
