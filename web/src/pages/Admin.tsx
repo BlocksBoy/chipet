@@ -17,6 +17,8 @@ export function Admin() {
   const [token, setToken] = useState('');
   const [loginErr, setLoginErr] = useState('');
   const [busy, setBusy] = useState(false);
+  /** 正在发起 / 运行中的扫链类型，用于只亮对应按钮的加载态 */
+  const [scanKind, setScanKind] = useState<'inc' | 'full' | null>(null);
   const [chainId, setChainId] = useState(196);
   const [stats, setStats] = useState<AdminStatsPayload | null>(null);
   const [job, setJob] = useState<AdminScanJob | null>(null);
@@ -49,7 +51,11 @@ export function Admin() {
 
   const applyPayload = (s: AdminStatsPayload) => {
     setStats(s.empty ? null : s);
-    if (s.job) setJob(s.job);
+    if (s.job) {
+      setJob(s.job);
+      if (s.job.status === 'running') setScanKind(s.job.full ? 'full' : 'inc');
+      else setScanKind(null);
+    }
   };
 
   const load = async (id = chainId) => {
@@ -109,14 +115,15 @@ export function Admin() {
 
   const startScan = async (id = chainId, full = false) => {
     setLoadErr('');
+    setScanKind(full ? 'full' : 'inc');
     setProgress(full
       ? t('已启动全量后台扫链…', 'Full background scan started…')
       : t('已启动增量后台扫链…', 'Incremental background scan started…'));
-    setBusy(true);
     try {
       const r = await adminStartScan(id, { full });
       setJob(r.job);
       if (r.stats) setStats(r.stats);
+      if (r.job.status !== 'running') setScanKind(null);
       startPoll(id);
     } catch (e) {
       const err = e as Error & { status?: number };
@@ -127,8 +134,7 @@ export function Admin() {
       }
       setLoadErr(err.message || t('启动扫链失败', 'Failed to start scan'));
       setProgress('');
-    } finally {
-      setBusy(false);
+      setScanKind(null);
     }
   };
 
@@ -160,6 +166,7 @@ export function Admin() {
     setAuthed(false);
     setStats(null);
     setJob(null);
+    setScanKind(null);
     setHistory([]);
   };
 
@@ -259,10 +266,10 @@ export function Admin() {
           <Button size="sm" variant="ghost" icon={Database} busy={busy} onClick={() => load(chainId)}>
             {t('读库', 'Load DB')}
           </Button>
-          <Button size="sm" icon={RefreshCw} busy={busy || scanning} onClick={() => startScan(chainId, false)}>
+          <Button size="sm" icon={RefreshCw} busy={scanKind === 'inc'} disabled={scanning} onClick={() => startScan(chainId, false)}>
             {t('增量入库', 'Incremental')}
           </Button>
-          <Button size="sm" variant="ghost" icon={RotateCcw} busy={busy || scanning} onClick={() => startScan(chainId, true)}>
+          <Button size="sm" variant="ghost" icon={RotateCcw} busy={scanKind === 'full'} disabled={scanning} onClick={() => startScan(chainId, true)}>
             {t('全量重扫', 'Full rescan')}
           </Button>
           <Button size="sm" variant="ghost" icon={LogOut} onClick={onLogout}>
