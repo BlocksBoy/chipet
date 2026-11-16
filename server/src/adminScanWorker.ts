@@ -1,8 +1,9 @@
 /**
  * 后台分片扫链：HTTP 只启动/查询任务，避免 Cloudflare ~100s 超时导致 502。
+ * 另：进程内每小时自动增量同步两条主网。
  */
 import type { Address, PublicClient } from 'viem';
-import { loadAdminStats, type AdminStats } from '@tapearena/chain';
+import { loadAdminStats, MAINNET_IDS, type AdminStats } from '@tapearena/chain';
 import {
   getAdminScanCheckpoint,
   latestAdminStats,
@@ -10,6 +11,7 @@ import {
   saveAdminStats,
   type AdminStatsRow,
 } from './adminDb.ts';
+import { chainCtx, resetChainCtx, rpcHostLabel } from './chain.ts';
 
 export type AdminScanJobStatus = 'idle' | 'running' | 'done' | 'error';
 
@@ -114,5 +116,52 @@ export function adminStatsPayload(chainId: number) {
       head: (job.stats as AdminStats | undefined)?.head ?? cached?.head,
       complete: (job.stats as AdminStats | undefined)?.complete ?? (job.status === 'done' ? true : undefined),
     },
+  };
+}
+
+export const ADMIN_AUTO_SYNC_MS = 60 * 60 * 1000;
+
+/** 对 MAINNET_IDS 各启一次增量扫（已在跑则跳过）。 */
+export function kickAdminIncrementalSync(reason = 'manual') {
+  for (const chainId of MAINNET_IDS) {
+    try {
+      resetChainCtx(chainId);
+      const x = chainCtx(chainId);
+      if (!x.deployment?.chipet) {
+        console.warn(`[admin-auto-sync] skip chain ${chainId}: chipet not deployed`);
+        continue;
+      }
+      const job = startAdminScanJob({
+        chainId,
+        full: false,
+        client: x.client,
+        chipet: x.deployment.chipet,
+        rpcHost: rpcHostLabel(chainId),
+      });
+      console.log(`[admin-auto-sync] ${reason} chain=${chainId} status=${job.status}`);
+    } catch (e) {
+      console.error(`[admin-auto-sync] ${reason} chain=${chainId} failed`, e);
+    }
+  }
+}
+
+/**
+ * 启动后短暂延迟跑一次，之后每 hourMs 自动增量入库。
+ * 返回 stop()，供测试或热重载清理。
+ */
+export function startAdminAutoSync(opts?: { intervalMs?: number; initialDelayMs?: number }) {
+  const intervalMs = opts?.intervalMs ?? ADMIN_AUTO_SYNC_MS;
+  const initialDelayMs = opts?.initialDelayMs ?? 15_000;
+  const tick = () => kickAdminIncrementalSync('hourly');
+  const initial = setTimeout(() => {
+    kickAdminIncrementalSync('boot');
+  }, initialDelayMs);
+  const timer = setInterval(tick, intervalMs);
+  if (typeof timer.unref === 'function') timer.unref();
+  if (typeof initial.unref === 'function') initial.unref();
+  console.log(`[admin-auto-sync] scheduled every ${Math.round(intervalMs / 60000)}m (first in ${Math.round(initialDelayMs / 1000)}s)`);
+  return () => {
+    clearTimeout(initial);
+    clearInterval(timer);
   };
 }

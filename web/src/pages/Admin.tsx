@@ -134,9 +134,9 @@ export function Admin() {
         const [s, h] = await Promise.all([adminStats(id), adminStatsHistory(id, 6).catch(() => null)]);
         return { id, s, history: h?.items ?? [] };
       }));
+      let running = false;
       setByChain((prev) => {
         const next = { ...prev };
-        let running = false;
         for (const { id, s, history } of results) {
           const isRunning = s.job?.status === 'running';
           if (isRunning) running = true;
@@ -154,15 +154,14 @@ export function Admin() {
               : '',
           };
         }
-        if (running) {
-          syncScanKind(next);
-          queue Promise.resolve().then(() => startPoll());
-        } else {
-          stopPoll();
-          setScanKind(null);
-        }
+        if (running) syncScanKind(next);
         return next;
       });
+      if (running) startPoll();
+      else {
+        stopPoll();
+        setScanKind(null);
+      }
     } catch (e) {
       const err = e as Error & { status?: number };
       if (err.status === 401) {
@@ -205,9 +204,9 @@ export function Admin() {
         const r = await adminStartScan(id, { full });
         return { id, r };
       }));
+      let running = false;
       setByChain((prev) => {
         const next = { ...prev };
-        let running = false;
         for (const { id, r } of results) {
           if (r.job.status === 'running') running = true;
           next[id] = {
@@ -218,10 +217,10 @@ export function Admin() {
             err: '',
           };
         }
-        if (running) void Promise.resolve().then(() => startPoll());
-        else setScanKind(null);
         return next;
       });
+      if (running) startPoll();
+      else setScanKind(null);
     } catch (e) {
       const err = e as Error & { status?: number };
       if (err.status === 401) {
@@ -351,8 +350,8 @@ export function Admin() {
           </div>
           <p className="mt-1 text-sm text-mute">
             {t(
-              'X Layer 与 BSC 同屏对照。读库 / 增量 / 全量对两条链一并执行。',
-              'X Layer and BSC side by side. Load / incremental / full scan both chains together.',
+              'X Layer 与 BSC 同屏对照。服务端每小时自动增量同步；读库 / 增量 / 全量仍可手动对两条链一并执行。',
+              'X Layer and BSC side by side. Server auto-syncs incrementally every hour; Load / Incremental / Full still run both chains together.',
             )}
           </p>
         </div>
