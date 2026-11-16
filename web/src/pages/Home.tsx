@@ -355,7 +355,7 @@ export function Home() {
               </div>
               <div className="mt-2 flex flex-wrap justify-center gap-1.5 sm:justify-start">
                 {traits.map((t) => (
-                  <Trait key={t.label} label={t.label} value={t.value} className="bg-white/90" />
+                  <Trait key={t.id} label={t.label} value={t.value} className="bg-white/90" />
                 ))}
               </div>
               <p className="mt-2 text-sm text-mute">{t('破壳成功！去摸摸它、给它的心脏通通电。', 'It hatched! Go pat it and power up its heart.')}</p>
@@ -496,7 +496,7 @@ export function Home() {
             </div>
           ) : (
             <ul className="mt-5 grid grid-cols-2 gap-4 md:grid-cols-3">
-              {pets.map((p) => {
+              {(pets.length > 6 ? pets.slice(0, 5) : pets).map((p) => {
                 const petPh = phenotypeOf(p.cpu, p.circuitId, p.rarity);
                 const h = heartOf(p.circuitId, p.rarity);
                 return (
@@ -512,6 +512,23 @@ export function Home() {
                   </li>
                 );
               })}
+              {pets.length > 6 && (
+                <li>
+                  <button
+                    type="button"
+                    onClick={() => go('/dex')}
+                    className="group flex h-full min-h-[220px] w-full flex-col items-center justify-center gap-2 rounded-3xl border border-dashed border-line-2 bg-panel/70 px-4 py-8 text-center shadow-sm shadow-si/5 transition duration-200 hover:-translate-y-0.5 hover:border-si/40 hover:bg-panel hover:shadow-md hover:shadow-si/10"
+                  >
+                    <span className="grid size-12 place-items-center rounded-2xl bg-si/10 text-si transition group-hover:bg-si/15">
+                      <ArrowRight className="size-5 transition-transform group-hover:translate-x-0.5" />
+                    </span>
+                    <span className="font-display text-[17px] font-bold text-ink">{t('查看更多', 'View more')}</span>
+                    <span className="text-xs text-mute">
+                      {t(`还有 ${pets.length - 5} 只`, `${pets.length - 5} more`)}
+                    </span>
+                  </button>
+                </li>
+              )}
             </ul>
           )}
         </div>

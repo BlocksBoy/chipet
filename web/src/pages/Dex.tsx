@@ -91,7 +91,7 @@ export function Dex() {
                 badge={`No.${String(sp.id + 1).padStart(2, '0')}`}
                 corner={`×${hit.n}`}
                 size={112}
-                tags={cattributes(ph).slice(0, 2).map((g) => <Trait key={g.label} value={g.value} />)}
+                tags={cattributes(ph).slice(0, 2).map((g) => <Trait key={g.id} value={g.value} />)}
                 onClick={() => go(`/pet/${p.id}`)}
               />
             </li>

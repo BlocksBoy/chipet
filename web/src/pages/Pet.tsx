@@ -18,6 +18,7 @@ import { feedChipet, playChipet, readPet } from '@tapearena/chain';
 import { isChainPet, localChipet, xpNeed } from '../chipet/store.ts';
 import { cattributes, geneStory, phenotypeOf, typeLabel } from '../chipet/phenotype.ts';
 import { maxBonds, social } from '../chipet/social.ts';
+import { ShareVisitModal } from '../chipet/ShareVisitModal.tsx';
 import { BEM_SKUS, bem } from '../chipet/bem.ts';
 import { plural, tr, txt, useLang, useT } from '../i18n.ts';
 import { useApp } from '../state.tsx';
@@ -40,6 +41,8 @@ export function PetPage({ id, share: shareToken }: { id?: number; share?: string
   const [now, setNow] = useState(Date.now());
   const [tick, setTick] = useState(0);
   const [impulse, setImpulse] = useState<ChipImpulse>('idle');
+  const [shareOpen, setShareOpen] = useState(false);
+  const [shareUrl, setShareUrl] = useState('');
 
   const pet = useMemo(
     () => (shareToken ? social.fromShareToken(shareToken) : id != null ? social.getByRouteId(id) : undefined),
@@ -236,14 +239,9 @@ export function PetPage({ id, share: shareToken }: { id?: number; share?: string
     } catch (e) { fail(e); }
   };
 
-  const share = async () => {
-    const url = social.shareUrl(key);
-    try {
-      await navigator.clipboard.writeText(url);
-      flash(t('链接已复制，发给朋友来拜访', 'Link copied. Send it to a friend to visit'));
-    } catch {
-      flash(url);
-    }
+  const share = () => {
+    setShareUrl(social.shareUrl(key));
+    setShareOpen(true);
   };
 
   const idText = pet.key.startsWith('share:')
@@ -251,9 +249,9 @@ export function PetPage({ id, share: shareToken }: { id?: number; share?: string
     : `${pet.mine ? '#' : 'N-'}${String(Math.abs(pet.id)).padStart(4, '0')}`;
   const hp = maxHpOf(level, pet.rarity, mood);
   const genes = [
-    ...traits.map((g) => ({ ...g, swatch: g.label === 'base' ? ph.body : g.label === 'eyes' ? ph.eye : undefined })),
-    { label: 'species', value: ph.species, swatch: undefined },
-    { label: 'vibe', value: ph.vibe, swatch: undefined },
+    ...traits.map((g) => ({ ...g, swatch: g.id === 'base' ? ph.body : g.id === 'eyes' ? ph.eye : undefined })),
+    { id: 'species', label: t('物种', 'species'), value: ph.species, swatch: undefined },
+    { id: 'vibe', label: t('气质', 'vibe'), value: ph.vibe, swatch: undefined },
   ];
   const toHeart = () => document.getElementById('heart-circuit')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
@@ -267,8 +265,19 @@ export function PetPage({ id, share: shareToken }: { id?: number; share?: string
           <ChevronRight className="size-3.5 shrink-0 text-faint" />
           <span className="truncate font-medium text-ink">{pet.name}</span>
         </nav>
-        <Button size="sm" variant="ghost" icon={Share2} onClick={share}>{t('分享拜访链接', 'Share visit link')}</Button>
+        <button
+          type="button"
+          onClick={share}
+          className="group inline-flex shrink-0 items-center gap-2 rounded-full bg-gradient-to-br from-copper to-[#d4682f] py-1.5 pr-4 pl-1.5 text-[13px] font-semibold text-white shadow-[0_6px_16px_-4px_rgba(224,122,69,0.55)] ring-1 ring-white/25 transition duration-200 hover:-translate-y-0.5 hover:shadow-[0_10px_22px_-6px_rgba(224,122,69,0.65)] hover:brightness-[1.03] active:translate-y-px active:scale-[0.98]"
+        >
+          <span className="grid size-7 place-items-center rounded-full bg-white/20 shadow-inner ring-1 ring-white/30 transition group-hover:bg-white/28">
+            <Share2 className="size-3.5" strokeWidth={2.25} />
+          </span>
+          {t('分享撸猫链接', 'Share petting link')}
+        </button>
       </div>
+
+      <ShareVisitModal pet={pet} url={shareUrl} open={shareOpen} onClose={() => setShareOpen(false)} />
 
       {/* ── 主视觉：左边是这只猫的展示台，右边是档案与操作 ── */}
       <section className="overflow-hidden rounded-[2rem] border border-line/80 bg-panel shadow-sm shadow-si/5">
@@ -522,7 +531,7 @@ export function PetPage({ id, share: shareToken }: { id?: number; share?: string
           <Panel title={t('外形基因 · Cattributes', 'Cattributes')} icon={Dna} bodyClass="p-4">
             <ul className="grid grid-cols-2 gap-2">
               {genes.map((g) => (
-                <li key={g.label} className="min-w-0 rounded-2xl bg-panel-2/70 px-3.5 py-2.5">
+                <li key={g.id} className="min-w-0 rounded-2xl bg-panel-2/70 px-3.5 py-2.5">
                   <div className="font-mono text-[11px] text-faint">{g.label}</div>
                   <div className="mt-0.5 flex items-center gap-1.5 text-sm font-semibold text-ink">
                     {g.swatch && <span className="size-3 shrink-0 rounded-full ring-1 ring-black/10" style={{ backgroundColor: g.swatch }} />}

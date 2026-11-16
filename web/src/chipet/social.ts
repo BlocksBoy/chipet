@@ -585,8 +585,7 @@ export const social = {
       .slice(0, 10);
   },
   /**
-   * 分享拜访链接：用电路身份等字段编码，任何人打开都能还原「这一只」猫，
-   * 不再依赖本机 `/pet/{本地id}`（别人浏览器里对不上）。
+   * 分享撸猫链接：短 token 编码电路身份（+ 名字），别人打开也能还原「这一只」。
    */
   shareUrl(key: string) {
     const pet = this.getPet(key);
@@ -635,6 +634,14 @@ type SharePayload = {
   i?: number;
 };
 
+/** 已知处理器 → 单字符代号，把分享链压短 */
+const SHARE_CPUS: { code: string; addr: string }[] = [
+  { code: 'm', addr: MOCK_CPU.toLowerCase() },
+  { code: '0', addr: '0x09a92833377d742464895cc6a819e4c418d69029' }, // BSC
+  { code: '1', addr: '0x550992f2dc407bffdd82c516c0984dc5e00b37d3' }, // X Layer
+  { code: '2', addr: '0xde64a1584d6389d27318239dc5d6f58b0aed52a3' }, // local
+];
+
 function clampStat(n: number | undefined, fallback: number) {
   if (n == null || !Number.isFinite(n)) return fallback;
   return Math.max(0, Math.min(100, Math.floor(n)));
@@ -651,26 +658,57 @@ function shareDisplayId(circuitId: string) {
   return -1_000_000 - (Math.abs(h) % 900_000);
 }
 
-function encodeSharePet(pet: PublicPet): string {
-  const payload: SharePayload = {
-    n: pet.name,
-    o: pet.owner,
-    c: pet.circuitId.toString(),
-    u: pet.cpu,
-    r: pet.rarity,
-    lv: pet.level,
-    w: pet.wins,
-    m: pet.mood,
-    e: pet.energy,
-    i: pet.intimacy,
-  };
-  const bytes = new TextEncoder().encode(JSON.stringify(payload));
+function b64urlUtf8(s: string) {
+  const bytes = new TextEncoder().encode(s);
   let bin = '';
   for (const b of bytes) bin += String.fromCharCode(b);
   return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
-function decodeSharePet(token: string): SharePayload | null {
+function utf8FromB64url(token: string) {
+  const b64 = token.replace(/-/g, '+').replace(/_/g, '/');
+  const pad = b64.length % 4 === 0 ? '' : '='.repeat(4 - (b64.length % 4));
+  const bin = atob(b64 + pad);
+  return new TextDecoder().decode(Uint8Array.from(bin, (ch) => ch.charCodeAt(0)));
+}
+
+function base36ToBigInt(s: string): bigint {
+  const t = s.toLowerCase();
+  let n = 0n;
+  for (let i = 0; i < t.length; i++) {
+    const ch = t.charCodeAt(i);
+    const v = ch >= 48 && ch <= 57 ? ch - 48 : ch >= 97 && ch <= 122 ? ch - 87 : -1;
+    if (v < 0) throw new Error('bad base36');
+    n = n * 36n + BigInt(v);
+  }
+  return n;
+}
+
+function cpuCodeOf(addr: string) {
+  const a = addr.toLowerCase();
+  const hit = SHARE_CPUS.find((c) => c.addr === a);
+  if (hit) return hit.code;
+  return `x${a.replace(/^0x/, '')}`;
+}
+
+function cpuFromCode(code: string): Address {
+  const hit = SHARE_CPUS.find((c) => c.code === code);
+  if (hit) return hit.addr as Address;
+  if (/^x[0-9a-f]{40}$/i.test(code)) return (`0x${code.slice(1).toLowerCase()}`) as Address;
+  return MOCK_CPU;
+}
+
+/**
+ * 短链：`{circuitId36}.{rarity}{cpuCode}.{nameB64}`
+ * 例：`1kw.1m.6Z2S5qmY` —— 唯一靠 circuitId+cpu+rarity，名字仅展示。
+ */
+function encodeSharePet(pet: PublicPet): string {
+  const name = pet.name.slice(0, 24) || 'Chipet';
+  return `${pet.circuitId.toString(36)}.${pet.rarity}${cpuCodeOf(pet.cpu)}.${b64urlUtf8(name)}`;
+}
+
+/** 旧版整包 JSON base64，仍可解析以免已发出的链接失效 */
+function decodeSharePetLegacy(token: string): SharePayload | null {
   try {
     const b64 = token.replace(/-/g, '+').replace(/_/g, '/');
     const pad = b64.length % 4 === 0 ? '' : '='.repeat(4 - (b64.length % 4));
@@ -682,4 +720,19 @@ function decodeSharePet(token: string): SharePayload | null {
   } catch {
     return null;
   }
+}
+
+function decodeSharePet(token: string): SharePayload | null {
+  const m = /^([0-9a-z]+)\.([012])([m012]|x[0-9a-f]{40})\.([A-Za-z0-9_-]+)$/i.exec(token);
+  if (m) {
+    try {
+      const cid = base36ToBigInt(m[1]!);
+      const name = utf8FromB64url(m[4]!).slice(0, 32) || tr('芯喵', 'Chipet');
+      const cpu = cpuFromCode(m[3]!.toLowerCase());
+      return { n: name, o: tr('旅行者', 'Traveler'), c: cid.toString(), u: cpu, r: Number(m[2]) };
+    } catch {
+      return null;
+    }
+  }
+  return decodeSharePetLegacy(token);
 }

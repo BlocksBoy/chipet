@@ -33,7 +33,7 @@ export interface Phenotype {
 }
 
 /** 对齐加密猫 Kitty Types：Normal / Fancy / Exclusive（Special Edition 并入 Fancy） */
-const TYPE_NAME: Txt[] = [both('普通 Normal', 'Normal'), both('珍奇 Fancy', 'Fancy'), both('限定 Exclusive', 'Exclusive')];
+const TYPE_NAME: Txt[] = [both('普通', 'Normal'), both('珍奇', 'Fancy'), both('限定', 'Exclusive')];
 const RARITY_NAME: Txt[] = [both('普通', 'Normal'), both('珍奇', 'Fancy'), both('限定', 'Exclusive')];
 
 /** 英文 blurb 接在 "It …" 后面读。 */
@@ -58,48 +58,48 @@ export const speciesList = () => SPECIES.map((sp, id) => ({
 }));
 
 /** 底卡色取自加密猫白皮书封面：桃 / 天蓝 / 粉 / 丁香 / 薄荷 / 奶黄 / 青柠 / 米。 */
-const COATS: { name: string; body: string; belly: string; accent: string; bg: string }[] = [
-  { name: 'nachocheez', body: '#f7a13c', belly: '#fff1dc', accent: '#d9701f', bg: '#ffe8d1' },
-  { name: 'cottoncandy', body: '#f8a9cc', belly: '#fff0f6', accent: '#e0629e', bg: '#f9dcf5' },
-  { name: 'martian', body: '#7ed957', belly: '#effbe2', accent: '#3f9a2b', bg: '#e6f5c9' },
-  { name: 'glacier', body: '#8fd0f4', belly: '#f0faff', accent: '#3d8fc4', bg: '#fef6cf' },
-  { name: 'bananacream', body: '#fbe07a', belly: '#fffbe2', accent: '#d9a520', bg: '#fef6cf' },
-  { name: 'shadowgrey', body: '#8b93a1', belly: '#f1f3f6', accent: '#525a68', bg: '#cdf5d8' },
-  { name: 'cloudwhite', body: '#f7f3ec', belly: '#ffffff', accent: '#d8b9a0', bg: '#fbdcee' },
-  { name: 'onyx', body: '#4b4b57', belly: '#b9b9c6', accent: '#2a2a32', bg: '#d6f0ee' },
-  { name: 'dragonfruit', body: '#d070e0', belly: '#f9e3fc', accent: '#8f3ba3', bg: '#c9eefb' },
-  { name: 'redvelvet', body: '#f26b6b', belly: '#fff0ee', accent: '#c23a3a', bg: '#fddcdc' },
-  { name: 'cinderella', body: '#6fb0f7', belly: '#eaf4ff', accent: '#2d6fc0', bg: '#c9eefb' },
-  { name: 'brownies', body: '#a2714e', belly: '#f6e6d4', accent: '#6b4128', bg: '#efe9de' },
-  { name: 'tundra', body: '#d2bd9c', belly: '#fbf5ea', accent: '#94795a', bg: '#f3e6b8' },
-  { name: 'hotcocoa', body: '#7a4e3a', belly: '#ecd4bf', accent: '#4a2a1e', bg: '#ffe8d1' },
-  { name: 'cornflower', body: '#7f8ff0', belly: '#eaedff', accent: '#4553c4', bg: '#fef6cf' },
-  { name: 'icicle', body: '#d6eefb', belly: '#ffffff', accent: '#7fb6d6', bg: '#cfe6fb' },
-  { name: 'seafoam', body: '#62d6c2', belly: '#e6fbf6', accent: '#249682', bg: '#fddcdc' },
-  { name: 'lavender', body: '#b99cf5', belly: '#f4eeff', accent: '#7a52cc', bg: '#fef6cf' },
-  { name: 'apricot', body: '#f8a871', belly: '#fff0e2', accent: '#d5703a', bg: '#d6f0ee' },
-  { name: 'mintchip', body: '#86dcb2', belly: '#ecfbf2', accent: '#3a9c6c', bg: '#e6f5c9' },
-  { name: 'grapejelly', body: '#8b62cc', belly: '#eee2fb', accent: '#553493', bg: '#f9dcf5' },
-  { name: 'salmon', body: '#f98b7a', belly: '#fff0ea', accent: '#c94f43', bg: '#ffe8d1' },
-  { name: 'inkblue', body: '#4a5cb0', belly: '#dfe6fb', accent: '#28357a', bg: '#c9eefb' },
-  { name: 'honeydew', body: '#d0ef8a', belly: '#f8fde6', accent: '#84ad2e', bg: '#cdf5d8' },
+const COATS: { name: Txt; body: string; belly: string; accent: string; bg: string }[] = [
+  { name: both('芝士橙', 'nachocheez'), body: '#f7a13c', belly: '#fff1dc', accent: '#d9701f', bg: '#ffe8d1' },
+  { name: both('棉花糖', 'cottoncandy'), body: '#f8a9cc', belly: '#fff0f6', accent: '#e0629e', bg: '#f9dcf5' },
+  { name: both('火星绿', 'martian'), body: '#7ed957', belly: '#effbe2', accent: '#3f9a2b', bg: '#e6f5c9' },
+  { name: both('冰川蓝', 'glacier'), body: '#8fd0f4', belly: '#f0faff', accent: '#3d8fc4', bg: '#fef6cf' },
+  { name: both('香蕉奶', 'bananacream'), body: '#fbe07a', belly: '#fffbe2', accent: '#d9a520', bg: '#fef6cf' },
+  { name: both('影灰', 'shadowgrey'), body: '#8b93a1', belly: '#f1f3f6', accent: '#525a68', bg: '#cdf5d8' },
+  { name: both('云白', 'cloudwhite'), body: '#f7f3ec', belly: '#ffffff', accent: '#d8b9a0', bg: '#fbdcee' },
+  { name: both('墨玉', 'onyx'), body: '#4b4b57', belly: '#b9b9c6', accent: '#2a2a32', bg: '#d6f0ee' },
+  { name: both('火龙果', 'dragonfruit'), body: '#d070e0', belly: '#f9e3fc', accent: '#8f3ba3', bg: '#c9eefb' },
+  { name: both('红丝绒', 'redvelvet'), body: '#f26b6b', belly: '#fff0ee', accent: '#c23a3a', bg: '#fddcdc' },
+  { name: both('灰姑娘蓝', 'cinderella'), body: '#6fb0f7', belly: '#eaf4ff', accent: '#2d6fc0', bg: '#c9eefb' },
+  { name: both('布朗尼', 'brownies'), body: '#a2714e', belly: '#f6e6d4', accent: '#6b4128', bg: '#efe9de' },
+  { name: both('苔原', 'tundra'), body: '#d2bd9c', belly: '#fbf5ea', accent: '#94795a', bg: '#f3e6b8' },
+  { name: both('热可可', 'hotcocoa'), body: '#7a4e3a', belly: '#ecd4bf', accent: '#4a2a1e', bg: '#ffe8d1' },
+  { name: both('矢车菊', 'cornflower'), body: '#7f8ff0', belly: '#eaedff', accent: '#4553c4', bg: '#fef6cf' },
+  { name: both('冰凌', 'icicle'), body: '#d6eefb', belly: '#ffffff', accent: '#7fb6d6', bg: '#cfe6fb' },
+  { name: both('海沫', 'seafoam'), body: '#62d6c2', belly: '#e6fbf6', accent: '#249682', bg: '#fddcdc' },
+  { name: both('薰衣草', 'lavender'), body: '#b99cf5', belly: '#f4eeff', accent: '#7a52cc', bg: '#fef6cf' },
+  { name: both('杏子', 'apricot'), body: '#f8a871', belly: '#fff0e2', accent: '#d5703a', bg: '#d6f0ee' },
+  { name: both('薄荷巧', 'mintchip'), body: '#86dcb2', belly: '#ecfbf2', accent: '#3a9c6c', bg: '#e6f5c9' },
+  { name: both('葡萄冻', 'grapejelly'), body: '#8b62cc', belly: '#eee2fb', accent: '#553493', bg: '#f9dcf5' },
+  { name: both('鲑鱼粉', 'salmon'), body: '#f98b7a', belly: '#fff0ea', accent: '#c94f43', bg: '#ffe8d1' },
+  { name: both('墨蓝', 'inkblue'), body: '#4a5cb0', belly: '#dfe6fb', accent: '#28357a', bg: '#c9eefb' },
+  { name: both('蜜瓜', 'honeydew'), body: '#d0ef8a', belly: '#f8fde6', accent: '#84ad2e', bg: '#cdf5d8' },
 ];
 
-const EYES: { name: string; color: string }[] = [
-  { name: 'gold', color: '#f5b93c' },
-  { name: 'mint', color: '#4fd1b0' },
-  { name: 'bubblegum', color: '#ff6fa3' },
-  { name: 'sky', color: '#5fa8ff' },
-  { name: 'orchid', color: '#f03fd8' },
-  { name: 'lime', color: '#8ad64a' },
-  { name: 'violet', color: '#a47bff' },
-  { name: 'peach', color: '#ff8a5c' },
-  { name: 'cobalt', color: '#3f7af0' },
-  { name: 'copper', color: '#e07a45' },
-  { name: 'teal', color: '#1fa89a' },
-  { name: 'amber', color: '#e0a012' },
-  { name: 'pearl', color: '#e9eef5' },
-  { name: 'onyxeye', color: '#3a3a44' },
+const EYES: { name: Txt; color: string }[] = [
+  { name: both('金瞳', 'gold'), color: '#f5b93c' },
+  { name: both('薄荷', 'mint'), color: '#4fd1b0' },
+  { name: both('泡泡糖', 'bubblegum'), color: '#ff6fa3' },
+  { name: both('天空蓝', 'sky'), color: '#5fa8ff' },
+  { name: both('兰花紫', 'orchid'), color: '#f03fd8' },
+  { name: both('青柠', 'lime'), color: '#8ad64a' },
+  { name: both('紫罗兰', 'violet'), color: '#a47bff' },
+  { name: both('蜜桃', 'peach'), color: '#ff8a5c' },
+  { name: both('钴蓝', 'cobalt'), color: '#3f7af0' },
+  { name: both('铜色', 'copper'), color: '#e07a45' },
+  { name: both('青绿', 'teal'), color: '#1fa89a' },
+  { name: both('琥珀', 'amber'), color: '#e0a012' },
+  { name: both('珍珠', 'pearl'), color: '#e9eef5' },
+  { name: both('墨瞳', 'onyxeye'), color: '#3a3a44' },
 ];
 
 const PATTERNS: Txt[] = [both('纯色', 'solid'), both('虎纹', 'tiger'), both('圆点', 'speckles'), both('花斑', 'calico')];
@@ -142,17 +142,17 @@ export function phenotypeOf(cpu: string, circuitId: bigint | number | string, ra
   return {
     speciesId,
     get species() { return txt(sp.name); },
-    coat: coat.name,
+    get coat() { return txt(coat.name); },
     body: coat.body,
     belly: coat.belly,
     accent: coat.accent,
     outline: blend(coat.accent, '#2a1c1c', 0.62),
     bg: coat.bg,
     eye: eye.color,
-    eyeName: eye.name,
+    get eyeName() { return txt(eye.name); },
     cheek: CHEEK[(h >>> 12) % CHEEK.length]!,
     pattern,
-    get patternName() { return tr(`${pat.zh} ${pat.en}`, pat.en); },
+    get patternName() { return txt(pat); },
     ear: (h >>> 18) % 3,
     tail: (h >>> 21) % 3,
     mouth: (h >>> 24) % 4,
@@ -174,9 +174,9 @@ export function geneStory(p: Phenotype, gates?: number) {
 
 export function cattributes(p: Phenotype) {
   return [
-    { label: 'base', value: p.coat },
-    { label: 'eyes', value: p.eyeName },
-    { label: 'pattern', value: txt(PATTERNS[p.pattern]) },
-    { label: 'type', value: txt(RARITY_NAME[p.rarity]) },
+    { id: 'base', label: tr('毛色', 'base'), value: p.coat },
+    { id: 'eyes', label: tr('瞳色', 'eyes'), value: p.eyeName },
+    { id: 'pattern', label: tr('花纹', 'pattern'), value: txt(PATTERNS[p.pattern]) },
+    { id: 'type', label: tr('类型', 'type'), value: txt(RARITY_NAME[p.rarity]) },
   ];
 }
