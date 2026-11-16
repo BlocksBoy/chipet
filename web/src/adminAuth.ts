@@ -14,6 +14,25 @@ async function readJson(r: Response) {
   return r.json().catch(() => ({})) as Promise<{ error?: string; code?: string; ok?: boolean; expiresIn?: number }>;
 }
 
+export type AdminStatsPayload = {
+  id?: number;
+  chainId: number;
+  cats: number;
+  registered: number;
+  players: number;
+  rechargeUsers: number;
+  rechargeTxs: number;
+  rechargeBem: string;
+  treasuryBal: string;
+  scannedTo: string;
+  scannedFrom?: string;
+  scanMode?: 'incremental' | 'full' | 'noop';
+  rpcHost: string;
+  note: string;
+  createdAt?: number;
+  source?: 'cache' | 'live';
+};
+
 export async function adminLogin(token: string) {
   const r = await fetch(apiURL('/api/admin/login'), {
     method: 'POST',
@@ -49,8 +68,11 @@ export async function adminSession(): Promise<boolean> {
   }
 }
 
-export async function adminStats(chainId: number) {
-  const r = await fetch(apiURL(`/api/admin/stats?chainId=${chainId}`), { cache: 'no-store', credentials: 'include' });
+export async function adminStats(chainId: number, opts?: { refresh?: boolean; full?: boolean }) {
+  const q = new URLSearchParams({ chainId: String(chainId) });
+  if (opts?.refresh) q.set('refresh', '1');
+  if (opts?.full) q.set('full', '1');
+  const r = await fetch(apiURL(`/api/admin/stats?${q}`), { cache: 'no-store', credentials: 'include' });
   const data = await r.json().catch(() => ({}));
   if (!r.ok) {
     const err = new Error(data.error || `HTTP ${r.status}`) as Error & { status?: number; code?: string };
@@ -58,17 +80,18 @@ export async function adminStats(chainId: number) {
     err.code = data.code;
     throw err;
   }
-  return data as {
-    chainId: number;
-    cats: number;
-    registered: number;
-    players: number;
-    rechargeUsers: number;
-    rechargeTxs: number;
-    rechargeBem: string;
-    treasuryBal: string;
-    scannedTo: string;
-    rpcHost: string;
-    note: string;
-  };
+  return data as AdminStatsPayload;
+}
+
+export async function adminStatsHistory(chainId: number, limit = 10) {
+  const q = new URLSearchParams({ chainId: String(chainId), limit: String(limit) });
+  const r = await fetch(apiURL(`/api/admin/stats/history?${q}`), { cache: 'no-store', credentials: 'include' });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) {
+    const err = new Error(data.error || `HTTP ${r.status}`) as Error & { status?: number; code?: string };
+    err.status = r.status;
+    err.code = data.code;
+    throw err;
+  }
+  return data as { chainId: number; items: AdminStatsPayload[] };
 }

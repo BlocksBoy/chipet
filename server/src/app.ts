@@ -12,6 +12,10 @@ import {
   clientIp, createSession, getAdminToken, readAdminSession, requireAdmin, revokeSession,
   sessionValid, setAdminSessionCookie, tokenMatches,
 } from './adminAuth.ts';
+import {
+  getAdminScanCheckpoint, latestAdminStats, listAdminStatsHistory,
+  saveAdminScanCheckpoint, saveAdminStats,
+} from './adminDb.ts';
 
 export interface AppDeps {
   ctx?: (chainId?: number) => ChainCtx;
@@ -112,13 +116,34 @@ export function createApp(deps: AppDeps = {}) {
   app.get('/api/admin/stats', requireAdmin(), async (c) => {
     const chainId = Number(c.req.query('chainId') ?? process.env.CHAIN_ID ?? 196);
     if (chainId !== 196 && chainId !== 56) throw new HttpError(400, 'unsupported chainId');
+    const refresh = c.req.query('refresh') === '1' || c.req.query('refresh') === 'true';
+    const full = c.req.query('full') === '1' || c.req.query('full') === 'true';
+
+    if (!refresh) {
+      const cached = latestAdminStats(chainId);
+      if (cached) return json(c, cached);
+    }
+
     // 保证读到最新 RPC_URL_*（热更新 .env 后无需整机重启才能换节点）
     resetChainCtx(chainId);
     const x = ctxOf(chainId);
     if (!x.deployment?.chipet) throw new HttpError(404, 'chipet not deployed on this chain');
     const rpcHost = rpcHostLabel(chainId);
-    const stats = await loadAdminStats(x.client, chainId, x.deployment.chipet, { rpcHost });
-    return json(c, stats);
+    const checkpoint = full ? null : getAdminScanCheckpoint(chainId);
+    const { stats, checkpoint: next } = await loadAdminStats(x.client, chainId, x.deployment.chipet, {
+      rpcHost,
+      checkpoint,
+      full,
+    });
+    saveAdminScanCheckpoint(chainId, next);
+    return json(c, saveAdminStats(stats));
+  });
+
+  app.get('/api/admin/stats/history', requireAdmin(), (c) => {
+    const chainId = Number(c.req.query('chainId') ?? process.env.CHAIN_ID ?? 196);
+    if (chainId !== 196 && chainId !== 56) throw new HttpError(400, 'unsupported chainId');
+    const limit = Number(c.req.query('limit') ?? 20);
+    return json(c, { chainId, items: listAdminStatsHistory(chainId, Number.isFinite(limit) ? limit : 20) });
   });
 
   app.get('/api/examples', (c) => json(c, { ...EXAMPLES, fullAdderNand9: { title: '9 门全加器（NAND 手写）', src: FULL_ADDER_NAND9 } }));
