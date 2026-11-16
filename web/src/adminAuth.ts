@@ -58,7 +58,8 @@ export type AdminStatsPayload = {
 /** empty 扫链快照仍可能带钱包注册 / 上报充值，归一成可展示的 stats。 */
 export function coalesceAdminStats(s: AdminStatsPayload): AdminStatsPayload | null {
   if (!s.empty) return s;
-  const registered = Number(s.walletRegistered ?? s.registered ?? 0);
+  const registered = Number(s.registered ?? s.walletRegistered ?? 0);
+  const walletRegistered = Number(s.walletRegistered ?? 0);
   const rechargeTxs = Number(s.rechargeTxs ?? 0);
   const rechargeUsers = Number(s.rechargeUsers ?? 0);
   if (!registered && !s.registeredOnChain && !rechargeTxs && !rechargeUsers) return null;
@@ -68,7 +69,7 @@ export function coalesceAdminStats(s: AdminStatsPayload): AdminStatsPayload | nu
     cats: 0,
     registered,
     registeredOnChain: Number(s.registeredOnChain ?? 0),
-    walletRegistered: registered,
+    walletRegistered,
     players: 0,
     rechargeUsers,
     rechargeTxs,

@@ -348,9 +348,9 @@ export function Admin() {
     byChain[id]?.stats?.[key] ?? 0;
   const registeredOnChain = (id: number) =>
     Number(byChain[id]?.stats?.registeredOnChain ?? 0);
-  // 注册人数是全局独立地址，不能按链相加
+  // 注册人数 = 连钱包 ∪ 孵化地址（API 已去重）；两链返回同一全局总数，取 max 即可
   const registeredTotal = Math.max(0, ...MAINNET_IDS.map((id) =>
-    Number(byChain[id]?.stats?.walletRegistered ?? byChain[id]?.stats?.registered ?? 0)));
+    Number(byChain[id]?.stats?.registered ?? 0)));
   const bemSum = (key: 'rechargeBem' | 'treasuryBal') =>
     MAINNET_IDS.reduce((s, id) => s + Number(byChain[id]?.stats?.[key] ?? 0), 0);
   const hasAnyStats = MAINNET_IDS.some((id) => byChain[id]?.stats);
