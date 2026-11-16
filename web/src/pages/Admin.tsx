@@ -358,13 +358,16 @@ export function Admin() {
     icon: typeof Coins;
     label: string;
     key: 'rechargeUsers' | 'registered' | 'players' | 'cats';
-    tone: string;
+    swatch: string;
   }[] = [
-    { icon: Coins, label: t('充值人数', 'Recharge users'), key: 'rechargeUsers', tone: 'bg-copper/10 text-copper' },
-    { icon: Users, label: t('注册人数', 'Registered'), key: 'registered', tone: 'bg-si/10 text-si' },
-    { icon: Swords, label: t('游玩人数', 'Players'), key: 'players', tone: 'bg-gold/15 text-gold-dim' },
-    { icon: Cat, label: t('猫咪数量', 'Cats hatched'), key: 'cats', tone: 'bg-[#8b7cf0]/12 text-[#6a5ad6]' },
+    { icon: Coins, label: t('充值人数', 'Recharge users'), key: 'rechargeUsers', swatch: 'bg-copper' },
+    { icon: Users, label: t('注册人数', 'Registered'), key: 'registered', swatch: 'bg-si' },
+    { icon: Swords, label: t('游玩人数', 'Players'), key: 'players', swatch: 'bg-gold' },
+    { icon: Cat, label: t('猫咪数量', 'Cats hatched'), key: 'cats', swatch: 'bg-copper-dim' },
   ];
+
+  const pctOf = (part: number, total: number) =>
+    total > 0 ? `${((part / total) * 100).toFixed(1)}%` : undefined;
 
   return (
     <div className={cn(PAGE, 'py-6 sm:py-8')}>
@@ -379,8 +382,8 @@ export function Admin() {
           </div>
           <p className="mt-1 max-w-xl text-sm text-pretty text-mute">
             {t(
-              '默认读库展示合计；tag 标明各链贡献。服务端每小时自动增量；也可手动增量 / 全量。',
-              'Totals load from SQLite by default; tags show each chain’s share. Server auto-syncs hourly; manual incremental / full still available.',
+              '默认读库展示合计，下方拆开两条链。服务端每小时自动增量；也可手动增量 / 全量。',
+              'Totals load from SQLite by default, with each chain listed underneath. Server auto-syncs hourly; manual incremental / full still available.',
             )}
           </p>
         </div>
@@ -419,70 +422,89 @@ export function Admin() {
         </p>
       )}
 
-      <dl className="mt-6 grid grid-cols-1 gap-px overflow-hidden rounded-3xl border border-line/80 bg-line/70 shadow-sm shadow-si/5 sm:grid-cols-2 lg:grid-cols-4">
-        {metrics.map(({ icon: I, label, key, tone }) => {
+      <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
+        {metrics.map(({ icon: I, label, key, swatch }) => {
           const total = MAINNET_IDS.reduce((s, id) => s + num(id, key), 0);
           return (
-            <div key={key} className="flex min-w-0 flex-col gap-3 bg-panel px-4 py-4 sm:px-5">
-              <div className="flex items-center gap-3.5">
-                <span className={cn('grid size-11 shrink-0 place-items-center rounded-2xl', tone)}>
-                  <I className="size-5" />
-                </span>
-                <div className="min-w-0">
-                  <dd className="m-0 font-display text-2xl font-bold tabular-nums leading-tight text-ink">
-                    {hasAnyStats ? fmt(total) : '—'}
-                  </dd>
-                  <dt className="truncate text-xs text-mute">{label}</dt>
-                </div>
-              </div>
-              <div className="flex flex-wrap gap-1.5">
-                {MAINNET_IDS.map((id) => (
-                  <Tag key={id} tone={chainTone(id)}>
-                    {CHAIN_LABEL[id]} {hasAnyStats ? fmt(num(id, key)) : '—'}
-                  </Tag>
-                ))}
-              </div>
-            </div>
+            <BreakdownCard
+              key={key}
+              icon={<I className="size-4" />}
+              swatch={swatch}
+              label={label}
+              total={hasAnyStats ? fmt(total) : '—'}
+              parts={MAINNET_IDS.map((id) => ({
+                id,
+                label: CHAIN_LABEL[id] ?? String(id),
+                value: hasAnyStats ? fmt(num(id, key)) : '—',
+                pct: hasAnyStats ? pctOf(num(id, key), total) : undefined,
+              }))}
+            />
           );
         })}
-      </dl>
+      </div>
 
       <div className="mt-6 grid gap-4 lg:grid-cols-2">
-        <Panel title={t('充值明细', 'Recharge detail')} icon={Coins} bodyClass="p-5 space-y-3 text-sm">
-          <Row
-            k={t('充值笔数', 'Tx count')}
-            v={hasAnyStats ? fmt(MAINNET_IDS.reduce((s, id) => s + num(id, 'rechargeTxs'), 0)) : '—'}
-            tags={MAINNET_IDS.map((id) => (
-              <Tag key={id} tone={chainTone(id)}>{CHAIN_LABEL[id]} {hasAnyStats ? fmt(num(id, 'rechargeTxs')) : '—'}</Tag>
-            ))}
+        <Panel title={t('充值明细', 'Recharge detail')} icon={Coins} bodyClass="space-y-3 p-4">
+          <BreakdownCard
+            compact
+            swatch="bg-copper"
+            label={t('充值笔数', 'Tx count')}
+            total={hasAnyStats ? fmt(MAINNET_IDS.reduce((s, id) => s + num(id, 'rechargeTxs'), 0)) : '—'}
+            parts={MAINNET_IDS.map((id) => {
+              const n = num(id, 'rechargeTxs');
+              const total = MAINNET_IDS.reduce((s, cid) => s + num(cid, 'rechargeTxs'), 0);
+              return {
+                id,
+                label: CHAIN_LABEL[id] ?? String(id),
+                value: hasAnyStats ? fmt(n) : '—',
+                pct: hasAnyStats ? pctOf(n, total) : undefined,
+              };
+            })}
           />
-          <Row
-            k={t('累计 BEM', 'Total BEM')}
-            v={hasAnyStats ? `${fmt(bemSum('rechargeBem'))} BEM` : '—'}
-            tags={MAINNET_IDS.map((id) => (
-              <Tag key={id} tone={chainTone(id)}>
-                {CHAIN_LABEL[id]} {hasAnyStats ? `${fmt(byChain[id]?.stats?.rechargeBem ?? 0)}` : '—'}
-              </Tag>
-            ))}
+          <BreakdownCard
+            compact
+            swatch="bg-si"
+            label={t('累计 BEM', 'Total BEM')}
+            total={hasAnyStats ? `${fmt(bemSum('rechargeBem'))} BEM` : '—'}
+            parts={MAINNET_IDS.map((id) => {
+              const n = Number(byChain[id]?.stats?.rechargeBem ?? 0);
+              const total = bemSum('rechargeBem');
+              return {
+                id,
+                label: CHAIN_LABEL[id] ?? String(id),
+                value: hasAnyStats ? `${fmt(n)} BEM` : '—',
+                pct: hasAnyStats ? pctOf(n, total) : undefined,
+              };
+            })}
           />
-          <Row
-            k={t('收款钱包余额', 'Treasury balance')}
-            v={hasAnyStats ? `${fmt(bemSum('treasuryBal'))} BEM` : '—'}
-            tags={MAINNET_IDS.map((id) => (
-              <Tag key={id} tone={chainTone(id)}>
-                {CHAIN_LABEL[id]} {hasAnyStats ? `${fmt(byChain[id]?.stats?.treasuryBal ?? 0)}` : '—'}
-              </Tag>
-            ))}
+          <BreakdownCard
+            compact
+            swatch="bg-gold"
+            label={t('收款钱包余额', 'Treasury balance')}
+            total={hasAnyStats ? `${fmt(bemSum('treasuryBal'))} BEM` : '—'}
+            parts={MAINNET_IDS.map((id) => {
+              const n = Number(byChain[id]?.stats?.treasuryBal ?? 0);
+              const total = bemSum('treasuryBal');
+              return {
+                id,
+                label: CHAIN_LABEL[id] ?? String(id),
+                value: hasAnyStats ? `${fmt(n)} BEM` : '—',
+                pct: hasAnyStats ? pctOf(n, total) : undefined,
+              };
+            })}
           />
-          <div className="space-y-1.5 border-t border-line/60 pt-3">
-            <span className="text-mute">{t('收款地址', 'Treasury')}</span>
-            <div className="flex flex-col gap-1.5">
+          <div className="rounded-2xl border border-line/80 bg-panel px-4 py-3">
+            <div className="text-sm text-mute">{t('收款地址', 'Treasury')}</div>
+            <div className="mt-2 space-y-2 border-t border-dashed border-line/80 pt-2">
               {MAINNET_IDS.map((id) => {
                 const bem = bemNetwork(id);
                 return (
-                  <div key={id} className="flex flex-wrap items-center gap-2">
-                    <Tag tone={chainTone(id)}>{CHAIN_LABEL[id]}</Tag>
-                    <span className="font-mono text-[12px] font-semibold text-ink" title={bem?.treasury}>
+                  <div key={id} className="flex items-center justify-between gap-3 pl-1 text-sm">
+                    <span className="flex items-center gap-2 text-mute">
+                      <span className={cn('size-2.5 rounded-sm', id === 56 ? 'bg-gold' : 'bg-si')} />
+                      {CHAIN_LABEL[id]}
+                    </span>
+                    <span className="font-mono text-[12px] font-semibold tabular-nums text-ink" title={bem?.treasury}>
                       {bem ? short(bem.treasury, 8) : '—'}
                     </span>
                   </div>
@@ -543,14 +565,62 @@ export function Admin() {
   );
 }
 
-function Row({ k, v, tags }: { k: string; v: ReactNode; tags?: ReactNode }) {
+function Row({ k, v }: { k: string; v: ReactNode }) {
   return (
-    <div className="flex flex-col gap-1.5">
-      <div className="flex items-baseline justify-between gap-3">
-        <span className="text-mute">{k}</span>
-        <span className="font-semibold tabular-nums text-ink">{v}</span>
+    <div className="flex items-baseline justify-between gap-3">
+      <span className="text-mute">{k}</span>
+      <span className="font-semibold tabular-nums text-ink">{v}</span>
+    </div>
+  );
+}
+
+/** 合计一行 + 虚线下各链分项（对齐参考：总 → 拆链） */
+function BreakdownCard({
+  label,
+  total,
+  parts,
+  swatch,
+  icon,
+  compact,
+}: {
+  label: string;
+  total: ReactNode;
+  parts: { id: number; label: string; value: ReactNode; pct?: string }[];
+  swatch: string;
+  icon?: ReactNode;
+  compact?: boolean;
+}) {
+  return (
+    <div className={cn('rounded-2xl border border-line/80 bg-panel shadow-sm shadow-si/5', compact ? 'px-4 py-3' : 'px-4 py-4 sm:px-5')}>
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-2.5">
+          {icon ? (
+            <span className={cn('grid shrink-0 place-items-center rounded-md text-white', swatch, compact ? 'size-6' : 'size-8')}>
+              {icon}
+            </span>
+          ) : (
+            <span className={cn('size-2.5 shrink-0 rounded-sm', swatch)} />
+          )}
+          <span className={cn('truncate font-semibold text-ink', compact ? 'text-sm' : 'text-[15px]')}>{label}</span>
+        </div>
+        <span className={cn('shrink-0 font-display font-bold tabular-nums text-ink', compact ? 'text-lg' : 'text-2xl')}>
+          {total}
+        </span>
       </div>
-      {tags && <div className="flex flex-wrap justify-end gap-1.5">{tags}</div>}
+      <div className="mt-3 space-y-2 border-t border-dashed border-line/80 pt-3">
+        {parts.map((p) => (
+          <div key={p.id} className="flex items-center justify-between gap-3 pl-1 text-sm">
+            <span className="flex min-w-0 items-center gap-2 text-mute">
+              <span className={cn('size-2.5 shrink-0 rounded-sm', p.id === 56 ? 'bg-gold' : 'bg-si')} />
+              <span className="truncate">{p.label}</span>
+            </span>
+            <span className="flex shrink-0 items-baseline gap-2 tabular-nums">
+              {p.pct && <span className="font-mono text-[11px] text-faint">{p.pct}</span>}
+              <span className="font-semibold text-ink">{p.value}</span>
+            </span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
