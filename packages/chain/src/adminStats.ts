@@ -22,7 +22,10 @@ const SCAN_FROM: Record<number, bigint> = {
   56: 70_000_000n,
 };
 
-const CHUNK = 2_000n;
+/** Alchemy 等付费节点可拉更大区间；公共节点保守一点。 */
+function chunkFor(rpcHost?: string): bigint {
+  return rpcHost?.includes('alchemy.com') ? 50_000n : 2_000n;
+}
 
 export interface AdminStats {
   chainId: number;
@@ -34,6 +37,8 @@ export interface AdminStats {
   rechargeBem: string;
   treasuryBal: string;
   scannedTo: string;
+  /** RPC 主机名（不含 key） */
+  rpcHost: string;
   note: string;
 }
 
@@ -49,10 +54,11 @@ function shopReceivers(chainId: number): Address[] {
 async function forEachChunk(
   from: bigint,
   to: bigint,
+  chunk: bigint,
   fn: (a: bigint, b: bigint) => Promise<void>,
 ) {
-  for (let a = from; a <= to; a += CHUNK) {
-    const b = a + CHUNK - 1n > to ? to : a + CHUNK - 1n;
+  for (let a = from; a <= to; a += chunk) {
+    const b = a + chunk - 1n > to ? to : a + chunk - 1n;
     await fn(a, b);
   }
 }
@@ -83,8 +89,11 @@ export async function loadAdminStats(
   pub: PublicClient,
   chainId: number,
   chipet: Address | undefined,
+  opts?: { rpcHost?: string },
 ): Promise<AdminStats> {
   const bem = bemNetwork(chainId);
+  const rpcHost = opts?.rpcHost ?? 'default';
+  const chunk = chunkFor(rpcHost);
   const head = await pub.getBlockNumber();
   const from = SCAN_FROM[chainId] && SCAN_FROM[chainId]! < head
     ? SCAN_FROM[chainId]!
@@ -107,7 +116,7 @@ export async function loadAdminStats(
 
   if (bem && receivers.length) {
     for (const to of receivers) {
-      await forEachChunk(from, head, async (a, b) => {
+      await forEachChunk(from, head, chunk, async (a, b) => {
         const logs = await getLogsSafe(pub, {
           address: bem.token,
           event: TRANSFER,
@@ -127,7 +136,7 @@ export async function loadAdminStats(
   const hatchers = new Set<string>();
   const playedPets = new Set<string>();
   if (chipet) {
-    await forEachChunk(from, head, async (a, b) => {
+    await forEachChunk(from, head, chunk, async (a, b) => {
       const logs = await getLogsSafe(pub, {
         address: chipet,
         event: HATCHED,
@@ -139,7 +148,7 @@ export async function loadAdminStats(
       }
     });
 
-    await forEachChunk(from, head, async (a, b) => {
+    await forEachChunk(from, head, chunk, async (a, b) => {
       const logs = await getLogsSafe(pub, {
         address: chipet,
         event: PLAYED,
@@ -194,6 +203,7 @@ export async function loadAdminStats(
     rechargeBem: bem ? formatUnits(rechargeRaw, bem.decimals) : '0',
     treasuryBal,
     scannedTo: head.toString(),
+    rpcHost,
     note: '注册=链上孵化过的钱包；游玩=通电过的芯喵主人；充值含现收款地址与旧工厂地址入账。仅本地演示、未上链行为不计入。',
   };
 }

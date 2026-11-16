@@ -68,6 +68,7 @@ export async function adminStats(chainId: number) {
     rechargeBem: string;
     treasuryBal: string;
     scannedTo: string;
+    rpcHost: string;
     note: string;
   };
 }

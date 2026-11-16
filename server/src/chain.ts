@@ -10,7 +10,7 @@ export interface ChainCtx {
 
 const ctxs = new Map<number, ChainCtx>();
 
-function rpcFor(chainId: number): string {
+export function rpcFor(chainId: number): string {
   const env = process.env[`RPC_URL_${chainId}`] ?? (chainId === 196 ? process.env.RPC_URL : undefined);
   if (env) return env;
   const chain = CHAINS[chainId as keyof typeof CHAINS];
@@ -18,14 +18,32 @@ function rpcFor(chainId: number): string {
   return chain.rpcUrls.default.http[0];
 }
 
+/** 展示用：只回主机名，避免把 Alchemy key 泄露到 Admin 前端。 */
+export function rpcHostLabel(chainId: number): string {
+  try {
+    return new URL(rpcFor(chainId)).host;
+  } catch {
+    return 'unknown';
+  }
+}
+
 export function chainCtx(chainId = Number(process.env.CHAIN_ID ?? 196)): ChainCtx {
   let c = ctxs.get(chainId);
   if (!c) {
-    const client = createPublicClient({ transport: http(rpcFor(chainId), { batch: true, retryCount: 3 }) }) as PublicClient;
+    const url = rpcFor(chainId);
+    const client = createPublicClient({
+      transport: http(url, { batch: true, retryCount: 3, timeout: 30_000 }),
+    }) as PublicClient;
     c = { chainId, client, lib: new ChainLibrary(client), deployment: deploymentFor(chainId) };
     ctxs.set(chainId, c);
   }
   return c;
+}
+
+/** 热更新 .env 后清缓存，让 Admin 立刻用上新 RPC。 */
+export function resetChainCtx(chainId?: number) {
+  if (chainId == null) ctxs.clear();
+  else ctxs.delete(chainId);
 }
 
 export class HttpError extends Error {

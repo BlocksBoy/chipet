@@ -194,9 +194,10 @@ export function Admin() {
         <Panel title={t('口径说明', 'Definitions')} bodyClass="p-5 text-sm text-mute leading-relaxed">
           <p>{stats?.note ?? t('加载后显示统计口径。', 'Definitions appear after load.')}</p>
           {stats && (
-            <p className="mt-3 font-mono text-[11px] text-faint">
-              {t('扫描至区块', 'Scanned to block')} #{stats.scannedTo}
-            </p>
+            <div className="mt-3 space-y-1 font-mono text-[11px] text-faint">
+              <p>{t('扫描至区块', 'Scanned to block')} #{stats.scannedTo}</p>
+              <p>{t('扫链 RPC', 'Scan RPC')} · {stats.rpcHost}</p>
+            </div>
           )}
         </Panel>
       </div>

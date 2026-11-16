@@ -4,7 +4,7 @@ import { streamSSE } from 'hono/streaming';
 import { zeroAddress, type Address } from 'viem';
 import { EXAMPLES, FULL_ADDER_NAND9, generateVectors, HdlError, toHex, type Library, type Resolved } from '@tapearena/netlist';
 import { bountyPhase, loadAdminStats, type Bounty } from '@tapearena/chain';
-import { bountiesOf, bountyOf, chainCtx, componentsOf, HttpError, type ChainCtx } from './chain.ts';
+import { bountiesOf, bountyOf, chainCtx, componentsOf, HttpError, resetChainCtx, rpcHostLabel, type ChainCtx } from './chain.ts';
 import { build, challengeHint, precheck, simulate, summary, vectorsFor } from '@tapearena/chain';
 import { designLoop, openAIChat, type ChatFn, type DesignTarget } from './ai.ts';
 import {
@@ -112,9 +112,12 @@ export function createApp(deps: AppDeps = {}) {
   app.get('/api/admin/stats', requireAdmin(), async (c) => {
     const chainId = Number(c.req.query('chainId') ?? process.env.CHAIN_ID ?? 196);
     if (chainId !== 196 && chainId !== 56) throw new HttpError(400, 'unsupported chainId');
+    // 保证读到最新 RPC_URL_*（热更新 .env 后无需整机重启才能换节点）
+    resetChainCtx(chainId);
     const x = ctxOf(chainId);
     if (!x.deployment?.chipet) throw new HttpError(404, 'chipet not deployed on this chain');
-    const stats = await loadAdminStats(x.client, chainId, x.deployment.chipet);
+    const rpcHost = rpcHostLabel(chainId);
+    const stats = await loadAdminStats(x.client, chainId, x.deployment.chipet, { rpcHost });
     return json(c, stats);
   });
 
