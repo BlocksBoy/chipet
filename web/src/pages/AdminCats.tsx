@@ -234,7 +234,7 @@ export function AdminCats() {
             <Select
               value={chain}
               onChange={(e) => { setChain(e.target.value as ChainBand); setPage(1); }}
-              className="h-9 min-w-[140px] text-[13px]"
+              className="min-w-[140px] text-[13px] leading-10"
             >
               <option value="all">{t('全部链', 'All chains')}</option>
               {MAINNET_IDS.map((id) => (
@@ -246,7 +246,7 @@ export function AdminCats() {
             <Select
               value={energy}
               onChange={(e) => { setEnergy(e.target.value as EnergyBand); setPage(1); }}
-              className="h-9 min-w-[140px] text-[13px]"
+              className="min-w-[140px] text-[13px] leading-10"
             >
               <option value="all">{t('全部能量', 'All energy')}</option>
               <option value="low">{t('低 · 0–39', 'Low · 0–39')}</option>
@@ -258,7 +258,7 @@ export function AdminCats() {
             <Select
               value={level}
               onChange={(e) => { setLevel(e.target.value as LevelBand); setPage(1); }}
-              className="h-9 min-w-[140px] text-[13px]"
+              className="min-w-[140px] text-[13px] leading-10"
             >
               <option value="all">{t('全部等级', 'All levels')}</option>
               <option value="1-3">Lv.1–3</option>
@@ -270,7 +270,7 @@ export function AdminCats() {
             <Select
               value={rarity}
               onChange={(e) => { setRarity(e.target.value as RarityBand); setPage(1); }}
-              className="h-9 min-w-[140px] text-[13px]"
+              className="min-w-[140px] text-[13px] leading-10"
             >
               <option value="all">{t('全部稀有度', 'All rarities')}</option>
               <option value="0">{t('普通', 'Common')}</option>

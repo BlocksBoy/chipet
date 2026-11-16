@@ -76,6 +76,87 @@ n[0] = p ^ x[2]
 n[1] = (x[0] & x[1]) | (p & x[2])
 `,
   },
+  halfAdder: {
+    get title() { return L('半加器', 'Half adder'); },
+    src: `circuit half_adder
+in a, b
+out s, c
+s = a ^ b
+c = a & b
+`,
+  },
+  xorNand: {
+    get title() { return L('用 NAND 拼 XOR', 'XOR from NANDs'); },
+    src: `circuit xor_nand
+in a, b
+out y
+wire t, u, v
+t = nand(a, b)
+u = nand(a, t)
+v = nand(b, t)
+y = nand(u, v)
+`,
+  },
+  majority3: {
+    get title() { return L('3 输入多数表决', '3-input majority'); },
+    src: `circuit majority3
+in a, b, c
+out y
+y = (a & b) | (b & c) | (a & c)
+`,
+  },
+  parity4: {
+    get title() { return L('4 位偶校验', '4-bit even parity'); },
+    src: `circuit parity4
+in x[4]
+out p
+p = x[0] ^ x[1] ^ x[2] ^ x[3]
+`,
+  },
+  decoder2: {
+    get title() { return L('2–4 译码器', '2-to-4 decoder'); },
+    src: `circuit decoder2
+in s[2]
+out y[4]
+y[0] = ~s[1] & ~s[0]
+y[1] = ~s[1] &  s[0]
+y[2] =  s[1] & ~s[0]
+y[3] =  s[1] &  s[0]
+`,
+  },
+  eq4: {
+    get title() { return L('4 位相等比较器', '4-bit equality comparator'); },
+    src: `circuit eq4
+in a[4], b[4]
+out eq
+wire d[4]
+for i in 0..3 {
+  d[i] = ~(a[i] ^ b[i])
+}
+eq = d[0] & d[1] & d[2] & d[3]
+`,
+  },
+  priority4: {
+    get title() { return L('4 位优先编码器', '4-bit priority encoder'); },
+    src: `circuit priority4
+in x[4]
+out y[2], valid
+// 高位优先：x[3] > x[2] > x[1] > x[0]
+valid = x[0] | x[1] | x[2] | x[3]
+y[1] = x[3] | x[2]
+y[0] = x[3] | (~x[2] & x[1])
+`,
+  },
+  toggle: {
+    get title() { return L('T 触发器（寄存器）', 'T flip-flop (register)'); },
+    src: `circuit toggle
+in t
+out q
+reg r
+r <= t ? ~r : r
+q = r
+`,
+  },
 };
 
 /** 直接用 NAND 手写的全加器（9 门，经典最优），用来演示「同样功能、门数更少」。 */

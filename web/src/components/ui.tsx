@@ -227,9 +227,20 @@ export function Textarea({ className, ...p }: TextareaHTMLAttributes<HTMLTextAre
 export function Select({ className, wrapClass, icon: I, children, ...p }: SelectHTMLAttributes<HTMLSelectElement> & { wrapClass?: string; icon?: Icon }) {
   return (
     <span className={cn('relative inline-flex items-center', wrapClass)}>
-      {I && <I className="pointer-events-none absolute left-3 size-4 text-faint" />}
-      <select className={cn(FIELD, 'h-10 cursor-pointer appearance-none pr-10', I && 'pl-9', className)} {...p}>{children}</select>
-      <ChevronDown className="pointer-events-none absolute right-3.5 size-4 text-mute" />
+      {I && <I className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-faint" />}
+      <select
+        className={cn(
+          FIELD,
+          // 固定高度 + 清掉 FIELD 的 py-2，文字与箭头垂直居中
+          'h-10 cursor-pointer appearance-none py-0 leading-10 pr-10',
+          I && 'pl-9',
+          className,
+        )}
+        {...p}
+      >
+        {children}
+      </select>
+      <ChevronDown className="pointer-events-none absolute top-1/2 right-3.5 size-4 -translate-y-1/2 text-mute" />
     </span>
   );
 }

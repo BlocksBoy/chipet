@@ -115,6 +115,12 @@ cout = c[4]
     expect(() => compile('in a\nout y\ny = a & q')).toThrow(HdlError);
     try { compile('in a\nout y\ny = a & q'); } catch (e) { expect((e as HdlError).line).toBe(3); }
   });
+
+  it('全部内置示例可编译', () => {
+    for (const [k, ex] of Object.entries(EXAMPLES)) {
+      expect(() => compile(ex.src), k).not.toThrow();
+    }
+  });
 });
 
 describe('测试向量', () => {

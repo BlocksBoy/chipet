@@ -29,12 +29,20 @@ export function Studio() {
   const route = useRoute();
   const bountyId = route.query.get('bounty');
   const [src, setSrc] = useState(() => localStorage.getItem(DRAFT) ?? EXAMPLES.add4.src);
+  const [picked, setPicked] = useState('');
   const [built, setBuilt] = useState<Built | null>(null);
   const [err, setErr] = useState<{ msg: string; line?: number } | null>(null);
   const [tab, setTab] = useState<Tab>(bountyId ? 'test' : 'sim');
   const [bounty, setBounty] = useState<Bounty | null>(null);
 
   useEffect(() => { localStorage.setItem(DRAFT, src); }, [src]);
+
+  const loadTemplate = (key: string) => {
+    const t = TEMPLATES[key as keyof typeof TEMPLATES];
+    if (!t) return;
+    setPicked(key);
+    setSrc(t.src);
+  };
 
   // 输入改动后 250ms 重新编译（use 组件会按需读链）
   useEffect(() => {
@@ -79,7 +87,13 @@ export function Studio() {
           ? <Link to={`/lab/bounty/${bounty.id}`} className="min-w-0 no-underline"><Tag tone="si" icon={Target}>{tr(`正在为擂台 #${bounty.id}「${bounty.meta.title}」设计`, `Designing for bounty #${bounty.id} "${bounty.meta.title}"`)}</Tag></Link>
           : <span className="min-w-0 text-[13px] text-pretty text-mute">{tr('写 TapeHDL，实时编译成 NAND 网表；所有计算都在你的浏览器里完成。', 'Write TapeHDL and it compiles to a NAND netlist as you type. Everything runs in your browser.')}</span>}
         <div className="hidden flex-1 sm:block" />
-        <Select aria-label={tr('载入示例', 'Load an example')} icon={FileCode2} className="w-full max-w-full sm:w-64" value="" onChange={(e) => e.target.value && setSrc(TEMPLATES[e.target.value as keyof typeof TEMPLATES].src)}>
+        <Select
+          aria-label={tr('载入示例', 'Load an example')}
+          icon={FileCode2}
+          className="w-full max-w-full sm:w-64"
+          value={picked}
+          onChange={(e) => { if (e.target.value) loadTemplate(e.target.value); }}
+        >
           <option value="">{tr('载入示例…', 'Load an example…')}</option>
           {Object.entries(TEMPLATES).map(([k, v]) => <option key={k} value={k}>{v.title}</option>)}
         </Select>
@@ -89,7 +103,14 @@ export function Studio() {
         <div className="flex flex-col gap-5">
           <Panel title={<span className="font-mono">{built?.compiled.name ?? 'circuit'}<span className="text-faint">.thdl</span></span>} icon={FileCode2}
             right={err ? <Tag tone="danger" icon={CircleX}>{tr('编译失败', 'Compile failed')}</Tag> : built && <Tag tone="si" icon={CircleCheck}>{tr('已编译', 'Compiled')}</Tag>}>
-            <Editor value={src} onChange={setSrc} errLine={err?.line} />
+            <Editor
+              value={src}
+              onChange={(v) => {
+                setSrc(v);
+                if (picked) setPicked('');
+              }}
+              errLine={err?.line}
+            />
             {err
               ? <ErrBar>{err.msg}</ErrBar>
               : built && (
