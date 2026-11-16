@@ -100,10 +100,17 @@ export interface Quest {
   claimed: boolean;
 }
 
-/** 按钱包记住的主人昵称：自定义名回切保留，未自定义则换钱包重抽。 */
+/** 按钱包记住的进度：昵称、签到、今日任务、摸/喂日限、野怪首胜、鱼干。 */
 interface WalletIdentity {
   displayName: string;
   custom: boolean;
+  checkinDay: string;
+  streak: number;
+  fish: number;
+  quest: { day: string; n: Record<string, number>; claimed: Record<string, boolean> };
+  myPatsToday: Record<string, string>;
+  giftsToday: Record<string, string>;
+  wildDay: Record<string, string>;
 }
 
 interface SocialState {
@@ -112,7 +119,7 @@ interface SocialState {
   nameCustomized: boolean;
   /** 当前绑定的钱包（小写）；空串表示未连接 */
   boundWallet: string;
-  /** 各钱包自己的昵称档案 */
+  /** 各钱包自己的昵称 + 签到/任务进度 */
   walletIdentities: Record<string, WalletIdentity>;
   friendCode: string;
   pats: Record<string, number>;
@@ -147,13 +154,69 @@ interface NpcLive {
 
 const KEY = 'chipet.social.v1';
 /** 按本地日历日算「今天」，避免 UTC 切日导致任务进度读成 0。 */
-const DAY = () => {
+const DAY = (offset = 0) => {
   const d = new Date();
+  if (offset) d.setDate(d.getDate() + offset);
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, '0');
   const day = String(d.getDate()).padStart(2, '0');
   return `${y}-${m}-${day}`;
 };
+
+function snapshotWallet(s: SocialState): WalletIdentity {
+  return {
+    displayName: s.displayName,
+    custom: Boolean(s.nameCustomized) && !LEGACY_NAMES.has(s.displayName),
+    checkinDay: s.checkinDay ?? '',
+    streak: Number(s.streak) || 0,
+    fish: Math.max(0, Number(s.fish) || 0),
+    quest: normalizeQuest(s.quest),
+    myPatsToday: { ...(s.myPatsToday ?? {}) },
+    giftsToday: { ...(s.giftsToday ?? {}) },
+    wildDay: { ...(s.wildDay ?? {}) },
+  };
+}
+
+/** 套用某钱包存档；无存档则清空签到/任务日限并给起步鱼干。 */
+function applyWallet(s: SocialState, saved: WalletIdentity | undefined, mode: 'switch' | 'first') {
+  if (saved) {
+    if (saved.custom && saved.displayName && !LEGACY_NAMES.has(saved.displayName)) {
+      s.displayName = saved.displayName.slice(0, 16);
+      s.nameCustomized = true;
+    } else if (mode === 'switch') {
+      s.displayName = pickRandomName();
+      s.nameCustomized = false;
+    } else if (LEGACY_NAMES.has(s.displayName)) {
+      s.displayName = pickRandomName();
+      s.nameCustomized = false;
+    }
+    s.checkinDay = saved.checkinDay ?? '';
+    s.streak = Number(saved.streak) || 0;
+    s.fish = saved.fish != null && Number.isFinite(Number(saved.fish))
+      ? Math.max(0, Number(saved.fish))
+      : 2;
+    s.quest = normalizeQuest(saved.quest);
+    s.myPatsToday = { ...(saved.myPatsToday ?? {}) };
+    s.giftsToday = { ...(saved.giftsToday ?? {}) };
+    s.wildDay = { ...(saved.wildDay ?? {}) };
+    return;
+  }
+  if (mode === 'switch') {
+    s.displayName = pickRandomName();
+    s.nameCustomized = false;
+    s.checkinDay = '';
+    s.streak = 0;
+    s.fish = 2;
+    s.quest = { day: '', n: {}, claimed: {} };
+    s.myPatsToday = {};
+    s.giftsToday = {};
+    s.wildDay = {};
+    return;
+  }
+  // 首次绑定：进度留在当前钱包，只保证有昵称
+  if (LEGACY_NAMES.has(s.displayName)) s.displayName = pickRandomName();
+  s.nameCustomized = false;
+}
 
 function normalizeQuest(q: Partial<SocialState['quest']> | null | undefined): SocialState['quest'] {
   return {
@@ -496,6 +559,10 @@ let socialRev = 0;
 const socialSubs = new Set<() => void>();
 
 function save(s: SocialState) {
+  // 有绑定钱包时，把签到/任务等进度一并写回该钱包档案
+  if (s.boundWallet) {
+    s.walletIdentities[s.boundWallet] = snapshotWallet(s);
+  }
   localStorage.setItem(KEY, JSON.stringify(s));
   socialRev += 1;
   socialSubs.forEach((fn) => fn());
@@ -622,16 +689,12 @@ export const social = {
     if (!next) return;
     s.displayName = next;
     s.nameCustomized = true;
-    if (s.boundWallet) {
-      s.walletIdentities[s.boundWallet] = { displayName: next, custom: true };
-    }
     save(s);
   },
   /**
-   * 绑定当前钱包到主人昵称：
-   * - 该钱包曾自定义 → 恢复自定义名
-   * - 从未自定义 → 换到另一只钱包时重抽随机网名
-   * - 首次连接（此前未绑钱包）→ 保留现有随机名，不强制重抽
+   * 绑定当前钱包：签到 / 今日任务 / 日限 / 鱼干 / 昵称都按钱包切换。
+   * - 曾自定义昵称 → 恢复；否则换钱包重抽
+   * - 首次连接 → 当前进度归属这只钱包，不重置
    */
   bindAccount(address: string | null | undefined) {
     const s = load();
@@ -642,25 +705,15 @@ export const social = {
     const prev = (s.boundWallet ?? '').toLowerCase();
     if (next === prev) return s.displayName;
 
-    if (prev && s.nameCustomized && !LEGACY_NAMES.has(s.displayName)) {
-      s.walletIdentities[prev] = { displayName: s.displayName, custom: true };
+    if (prev) {
+      s.walletIdentities[prev] = snapshotWallet(s);
     }
 
     s.boundWallet = next;
     const saved = s.walletIdentities[next];
-    if (saved?.custom && saved.displayName && !LEGACY_NAMES.has(saved.displayName)) {
-      s.displayName = saved.displayName.slice(0, 16);
-      s.nameCustomized = true;
-    } else if (prev) {
-      // 从另一只钱包切过来，且这只没自定义 → 重抽
-      s.displayName = pickRandomName();
-      s.nameCustomized = false;
-      delete s.walletIdentities[next];
-    } else {
-      // 首次绑定：沿用当前展示名
-      if (LEGACY_NAMES.has(s.displayName)) s.displayName = pickRandomName();
-      s.nameCustomized = false;
-    }
+    applyWallet(s, saved, prev ? 'switch' : 'first');
+    // 首次绑定也落一份，避免下次切走丢进度
+    s.walletIdentities[next] = snapshotWallet(s);
     save(s);
     return s.displayName;
   },
@@ -675,7 +728,7 @@ export const social = {
     const s = load();
     const today = DAY();
     if (s.checkinDay === today) throw new Error(tr('今天已经签到过了', 'You already checked in today'));
-    const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+    const yesterday = DAY(-1);
     s.streak = s.checkinDay === yesterday ? s.streak + 1 : 1;
     s.checkinDay = today;
     s.fish += 1 + (s.streak >= 3 ? 1 : 0);
