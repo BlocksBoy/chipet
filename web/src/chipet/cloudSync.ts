@@ -48,6 +48,9 @@ let cloudRev = 0;
 /** 广场动态服务端总数（分页） */
 let feedTotal = 0;
 let feedPageLoading = false;
+/** 当前 ensureFeedThrough 要凑齐的条数（并发翻页时取 max，避免丢请求） */
+let feedWantedNeed = 0;
+let feedEnsureChain: Promise<void> | null = null;
 
 function notifyCloud() {
   cloudRev += 1;
@@ -153,39 +156,74 @@ export const cloudSync = {
   /**
    * 保证本地至少有到第 page 页的动态（含）；不够就按 offset 向库续拉。
    * page 从 1 起；pageSize 与广场 FEED_PAGE 对齐。
+   * 并发翻页会抬高 wantedNeed，不会因 feedPageLoading 直接丢请求。
    */
   async ensureFeedThrough(page: number, pageSize: number): Promise<void> {
-    const need = Math.max(1, page) * Math.max(1, pageSize);
-    if (feedPageLoading) return;
+    const size = Math.max(1, pageSize);
+    const need = Math.max(1, page) * size;
+    feedWantedNeed = Math.max(feedWantedNeed, need);
+    if (feedEnsureChain) return feedEnsureChain;
+
     feedPageLoading = true;
     notifyCloud();
-    try {
-      // 可能连续翻多页，循环补齐
-      for (let guard = 0; guard < 30; guard++) {
-        const have = social.activities().length;
-        const total = feedTotal || have;
-        if (have >= need || have >= total) break;
-        const r = await fetchChipetFeed({ limit: pageSize, offset: have });
-        if (!r) break;
-        if (r.total != null) feedTotal = Math.max(0, Number(r.total) || 0);
-        if (!r.items?.length) {
-          feedTotal = have;
-          break;
+    feedEnsureChain = (async () => {
+      try {
+        for (let guard = 0; guard < 40; guard++) {
+          const target = feedWantedNeed;
+          const have = social.activities().length;
+          const total = feedTotal > 0 ? feedTotal : Number.POSITIVE_INFINITY;
+          if (have >= target || have >= total) {
+            if (Number.isFinite(total) && have >= total) {
+              feedTotal = have;
+            }
+            // 等待期间又翻到更后面：继续补
+            if (feedWantedNeed > target) continue;
+            break;
+          }
+          const gap = Math.min(100, Math.max(size, target - have));
+          const r = await fetchChipetFeed({ limit: gap, offset: have });
+          if (!r) {
+            // 网络失败：别再拿虚高 total 画出空页
+            feedTotal = have;
+            break;
+          }
+          if (r.total != null) feedTotal = Math.max(0, Number(r.total) || 0);
+          if (!r.items?.length) {
+            feedTotal = have;
+            break;
+          }
+          const before = have;
+          social.applyCloudFeed(
+            r.items as Parameters<typeof social.applyCloudFeed>[0],
+            r.likes ?? {},
+            false,
+          );
+          const after = social.activities().length;
+          if (after <= before) {
+            // 合并没涨（全是重复）→ 视为到头，避免死循环空页
+            feedTotal = after;
+            break;
+          }
+          if (r.items.length < gap) {
+            feedTotal = after;
+            break;
+          }
         }
-        social.applyCloudFeed(
-          r.items as Parameters<typeof social.applyCloudFeed>[0],
-          r.likes ?? {},
-          false,
-        );
-        if (r.items.length < pageSize) {
-          feedTotal = social.activities().length;
-          break;
+      } finally {
+        feedPageLoading = false;
+        feedEnsureChain = null;
+        const have = social.activities().length;
+        const total = feedTotal > 0 ? feedTotal : have;
+        if (have >= total) feedTotal = have;
+        notifyCloud();
+        // 链结束时目标又被抬高且还没凑齐 → 再开一轮
+        if (have < feedWantedNeed && have < total) {
+          void this.ensureFeedThrough(Math.ceil(feedWantedNeed / size), size);
         }
       }
-    } finally {
-      feedPageLoading = false;
-      notifyCloud();
-    }
+    })();
+
+    return feedEnsureChain;
   },
 
   /** 本机 localStorage → 库；每浏览器只跑一次（成功或空载荷也打标）。 */
