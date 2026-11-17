@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  ArrowLeft, Bone, Cable, CalendarDays, ChevronDown, ChevronRight, CircuitBoard, Coins, Cpu, Dna, Fish, Hand, Hash, Heart, History,
+  ArrowLeft, Bone, Cable, CalendarDays, ChevronDown, ChevronRight, CircleAlert, CircuitBoard, Coins, Cpu, Dna, Fish, Hand, Hash, Heart, History,
   MessageCircle, Share2, Sparkles, Swords, Trophy, Unlink, User, Zap,
 } from 'lucide-react';
-import { Button, Empty, ErrBar, Input, KV, Meter, PAGE, Panel, Stat, Tag, cn, useMedia } from '../components/ui.tsx';
+import { Button, Empty, Input, KV, Meter, PAGE, Panel, Stat, Tag, cn, useMedia } from '../components/ui.tsx';
 import { go } from '../router.tsx';
 import { short } from '../format.ts';
 import { motion } from 'motion/react';
@@ -408,23 +408,31 @@ export function PetPage({ id, share: shareToken }: { id?: number; share?: string
               <span className="ml-auto flex items-center gap-1.5 font-mono text-xs text-mute"><Fish className="size-3.5 text-si" />{t(`我的鱼干 ${profile.fish}`, `${plural(profile.fish, 'fish treat')} left`)}</span>
             </div>
 
-            <div className="mt-3 min-h-10" aria-live="polite">
-              {err
-                ? <div className="overflow-hidden rounded-2xl"><ErrBar>{err}</ErrBar></div>
-                : ok && <p className="animate-rise rounded-2xl bg-si/10 px-3.5 py-2 text-sm text-si-dim">{ok}</p>}
-            </div>
-
-            <button type="button" onClick={toHeart}
-              className="group mt-auto flex items-center gap-3 rounded-2xl bg-[#14231f] px-4 py-3 text-left transition hover:bg-[#1b302a]">
-              <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-white/10 text-copper-hi"><Cpu className="size-5" /></span>
-              <span className="min-w-0 flex-1">
-                <span className="block font-mono text-[11px] text-[#8fb3a5]">HEART · TapeOut circuit #{pet.circuitId.toString()}</span>
-                <span className="block truncate text-sm font-semibold text-white">
-                  {heart.name} · {t(`${heart.gates} 门 · ${heart.nIn} 进 ${heart.nOut} 出 · ${heart.style}`, `${heart.gates} gates · ${heart.nIn} in / ${heart.nOut} out · ${heart.style}`)}
+            <div className="mt-auto flex flex-col gap-3 pt-5">
+              <div aria-live="polite">
+                {err
+                  ? (
+                    <div className="animate-rise flex items-start gap-2 rounded-2xl border border-danger/30 bg-danger/[0.08] px-3.5 py-2.5 font-mono text-[12.5px] text-danger">
+                      <CircleAlert className="mt-0.5 size-3.5 shrink-0" />
+                      <span>{err}</span>
+                    </div>
+                  )
+                  : ok
+                    ? <p className="animate-rise rounded-2xl bg-si/10 px-3.5 py-2.5 text-sm text-si-dim">{ok}</p>
+                    : null}
+              </div>
+              <button type="button" onClick={toHeart}
+                className="group flex shrink-0 items-center gap-3 rounded-2xl bg-[#14231f] px-4 py-3 text-left transition hover:bg-[#1b302a]">
+                <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-white/10 text-copper-hi"><Cpu className="size-5" /></span>
+                <span className="min-w-0 flex-1">
+                  <span className="block font-mono text-[11px] text-[#8fb3a5]">HEART · TapeOut circuit #{pet.circuitId.toString()}</span>
+                  <span className="block truncate text-sm font-semibold text-white">
+                    {heart.name} · {t(`${heart.gates} 门 · ${heart.nIn} 进 ${heart.nOut} 出 · ${heart.style}`, `${heart.gates} gates · ${heart.nIn} in / ${heart.nOut} out · ${heart.style}`)}
+                  </span>
                 </span>
-              </span>
-              <ChevronDown className="size-4 shrink-0 text-[#8fb3a5] transition-transform group-hover:translate-y-0.5" />
-            </button>
+                <ChevronDown className="size-4 shrink-0 text-[#8fb3a5] transition-transform group-hover:translate-y-0.5" />
+              </button>
+            </div>
           </div>
         </div>
       </section>
