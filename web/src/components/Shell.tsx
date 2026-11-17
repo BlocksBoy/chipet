@@ -279,19 +279,22 @@ export function Shell({ children }: { children: ReactNode }) {
         <main className="min-w-0 w-full flex-1 overflow-x-clip">{children}</main>
       )}
 
-      <nav aria-label={t('主导航', 'Main')} className="fixed inset-x-0 bottom-0 z-20 flex border-t border-line/70 bg-panel/90 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl md:hidden">
+      <nav
+        aria-label={t('主导航', 'Main')}
+        className="fixed inset-x-0 bottom-0 z-20 flex min-h-[calc(4rem+env(safe-area-inset-bottom,0px))] border-t border-line/70 bg-panel/90 px-3 pt-1.5 pb-[calc(0.375rem+env(safe-area-inset-bottom,0px))] backdrop-blur-xl md:hidden"
+      >
         {NAV.map(({ to, key, label, icon: I }) => (
           <Link key={key} to={to} aria-current={here === key ? 'page' : undefined} className={cn(
-            'flex min-w-0 flex-1 flex-col items-center gap-0.5 pt-2 pb-1.5 text-[11px] no-underline transition-colors',
+            'flex min-h-[52px] min-w-0 flex-1 flex-col items-center justify-center gap-1 px-1 py-1.5 text-[11px] leading-tight no-underline transition-colors',
             here === key ? 'font-semibold text-ink' : 'text-mute',
           )}>
-            <I className={cn('size-5', here === key && 'text-si')} />
+            <I className={cn('size-5 shrink-0', here === key && 'text-si')} />
             <span className="max-w-full truncate">{txt(label)}</span>
           </Link>
         ))}
       </nav>
 
-      <footer className="mt-10 border-t border-line/70 bg-panel/50 pb-[calc(3.5rem+env(safe-area-inset-bottom))] md:pb-0">
+      <footer className="mt-10 border-t border-line/70 bg-panel/50 pb-[calc(5.5rem+env(safe-area-inset-bottom,0px))] md:pb-0">
         <div className="mx-auto grid max-w-[1180px] gap-8 px-4 py-10 sm:px-7 md:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)]">
           <div>
             <div className="flex items-center gap-2.5 font-display text-lg font-bold text-ink"><Logo className="size-7" />Chipet</div>
@@ -356,7 +359,7 @@ export function Shell({ children }: { children: ReactNode }) {
         </div>
       </footer>
 
-      <div className="fixed right-5 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-50 flex w-[360px] max-w-[calc(100vw-2.5rem)] flex-col gap-2 md:bottom-[max(1.25rem,env(safe-area-inset-bottom))]">
+      <div className="fixed right-5 bottom-[calc(5.5rem+env(safe-area-inset-bottom,0px))] z-50 flex w-[360px] max-w-[calc(100vw-2.5rem)] flex-col gap-2 md:bottom-[max(1.25rem,env(safe-area-inset-bottom,0px))]">
         {toasts.map((toast) => (
           <div key={toast.id} role="status" className={cn(
             'flex animate-rise items-start gap-3 rounded-2xl border bg-panel px-4 py-3 text-[13px] shadow-lg shadow-si/10',
