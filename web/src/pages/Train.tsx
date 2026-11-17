@@ -4,7 +4,6 @@ import {
   ArrowRight, Cable, ChevronLeft, ChevronRight, Cpu, Egg, Fish, Flag, RotateCcw, ScrollText, Shield, Swords, Trophy, WandSparkles, X, Zap, type LucideProps,
 } from 'lucide-react';
 import { useAccount } from 'wagmi';
-import { fetchRivals } from '../api.ts';
 import { DataLoading, PetCardGridSkeleton } from '../components/Skeleton.tsx';
 import { Button, Empty, ErrBar, PAGE, PageHeader, Panel, Tag, cn } from '../components/ui.tsx';
 import { Link, go, useRoute } from '../router.tsx';
@@ -20,8 +19,9 @@ import {
   type Clash, type Move, type Roll, type Wild,
 } from '../chipet/battle.ts';
 import { petSeed, phenotypeOf } from '../chipet/phenotype.ts';
-import { BATTLE_ENERGY, isChainPet, localChipet, xpNeed, type LocalPet } from '../chipet/store.ts';
-import { isOnchainPetKey, rivalFromArchive, social, type PublicPet } from '../chipet/social.ts';
+import { BATTLE_ENERGY, localChipet, xpNeed, type LocalPet } from '../chipet/store.ts';
+import { hydrateChainRivals } from '../chipet/rivals.ts';
+import { isOnchainPetKey, social, type PublicPet } from '../chipet/social.ts';
 import { both, plural, tr, txt, useLang, useT, type Txt } from '../i18n.ts';
 
 const MOVE_ICON: ComponentType<LucideProps>[] = [Swords, Shield, WandSparkles];
@@ -755,17 +755,11 @@ export function Train() {
   useEffect(() => {
     let alive = true;
     setRivalsLoading(true);
-    fetchRivals({ exclude: address, limit: 24 }).then((items) => {
-      if (!alive) return;
-      const localChain = localChipet.list().filter(isChainPet);
-      const pets = items.map(rivalFromArchive).filter((p) => {
-        const petId = Number(p.key.split(':')[2]);
-        return !localChain.some((lp) => lp.id === petId && lp.name === p.name);
-      });
-      social.setChainRivals(pets);
-      setTick((n) => n + 1);
-    }).finally(() => {
-      if (alive) setRivalsLoading(false);
+    void hydrateChainRivals({ exclude: address, limit: 24 }).finally(() => {
+      if (alive) {
+        setRivalsLoading(false);
+        setTick((n) => n + 1);
+      }
     });
     return () => { alive = false; };
   }, [address]);

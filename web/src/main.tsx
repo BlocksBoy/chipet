@@ -12,6 +12,7 @@ import { Dex } from './pages/Dex.tsx';
 import { Kitties } from './pages/Kitties.tsx';
 import { Train } from './pages/Train.tsx';
 import { Plaza } from './pages/Plaza.tsx';
+import { Neighbors } from './pages/Neighbors.tsx';
 import { Arena } from './pages/Arena.tsx';
 import { BountyPage } from './pages/BountyPage.tsx';
 import { Studio } from './pages/Studio.tsx';
@@ -33,6 +34,7 @@ function App() {
   else if (a === 'pet' && b === 's' && r.parts[2]) page = <PetPage share={r.parts[2]} />;
   else if (a === 'pet' && b) page = <PetPage id={Number(b)} />;
   else if (a === 'plaza') page = <Plaza />;
+  else if (a === 'neighbors') page = <Neighbors />;
   else if (a === 'dex') page = <Dex />;
   else if (a === 'kitties') page = <Kitties />;
   else if (a === 'train') page = <Train />;

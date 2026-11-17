@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
-import { Cable, CalendarCheck, Check, Fish, Flame, Hand, Pencil, Sparkles, Swords, ThumbsUp, Trophy, Users } from 'lucide-react';
+import { ArrowRight, Cable, CalendarCheck, Check, Fish, Flame, Hand, Pencil, Sparkles, Swords, ThumbsUp, Trophy, Users } from 'lucide-react';
 import { PaginationBar } from '../components/Pagination.tsx';
 import {
   DataLoading, FeedSkeleton, PetCardGridSkeleton, PlazaSidebarSkeleton, RankListSkeleton, StatBandSkeleton,
 } from '../components/Skeleton.tsx';
 import { Button, Input, PAGE, PageHeader, Panel, Segmented, StatBand, Tag, cn } from '../components/ui.tsx';
-import { go } from '../router.tsx';
+import { Link, go } from '../router.tsx';
 import { useApp } from '../state.tsx';
 import { PetAvatar } from '../chipet/PetAvatar.tsx';
 import { ACT_ICON, actTone, PetCard, routeIdOf, timeAgo } from '../chipet/PetCard.tsx';
@@ -16,6 +16,7 @@ import {
   isFeedPageLoading, isLeaderboardLoading, isPublicLoading,
   leaderboardItemToPet, subscribeCloudSync, subscribeLeaderboard,
 } from '../chipet/cloudSync.ts';
+import { hydrateChainRivals } from '../chipet/rivals.ts';
 import { getSocialRev, maxBonds, social, subscribeSocial } from '../chipet/social.ts';
 import { plural, txt, useLang, useT } from '../i18n.ts';
 
@@ -25,7 +26,7 @@ const FEED_PAGE = 20;
 export function Plaza() {
   const t = useT();
   const lang = useLang();
-  const { notify } = useApp();
+  const { account, notify } = useApp();
   const [tab, setTab] = useState<'feed' | 'hot' | 'rank'>('feed');
   const [rankKind, setRankKind] = useState<'pats' | 'wins' | 'intimacy' | 'level'>('pats');
   const [name, setName] = useState(social.profile().displayName);
@@ -76,7 +77,15 @@ export function Plaza() {
     return social.leaderboard(rankKind);
   }, [tick, socialRev, boardRev, rankKind]);
   const bonds = useMemo(() => social.bonds(), [tick, socialRev]);
-  const neighbors = useMemo(() => social.neighbors(), [tick, socialRev]);
+  const neighbors = useMemo(() => {
+    const all = social.neighbors();
+    // 侧栏预览：真人猫优先
+    return [...all].sort((a, b) => {
+      const ao = a.key.startsWith('onchain:') ? 1 : 0;
+      const bo = b.key.startsWith('onchain:') ? 1 : 0;
+      return bo - ao;
+    });
+  }, [tick, socialRev]);
   const top = ranks[0]?.score || 1;
   const showFeedSkeleton = (bootLoading || (feedLoading && feed.length === 0)) && activities.length === 0;
   const showHotSkeleton = (bootLoading || boardLoading) && hot.length === 0;
@@ -90,6 +99,11 @@ export function Plaza() {
     if (tab !== 'feed') return;
     void cloudSync.ensureFeedThrough(feedPage, FEED_PAGE);
   }, [tab, feedPage, cloudRev]);
+
+  // 侧栏邻居 /「更多邻居」混入其他玩家的链上芯喵
+  useEffect(() => {
+    void hydrateChainRivals({ exclude: account, limit: 48 });
+  }, [account]);
 
   useEffect(() => { setFeedPage(1); }, [tab]);
   useEffect(() => {
@@ -337,7 +351,22 @@ export function Plaza() {
             )}
           </Panel>
 
-          <Panel title={t('邻居', 'Neighbors')} icon={Sparkles} bodyClass="p-4">
+          <Panel
+            title={t('邻居', 'Neighbors')}
+            icon={Sparkles}
+            bodyClass="p-4"
+            right={
+              neighbors.length > 0 ? (
+                <Link
+                  to="/neighbors"
+                  className="inline-flex items-center gap-1 text-xs font-semibold text-si-dim no-underline hover:text-si"
+                >
+                  {t('更多邻居', 'More neighbors')}
+                  <ArrowRight className="size-3.5" />
+                </Link>
+              ) : null
+            }
+          >
             <ul className="space-y-1.5">
               {neighbors.slice(0, 5).map((p) => (
                 <li key={p.key}>

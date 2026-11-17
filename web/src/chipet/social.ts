@@ -751,9 +751,11 @@ export const social = {
     save(s);
     return s;
   },
-  /** 写入链上切磋对手（Train 拉取 /api/pets/rivals 后调用）。 */
+  /** 写入链上切磋/邻居对手（Train / 广场拉取 /api/pets/rivals 后调用）。 */
   setChainRivals(pets: PublicPet[]) {
     chainRivalsCache = pets.filter((p) => !p.mine && isOnchainPetKey(p.key));
+    socialRev += 1;
+    socialSubs.forEach((fn) => fn());
   },
   chainRivals(): PublicPet[] {
     return chainRivalsCache;
