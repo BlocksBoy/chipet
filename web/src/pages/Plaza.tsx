@@ -31,6 +31,8 @@ function feedActorLabel(actor: Activity['actor'], t: (zh: string, en: string) =>
 const FEED_PAGE = 20;
 /** 停留在动态 Tab 时，后台软合并补新的间隔 */
 const FEED_SOFT_POLL_MS = 30_000;
+/** 第一页本地缓存（stale-while-revalidate） */
+const FEED_HEAD_CACHE_KEY = 'chipet.plaza.feedHead.v1';
 /** 可视区约 10 行高（与行 min-h-[4.75rem] 对齐） */
 const FEED_VIEW_CLASS = 'max-h-[47.5rem]';
 /** 自定义绿色拇指固定高度（px），故意比原生可视比拇指短 */
@@ -39,6 +41,13 @@ const FEED_THUMB_PX = 48;
 const FEED_FOOTER_H = 'h-10';
 
 type FeedRow = Activity & { likes: number; liked: boolean };
+
+type FeedHeadCachePayload = {
+  v: 1;
+  total: number;
+  items: Activity[];
+  likes: Record<string, number>;
+};
 
 function mergeLikeState(items: Activity[], likesMap: Record<string, number>): FeedRow[] {
   const local = social.activities();
@@ -51,6 +60,63 @@ function mergeLikeState(items: Activity[], likesMap: Record<string, number>): Fe
       liked: hit?.liked ?? false,
     };
   });
+}
+
+function readFeedHeadCache(): { rows: FeedRow[]; total: number; items: Activity[]; likes: Record<string, number> } | null {
+  try {
+    const raw = localStorage.getItem(FEED_HEAD_CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as FeedHeadCachePayload;
+    if (!parsed || parsed.v !== 1 || !Array.isArray(parsed.items) || !parsed.items.length) return null;
+    const likes = parsed.likes && typeof parsed.likes === 'object' ? parsed.likes : {};
+    const items = parsed.items.slice(0, FEED_PAGE) as Activity[];
+    return {
+      items,
+      likes,
+      rows: mergeLikeState(items, likes),
+      total: Math.max(0, Number(parsed.total) || items.length),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function writeFeedHeadCache(items: Activity[], likes: Record<string, number>, total: number) {
+  try {
+    const payload: FeedHeadCachePayload = {
+      v: 1,
+      total: Math.max(0, total),
+      items: items.slice(0, FEED_PAGE),
+      likes,
+    };
+    localStorage.setItem(FEED_HEAD_CACHE_KEY, JSON.stringify(payload));
+  } catch {
+    /* quota / private mode */
+  }
+}
+
+/** 每次挂载都读最新本地首屏（勿缓存 null，否则写库后再进菜单仍当无缓存） */
+function bootFeedHead() {
+  return readFeedHeadCache();
+}
+
+/** 有本地首屏时立刻灌进列表，避免切回菜单先闪 loading；同步写 ref，同帧即可判断 hadItems */
+function hydrateFeedFromCache(
+  setItems: (rows: FeedRow[]) => void,
+  setTotal: (n: number) => void,
+  itemsRef: { current: FeedRow[] },
+  totalRef: { current: number },
+  nextOffsetRef: { current: number },
+): boolean {
+  const cached = readFeedHeadCache();
+  if (!cached?.rows.length) return false;
+  itemsRef.current = cached.rows;
+  totalRef.current = cached.total;
+  setItems(cached.rows);
+  setTotal(cached.total);
+  if (nextOffsetRef.current <= 0) nextOffsetRef.current = cached.rows.length;
+  social.applyCloudFeed(cached.items, cached.likes, false);
+  return true;
 }
 
 /** 软合并：新帖插到顶部，已加载的旧页保留，避免轮询把列表裁回首屏导致跳动 */
@@ -75,19 +141,21 @@ export function Plaza() {
   const [name, setName] = useState(() => social.profile().displayName);
   const [editing, setEditing] = useState(false);
   const [tick, setTick] = useState(0);
-  /** 广场列表：组件内直打 API，不走本地页缓存 */
-  const [feedItems, setFeedItems] = useState<FeedRow[]>([]);
-  const [feedTotal, setFeedTotal] = useState(0);
-  const [feedHeadLoading, setFeedHeadLoading] = useState(true);
+  /** 广场列表：首屏读本地缓存立刻画，网络回来后整页替换并回写缓存 */
+  const [feedItems, setFeedItems] = useState<FeedRow[]>(() => bootFeedHead()?.rows ?? []);
+  const [feedTotal, setFeedTotal] = useState(() => bootFeedHead()?.total ?? 0);
+  // 有缓存则不当成「首屏加载中」，避免切回菜单闪 skeleton / 转圈
+  const [feedHeadLoading, setFeedHeadLoading] = useState(() => !(bootFeedHead()?.rows.length));
   const [feedMoreLoading, setFeedMoreLoading] = useState(false);
   const feedItemsRef = useRef<FeedRow[]>([]);
   const feedTotalRef = useRef(0);
   const feedMoreLoadingRef = useRef(false);
-  const feedHeadLoadingRef = useRef(true);
+  const feedHeadLoadingRef = useRef(false);
   /** DOM 提交后再钉住/补偿 scrollTop，避免加载时视口跳动 */
   const feedScrollBoostRef = useRef<number | null>(null);
   const lastScrollTop = useRef(0);
-  const nextOffset = useRef(0);
+  const nextOffset = useRef(-1);
+  if (nextOffset.current < 0) nextOffset.current = feedItems.length;
   const headPending = useRef(false);
   const nextPage = useRef<{ offset: number; request: ReturnType<typeof fetchChipetFeed> } | null>(null);
   const feedScrollRef = useRef<HTMLDivElement>(null);
@@ -177,20 +245,31 @@ export function Plaza() {
     return request;
   }, []);
 
-  /** replace：手动刷新整表对齐；默认 soft 合并，避免轮询裁掉已加载页 */
+  /** replace：整表对齐；已下翻多页时 soft 合并，避免轮询裁掉后续页 */
   const loadFeedHead = useCallback(async (opts?: { replace?: boolean }) => {
     if (headPending.current || feedMoreLoadingRef.current) return;
     headPending.current = true;
+    // 列表空时先灌本地缓存，切回菜单不闪 loading
+    if (feedItemsRef.current.length === 0) {
+      hydrateFeedFromCache(setFeedItems, setFeedTotal, feedItemsRef, feedTotalRef, nextOffset);
+    }
     const hadItems = feedItemsRef.current.length > 0;
-    const replace = !!opts?.replace || !hadItems;
-    if (replace) setFeedHeadLoading(true);
+    // 仅首屏（含本地缓存）时整页替换；已加载更多页才 soft 合并
+    const onlyHead = nextOffset.current <= FEED_PAGE;
+    const replace = !!opts?.replace || !hadItems || onlyHead;
+    // 有可展示数据时不亮 skeleton；仅手动刷新转小图标
+    if (!hadItems) setFeedHeadLoading(true);
+    else if (opts?.replace) setFeedHeadLoading(true);
     try {
       const r = await fetchChipetFeed({ limit: FEED_PAGE, offset: 0 });
       if (!r) return;
       const items = (r.items ?? []) as Activity[];
       const likes = r.likes ?? {};
       const next = mergeLikeState(items, likes);
-      setFeedTotal(Math.max(0, Number(r.total) || items.length));
+      const total = Math.max(0, Number(r.total) || items.length);
+      setFeedTotal(total);
+      // 第一页成功即回写本地缓存，下次先画缓存再替换
+      writeFeedHeadCache(items, likes, total);
       if (!replace && hadItems) {
         const existing = new Set(feedItemsRef.current.map(row => row.id));
         const added = next.filter(row => !existing.has(row.id)).length;
@@ -208,12 +287,15 @@ export function Plaza() {
         nextOffset.current = next.length;
         nextPage.current = null;
         setFeedItems(next);
-        lastScrollTop.current = 0;
-        if (feedScrollRef.current) feedScrollRef.current.scrollTop = 0;
+        // 手动整表刷新才回顶；缓存→网络替换时保住滚动位置
+        if (opts?.replace) {
+          lastScrollTop.current = 0;
+          if (feedScrollRef.current) feedScrollRef.current.scrollTop = 0;
+        }
       }
       if (items.length) social.applyCloudFeed(items, likes, false);
       // 首屏 / 整表刷新后立刻预取第 2 页，滚动时不卡在跨洋 RTT
-      if (replace && next.length < Number(r.total)) void requestPage(next.length);
+      if (replace && next.length < total) void requestPage(next.length);
     } finally {
       headPending.current = false;
       setFeedHeadLoading(false);
@@ -272,9 +354,12 @@ export function Plaza() {
     }
   }, [feedItems]);
 
-  // 切回动态立刻拉；停留期间按间隔软合并补新
+  // 切回动态：先展示本地首屏，再拉网络替换；停留期间软合并补新
   useEffect(() => {
     if (tab !== 'feed') return;
+    if (feedItemsRef.current.length === 0) {
+      hydrateFeedFromCache(setFeedItems, setFeedTotal, feedItemsRef, feedTotalRef, nextOffset);
+    }
     void loadFeedHead();
     const timer = window.setInterval(() => {
       void loadFeedHead();
