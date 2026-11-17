@@ -21,7 +21,7 @@ import { getSocialRev, maxBonds, social, subscribeSocial } from '../chipet/socia
 import { plural, txt, useLang, useT } from '../i18n.ts';
 
 /** 广场动态每页条数（与后端 offset/limit 对齐） */
-const FEED_PAGE = 9;
+const FEED_PAGE = 10;
 
 export function Plaza() {
   const t = useT();
@@ -188,7 +188,7 @@ export function Plaza() {
               {showFeedSkeleton || feedPagePending ? (
                 <>
                   <DataLoading label={t('加载广场动态…', 'Loading plaza feed…')}>
-                    <FeedSkeleton rows={6} />
+                    <FeedSkeleton rows={10} />
                   </DataLoading>
                   <PaginationBar
                     page={safeFeedPage}
@@ -209,20 +209,20 @@ export function Plaza() {
                     ) : feed.map((a) => {
                       const I = ACT_ICON[a.kind] ?? Sparkles;
                       return (
-                        <div key={a.id} className="flex min-h-[4.75rem] items-center gap-2 pr-4 transition hover:bg-panel-2/50">
+                        <div key={a.id} className="flex min-h-[3.25rem] items-center gap-2 pr-3 transition hover:bg-panel-2/50">
                           <button type="button" onClick={() => a.petKey && go(`/pet/${routeIdOf(a.petKey)}`)}
-                            className="flex min-w-0 flex-1 items-start gap-3 py-4 pl-5 text-left">
-                            <span className={cn('mt-0.5 grid size-9 shrink-0 place-items-center rounded-xl', actTone(a.kind))}>
-                              <I className="size-4" />
+                            className="flex min-w-0 flex-1 items-center gap-2.5 py-2.5 pl-4 text-left">
+                            <span className={cn('grid size-7 shrink-0 place-items-center rounded-lg', actTone(a.kind))}>
+                              <I className="size-3.5" />
                             </span>
                             <span className="min-w-0 flex-1">
-                              <span className="block text-sm text-pretty text-ink">{txt(a.text)}</span>
-                              <span className="mt-1 block text-xs text-faint">{txt(a.actor)} · {timeAgo(a.at)}</span>
+                              <span className="block text-[13px] leading-snug text-pretty text-ink">{txt(a.text)}</span>
+                              <span className="mt-0.5 block text-[11px] leading-tight text-faint">{txt(a.actor)} · {timeAgo(a.at)}</span>
                             </span>
                           </button>
                           <button type="button" onClick={() => like(a.id)} aria-pressed={a.liked} aria-label={t('击掌', 'High five')}
-                            className={cn('flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3 font-mono text-xs transition active:scale-95', a.liked ? 'bg-copper/10 text-copper-dim ring-1 ring-copper/40' : 'text-faint ring-1 ring-line hover:text-copper-dim hover:ring-copper/40')}>
-                            <ThumbsUp className={cn('size-3.5', a.liked && 'fill-copper/30')} />
+                            className={cn('flex h-7 shrink-0 items-center gap-1 rounded-full px-2.5 font-mono text-[11px] transition active:scale-95', a.liked ? 'bg-copper/10 text-copper-dim ring-1 ring-copper/40' : 'text-faint ring-1 ring-line hover:text-copper-dim hover:ring-copper/40')}>
+                            <ThumbsUp className={cn('size-3', a.liked && 'fill-copper/30')} />
                             {a.likes > 0 ? a.likes : t('击掌', 'High five')}
                           </button>
                         </div>

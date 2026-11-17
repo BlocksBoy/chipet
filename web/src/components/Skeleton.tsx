@@ -32,13 +32,13 @@ export function DataLoading({
 
 export function FeedRowSkeleton() {
   return (
-    <div className="flex min-h-[4.75rem] items-center gap-3 px-5 py-4">
-      <Skeleton className="size-9 shrink-0 rounded-xl" />
-      <div className="min-w-0 flex-1 space-y-2">
-        <Skeleton className="h-3.5 w-[88%] rounded-md" />
-        <Skeleton className="h-3 w-32 rounded-md" />
+    <div className="flex min-h-[3.25rem] items-center gap-2.5 px-4 py-2.5">
+      <Skeleton className="size-7 shrink-0 rounded-lg" />
+      <div className="min-w-0 flex-1 space-y-1.5">
+        <Skeleton className="h-3 w-[88%] rounded-md" />
+        <Skeleton className="h-2.5 w-28 rounded-md" />
       </div>
-      <Skeleton className="h-8 w-16 shrink-0 rounded-full" />
+      <Skeleton className="h-7 w-14 shrink-0 rounded-full" />
     </div>
   );
 }
