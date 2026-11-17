@@ -778,6 +778,9 @@ export const social = {
   },
   checkin() {
     const s = load();
+    if (!(s.boundWallet || '').trim()) {
+      throw new Error(tr('请先连接钱包再签到', 'Connect a wallet to check in'));
+    }
     const today = DAY();
     if (s.checkinDay === today) throw new Error(tr('今天已经签到过了', 'You already checked in today'));
     const yesterday = DAY(-1);

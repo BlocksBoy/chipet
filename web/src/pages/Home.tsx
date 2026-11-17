@@ -213,6 +213,11 @@ export function Home() {
             : t('点一点彩蛋，把它敲醒', 'Tap the egg to wake it up');
 
   const checkin = () => {
+    if (!account) {
+      notify('err', t('请先连接钱包再签到', 'Connect a wallet to check in'));
+      connect();
+      return;
+    }
     try {
       social.checkin();
       setTick((t) => t + 1);
@@ -257,8 +262,12 @@ export function Home() {
             <div className="mt-5 flex flex-wrap items-center gap-2 sm:mt-6">
               <Tag tone="si" icon={Fish}>{t('小鱼干', 'Treats')} {profile.fish}</Tag>
               <Tag tone="copper">{t(`连续签到 ${profile.streak} 天`, `${profile.streak}-day streak`)}</Tag>
-              <Button size="sm" variant="ghost" disabled={profile.checkedIn} onClick={checkin}>
-                {profile.checkedIn ? t('今日已签到', 'Checked in') : t('每日签到领鱼干', 'Daily check-in')}
+              <Button size="sm" variant="ghost" disabled={!account || profile.checkedIn} onClick={checkin}>
+                {!account
+                  ? t('连接钱包后可签到', 'Connect wallet to check in')
+                  : profile.checkedIn
+                    ? t('今日已签到', 'Checked in')
+                    : t('每日签到领鱼干', 'Daily check-in')}
               </Button>
             </div>
 

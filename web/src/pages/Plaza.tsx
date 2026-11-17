@@ -134,7 +134,7 @@ function softMergeFeedHead(prev: FeedRow[], incoming: FeedRow[]): FeedRow[] {
 export function Plaza() {
   const t = useT();
   const lang = useLang();
-  const { account, notify } = useApp();
+  const { account, connect, notify } = useApp();
   const [tab, setTab] = useState<'feed' | 'hot' | 'rank'>('feed');
   const [rankKind, setRankKind] = useState<'pats' | 'wins' | 'intimacy' | 'level'>('pats');
   const [name, setName] = useState(() => social.profile().displayName);
@@ -437,6 +437,11 @@ export function Plaza() {
   };
 
   const checkin = () => {
+    if (!account) {
+      notify('err', t('请先连接钱包再签到', 'Connect a wallet to check in'));
+      connect();
+      return;
+    }
     try {
       social.checkin();
       setTick((t) => t + 1);
@@ -461,8 +466,17 @@ export function Plaza() {
         title={t('广场', 'Plaza')}
         desc={t('摸邻居的芯宠、牵线组合体电路、切磋一场，比一比谁更受欢迎。', 'Pat your neighbors\' Chipets, link up into fusion circuits, spar, and see who\'s the most popular.')}
         right={
-          <Button icon={CalendarCheck} variant={profile.checkedIn ? 'ghost' : 'primary'} disabled={profile.checkedIn} onClick={checkin}>
-            {profile.checkedIn ? t('今日已签到', 'Checked in') : t('每日签到领鱼干', 'Daily check-in')}
+          <Button
+            icon={CalendarCheck}
+            variant={!account || profile.checkedIn ? 'ghost' : 'primary'}
+            disabled={!account || profile.checkedIn}
+            onClick={checkin}
+          >
+            {!account
+              ? t('连接钱包后可签到', 'Connect wallet to check in')
+              : profile.checkedIn
+                ? t('今日已签到', 'Checked in')
+                : t('每日签到领鱼干', 'Daily check-in')}
           </Button>
         }
       />
