@@ -1,12 +1,14 @@
 /**
  * Chipet 的 BEM 经济：免费闭环之外，用 BEM 买「更快 / 更稀有 / 多一个坑」。
- * 本地演示走 localStorage；切到 X Layer / BSC 并连钱包后读该链真实余额并 transfer 支付。
+ * 演示余额等走内存态；真源在 SQLite（连钱包后 hydrate / push）。
+ * 切到 X Layer / BSC 并连钱包后读该链真实余额并 transfer 支付。
  */
 import { parseUnits, type Address, type PublicClient } from 'viem';
 import { bemNetwork, BEM_DECIMALS as CHAIN_BEM_DECIMALS, erc20Abi, XLAYER_BEM } from '@tapearena/chain';
 import { both, tr, txt, type Txt } from '../i18n.ts';
 
-const KEY = 'chipet.bem.v1';
+/** 旧版 localStorage 键；启动时一次性迁入内存后删除 */
+const LEGACY_KEY = 'chipet.bem.v1';
 /** 演示/链上标价共用；单位是整枚 BEM（链上 X Layer / BSC 均为 8 位小数） */
 export const BEM_DECIMALS = CHAIN_BEM_DECIMALS;
 export const BOND_SLOTS_DEFAULT = 3;
@@ -86,23 +88,39 @@ function DAY() {
   return new Date().toISOString().slice(0, 10);
 }
 
-function load(): BemState {
-  try {
-    const raw = JSON.parse(localStorage.getItem(KEY) || '{}') as Partial<BemState>;
-    return {
-      demoBal: Math.max(0, Number(raw.demoBal) || 0),
-      bondSlots: Math.min(BOND_SLOTS_MAX, Math.max(BOND_SLOTS_DEFAULT, Number(raw.bondSlots) || BOND_SLOTS_DEFAULT)),
-      eggCredits: Math.max(0, Number(raw.eggCredits) || 0),
-      faucetDay: typeof raw.faucetDay === 'string' ? raw.faucetDay : '',
-      log: Array.isArray(raw.log) ? raw.log.slice(0, 40) : [],
-    };
-  } catch {
-    return { demoBal: 0, bondSlots: BOND_SLOTS_DEFAULT, eggCredits: 0, faucetDay: '', log: [] };
-  }
+let bemMem: BemState | null = null;
+
+function emptyBem(): BemState {
+  return { demoBal: 0, bondSlots: BOND_SLOTS_DEFAULT, eggCredits: 0, faucetDay: '', log: [] };
 }
 
-function save(s: BemState) {
-  localStorage.setItem(KEY, JSON.stringify({ ...s, log: s.log.slice(0, 40) }));
+function normalizeBem(raw: Partial<BemState>): BemState {
+  return {
+    demoBal: Math.max(0, Number(raw.demoBal) || 0),
+    bondSlots: Math.min(BOND_SLOTS_MAX, Math.max(BOND_SLOTS_DEFAULT, Number(raw.bondSlots) || BOND_SLOTS_DEFAULT)),
+    eggCredits: Math.max(0, Number(raw.eggCredits) || 0),
+    faucetDay: typeof raw.faucetDay === 'string' ? raw.faucetDay : '',
+    log: Array.isArray(raw.log) ? raw.log.slice(0, 40) : [],
+  };
+}
+
+function load(): BemState {
+  if (bemMem) return bemMem;
+  try {
+    const raw = localStorage.getItem(LEGACY_KEY);
+    if (raw) {
+      bemMem = normalizeBem(JSON.parse(raw) as Partial<BemState>);
+      try { localStorage.removeItem(LEGACY_KEY); } catch { /* ignore */ }
+      return bemMem;
+    }
+  } catch { /* ignore */ }
+  bemMem = emptyBem();
+  return bemMem;
+}
+
+function save(s: BemState, opts?: { push?: boolean }) {
+  bemMem = { ...s, log: s.log.slice(0, 40) };
+  if (opts?.push === false) return;
   void import('./cloudSync.ts').then(({ cloudSync }) => cloudSync.scheduleBemPush());
 }
 
@@ -145,13 +163,7 @@ export const bem = {
     faucetDay: string;
     log: BemState['log'];
   }) {
-    localStorage.setItem(KEY, JSON.stringify({
-      demoBal: Math.max(0, Number(p.demoBal) || 0),
-      bondSlots: Math.min(BOND_SLOTS_MAX, Math.max(BOND_SLOTS_DEFAULT, Number(p.bondSlots) || BOND_SLOTS_DEFAULT)),
-      eggCredits: Math.max(0, Number(p.eggCredits) || 0),
-      faucetDay: typeof p.faucetDay === 'string' ? p.faucetDay : '',
-      log: Array.isArray(p.log) ? p.log.slice(0, 40) : [],
-    }));
+    save(normalizeBem(p), { push: false });
   },
   demoBal(): number {
     return load().demoBal;

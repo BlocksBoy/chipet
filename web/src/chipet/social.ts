@@ -73,7 +73,7 @@ export interface PublicPet {
   mine: boolean;
 }
 
-/** 动态、留言都会存进 localStorage：系统生成的文案存双语（Txt），显示时用 txt() 取当前语言。 */
+/** 动态、留言等广场状态：内存缓存；公共动态真源在 SQLite，个人进度连钱包后 hydrate/push。系统文案存双语（Txt）。 */
 export interface Activity {
   id: string;
   at: number;
@@ -152,7 +152,8 @@ interface NpcLive {
   intimacy: number;
 }
 
-const KEY = 'chipet.social.v1';
+/** 旧版 localStorage 键；启动时一次性迁入内存后删除 */
+const LEGACY_KEY = 'chipet.social.v1';
 /** 按本地日历日算「今天」，避免 UTC 切日导致任务进度读成 0。 */
 const DAY = (offset = 0) => {
   const d = new Date();
@@ -503,67 +504,78 @@ function ensureDisplayName(s: SocialState): boolean {
   return true;
 }
 
-function load(): SocialState {
+/** API 真源的内存缓存；不再持久化到 localStorage */
+let socialMem: SocialState | null = null;
+
+function parseSocial(parsed: Partial<SocialState>): SocialState {
+  const base = defaultState();
+  const s: SocialState = {
+    ...base,
+    ...parsed,
+    nameCustomized: Boolean(parsed.nameCustomized),
+    boundWallet: typeof parsed.boundWallet === 'string' ? parsed.boundWallet.toLowerCase() : '',
+    walletIdentities: parsed.walletIdentities && typeof parsed.walletIdentities === 'object'
+      ? { ...parsed.walletIdentities }
+      : {},
+    quest: normalizeQuest(parsed.quest ?? base.quest),
+    pats: { ...base.pats, ...(parsed.pats ?? {}) },
+    myPatsToday: { ...(parsed.myPatsToday ?? {}) },
+    giftsToday: { ...(parsed.giftsToday ?? {}) },
+    notes: { ...base.notes, ...(parsed.notes ?? {}) },
+    visits: { ...base.visits, ...(parsed.visits ?? {}) },
+    activities: Array.isArray(parsed.activities) ? parsed.activities : base.activities,
+    bubbles: { ...(parsed.bubbles ?? {}) },
+    bonds: Array.isArray(parsed.bonds) ? parsed.bonds : [],
+    likes: { ...base.likes, ...(parsed.likes ?? {}) },
+    liked: { ...(parsed.liked ?? {}) },
+    npcWins: { ...(parsed.npcWins ?? {}) },
+    npcLive: { ...(parsed.npcLive ?? {}) },
+    wildDay: { ...(parsed.wildDay ?? {}) },
+  };
+  if (LEGACY_NAMES.has(parsed.displayName ?? '')) s.displayName = '';
   try {
-    const raw = localStorage.getItem(KEY);
-    if (!raw) {
-      const s = defaultState();
-      save(s);
-      return s;
-    }
-    const parsed = JSON.parse(raw) as Partial<SocialState>;
-    const base = defaultState();
-    const s: SocialState = {
-      ...base,
-      ...parsed,
-      nameCustomized: Boolean(parsed.nameCustomized),
-      boundWallet: typeof parsed.boundWallet === 'string' ? parsed.boundWallet.toLowerCase() : '',
-      walletIdentities: parsed.walletIdentities && typeof parsed.walletIdentities === 'object'
-        ? { ...parsed.walletIdentities }
-        : {},
-      // 嵌套对象浅合并会丢字段；任务进度必须单独规范化
-      quest: normalizeQuest(parsed.quest ?? base.quest),
-      pats: { ...base.pats, ...(parsed.pats ?? {}) },
-      myPatsToday: { ...(parsed.myPatsToday ?? {}) },
-      giftsToday: { ...(parsed.giftsToday ?? {}) },
-      notes: { ...base.notes, ...(parsed.notes ?? {}) },
-      visits: { ...base.visits, ...(parsed.visits ?? {}) },
-      activities: Array.isArray(parsed.activities) ? parsed.activities : base.activities,
-      bubbles: { ...(parsed.bubbles ?? {}) },
-      bonds: Array.isArray(parsed.bonds) ? parsed.bonds : [],
-      likes: { ...base.likes, ...(parsed.likes ?? {}) },
-      liked: { ...(parsed.liked ?? {}) },
-      npcWins: { ...(parsed.npcWins ?? {}) },
-      npcLive: { ...(parsed.npcLive ?? {}) },
-      wildDay: { ...(parsed.wildDay ?? {}) },
-    };
-    // 旧存档空名会被上面的随机名盖掉，需按存档原值再判一次
-    if (LEGACY_NAMES.has(parsed.displayName ?? '')) s.displayName = '';
-    try {
-      upgradeSeeds(s);
-    } catch {
-      /* 升级失败不丢存档 */
-    }
-    if (ensureDisplayName(s)) save(s);
-    return s;
+    upgradeSeeds(s);
   } catch {
-    // 读失败时不要 overwrite 用户存档
-    return defaultState();
+    /* 升级失败不丢存档 */
   }
+  ensureDisplayName(s);
+  return s;
+}
+
+function load(): SocialState {
+  if (socialMem) return socialMem;
+  try {
+    const raw = localStorage.getItem(LEGACY_KEY);
+    if (raw) {
+      socialMem = parseSocial(JSON.parse(raw) as Partial<SocialState>);
+      try { localStorage.removeItem(LEGACY_KEY); } catch { /* ignore */ }
+      return socialMem;
+    }
+  } catch {
+    /* ignore */
+  }
+  socialMem = defaultState();
+  ensureDisplayName(socialMem);
+  return socialMem;
 }
 
 /** 跨页面订阅：Pet 里记账后，家园任务等能立刻重读。 */
 let socialRev = 0;
 const socialSubs = new Set<() => void>();
 
+/** 只更新内存并通知，不推云端（applyCloud* 用）。 */
+function commitLocal(s: SocialState) {
+  socialMem = s;
+  socialRev += 1;
+  socialSubs.forEach((fn) => fn());
+}
+
 function save(s: SocialState) {
   // 有绑定钱包时，把签到/任务等进度一并写回该钱包档案
   if (s.boundWallet) {
     s.walletIdentities[s.boundWallet] = snapshotWallet(s);
   }
-  localStorage.setItem(KEY, JSON.stringify(s));
-  socialRev += 1;
-  socialSubs.forEach((fn) => fn());
+  commitLocal(s);
   // 延迟推送，避免与 cloudSync 循环依赖
   if (s.boundWallet) {
     void import('./cloudSync.ts').then(({ cloudSync }) => cloudSync.scheduleProfilePush());
@@ -1179,9 +1191,7 @@ export const social = {
     if (!items.length && replace) {
       s.activities = [];
       s.likes = {};
-      localStorage.setItem(KEY, JSON.stringify(s));
-      socialRev += 1;
-      socialSubs.forEach((fn) => fn());
+      commitLocal(s);
       return;
     }
     if (!items.length) return;
@@ -1200,9 +1210,7 @@ export const social = {
       s.activities = [...byId.values()].sort((a, b) => b.at - a.at).slice(0, 2000);
       s.likes = { ...s.likes, ...likes };
     }
-    localStorage.setItem(KEY, JSON.stringify(s));
-    socialRev += 1;
-    socialSubs.forEach((fn) => fn());
+    commitLocal(s);
   },
 
   /** 导出本地广场公共数据，供一次性灌库。 */
@@ -1242,9 +1250,7 @@ export const social = {
   applyCloudNotes(petKey: string, notes: GuestNote[]) {
     const s = load();
     s.notes[petKey] = notes.slice(0, 20);
-    localStorage.setItem(KEY, JSON.stringify(s));
-    socialRev += 1;
-    socialSubs.forEach((fn) => fn());
+    commitLocal(s);
   },
 
   applyCloudProfile(p: {
@@ -1279,9 +1285,7 @@ export const social = {
     s.liked = { ...(p.liked ?? {}) };
     s.bubbles = { ...(p.bubbles ?? {}) };
     if (s.boundWallet) s.walletIdentities[s.boundWallet] = snapshotWallet(s);
-    localStorage.setItem(KEY, JSON.stringify(s));
-    socialRev += 1;
-    socialSubs.forEach((fn) => fn());
+    commitLocal(s);
   },
 
   exportProfileForCloud() {
@@ -1308,18 +1312,14 @@ export const social = {
     const s = load();
     s.liked[id] = liked;
     s.likes[id] = likes;
-    localStorage.setItem(KEY, JSON.stringify(s));
-    socialRev += 1;
-    socialSubs.forEach((fn) => fn());
+    commitLocal(s);
   },
 
   applyCloudPetAgg(petKey: string, pats: number, visits: number) {
     const s = load();
     s.pats[petKey] = pats;
     s.visits[petKey] = visits;
-    localStorage.setItem(KEY, JSON.stringify(s));
-    socialRev += 1;
-    socialSubs.forEach((fn) => fn());
+    commitLocal(s);
   },
 
   /** 用服务端全量 pet_agg 覆盖本地 pats/visits（热门/排行一致）。 */
@@ -1327,9 +1327,7 @@ export const social = {
     const s = load();
     s.pats = { ...s.pats, ...pats };
     s.visits = { ...s.visits, ...visits };
-    localStorage.setItem(KEY, JSON.stringify(s));
-    socialRev += 1;
-    socialSubs.forEach((fn) => fn());
+    commitLocal(s);
   },
 };
 

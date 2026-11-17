@@ -2,7 +2,7 @@ import type { Address } from 'viem';
 import { tr } from '../i18n.ts';
 import type { Rarity } from './phenotype.ts';
 
-/** 本地演示宠：链上 Chipet 未部署时用 localStorage，让前端立刻可玩。 */
+/** 本地演示宠：内存态展示；真源在 SQLite（连钱包后 hydrate / push）。 */
 export interface LocalPet {
   id: number;
   name: string;
@@ -21,7 +21,8 @@ export interface LocalPet {
   hatchedAt: number;
 }
 
-const KEY = 'chipet.local.pets';
+/** 旧版 localStorage 键；启动时一次性迁入内存后删除 */
+const LEGACY_KEY = 'chipet.local.pets';
 const FEED_CD = 5 * 60 * 1000;
 const PLAY_CD = 3 * 60 * 1000;
 /** 对战一场消耗的能量 */
@@ -41,6 +42,8 @@ type Stored = Omit<LocalPet, 'circuitId' | 'xp' | 'wins' | 'losses'> & {
 
 const petsSubs = new Set<() => void>();
 let petsRev = 0;
+/** API 真源的内存缓存；不再持久化到 localStorage */
+let petsMem: LocalPet[] | null = null;
 
 function notifyPets() {
   petsRev += 1;
@@ -56,19 +59,35 @@ export function getLocalPetsRev() {
   return petsRev;
 }
 
-function load(): LocalPet[] {
-  try {
-    const raw = JSON.parse(localStorage.getItem(KEY) || '[]') as Stored[];
-    return raw.map((p) => ({ ...p, circuitId: BigInt(p.circuitId), xp: p.xp ?? 0, wins: p.wins ?? 0, losses: p.losses ?? 0 }));
-  } catch {
-    return [];
-  }
+function parseStored(raw: Stored[]): LocalPet[] {
+  return raw.map((p) => ({
+    ...p,
+    circuitId: BigInt(p.circuitId),
+    xp: p.xp ?? 0,
+    wins: p.wins ?? 0,
+    losses: p.losses ?? 0,
+  }));
 }
 
-function save(pets: LocalPet[]) {
-  localStorage.setItem(KEY, JSON.stringify(pets.map((p) => ({ ...p, circuitId: p.circuitId.toString() }))));
+function load(): LocalPet[] {
+  if (petsMem) return petsMem;
+  try {
+    const raw = localStorage.getItem(LEGACY_KEY);
+    if (raw) {
+      petsMem = parseStored(JSON.parse(raw) as Stored[]);
+      try { localStorage.removeItem(LEGACY_KEY); } catch { /* ignore */ }
+      return petsMem;
+    }
+  } catch { /* ignore */ }
+  petsMem = [];
+  return petsMem;
+}
+
+function save(pets: LocalPet[], opts?: { push?: boolean }) {
+  petsMem = pets;
   notifyPets();
   // 仅本地孵化宠上云；链上宠仍走 petArchive
+  if (opts?.push === false) return;
   void import('./cloudSync.ts').then(({ cloudSync }) => cloudSync.schedulePetsPush());
 }
 
@@ -170,11 +189,8 @@ export const localChipet = {
       lastPlay: Number(p.lastPlay) || 0,
       hatchedAt: Number(p.hatchedAt) || Date.now(),
     }));
-    // 直接写盘，避免再触发 schedulePetsPush；仍通知订阅方刷新列表
-    localStorage.setItem(KEY, JSON.stringify(
-      [...chain, ...locals].map((p) => ({ ...p, circuitId: p.circuitId.toString() })),
-    ));
-    notifyPets();
+    // 云端覆盖：只改内存，不回推
+    save([...chain, ...locals], { push: false });
   },
   hatch(name: string, opts?: { guarantee?: 'fancy' }): LocalPet {
     const pets = load();
