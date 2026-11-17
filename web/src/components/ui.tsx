@@ -281,8 +281,13 @@ export function ErrBar({ children }: { children: ReactNode }) {
   return <div className="flex items-start gap-2 border-t border-danger/25 bg-danger/[0.08] px-3.5 py-2.5 font-mono text-[12.5px] text-danger"><CircleAlert className="mt-0.5 size-3.5 shrink-0" /><span>{children}</span></div>;
 }
 
-export function Loading({ children }: { children: ReactNode }) {
-  return <div className="flex items-center justify-center gap-2 py-16 text-mute"><Loader2 className="size-4 animate-spin text-copper" />{children}</div>;
+export function Loading({ children, className }: { children?: ReactNode; className?: string }) {
+  return (
+    <div className={cn('flex items-center justify-center gap-2 py-10 text-mute', className)} role="status" aria-live="polite" aria-busy="true">
+      <Loader2 className="size-4 shrink-0 animate-spin text-copper" />
+      {children}
+    </div>
+  );
 }
 
 export function KV({ rows }: { rows: [Icon, string, ReactNode][] }) {

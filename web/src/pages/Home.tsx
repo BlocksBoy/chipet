@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ComponentType } from 'react';
 import { motion } from 'motion/react';
 import { Egg, Sparkles, Hammer, Swords, BookOpen, ArrowRight, Users, Fish, ListChecks, CircleCheck, Zap, Hand, CalendarCheck, Cable, Cat, Trophy, Coins, type LucideProps } from 'lucide-react';
+import { DataLoading, FeedSkeleton } from '../components/Skeleton.tsx';
 import { Button, Panel, Tag, Input, PAGE, SectionTitle, StatBand, Trait, cn } from '../components/ui.tsx';
 import { Link, go, useRoute } from '../router.tsx';
 import { useApp } from '../state.tsx';
@@ -14,6 +15,7 @@ import { localChipet } from '../chipet/store.ts';
 import { cattributes, petSeed, phenotypeOf, SPECIES_COUNT, typeLabel } from '../chipet/phenotype.ts';
 import { heartOf } from '../chipet/heart.ts';
 import { ACT_ICON, actTone, PetCard, routeIdOf, timeAgo } from '../chipet/PetCard.tsx';
+import { getCloudSyncRev, isPublicLoading, subscribeCloudSync } from '../chipet/cloudSync.ts';
 import { getSocialRev, social, subscribeSocial, type QuestId } from '../chipet/social.ts';
 import { BEM_SKUS, bem } from '../chipet/bem.ts';
 
@@ -68,6 +70,9 @@ export function Home() {
   const timers = useRef<number[]>([]);
   const route = useRoute();
   const socialRev = useSyncExternalStore(subscribeSocial, getSocialRev, getSocialRev);
+  const cloudRev = useSyncExternalStore(subscribeCloudSync, getCloudSyncRev, getCloudSyncRev);
+  const feedLoading = isPublicLoading();
+  void cloudRev;
   const pets = useMemo(() => localChipet.list(), [tick, refreshKey]);
   // 路由回到家园 / 社交存档变更时都重算，避免任务进度卡住
   const profile = useMemo(() => social.profile(), [tick, socialRev, route.path]);
@@ -570,7 +575,11 @@ export function Home() {
 
         <Panel title={t('广场动态', 'Plaza feed')} icon={Users} bodyClass="p-4"
           right={<Link to="/plaza" className="inline-flex items-center gap-1 text-xs font-semibold text-si-dim no-underline hover:text-si">{t('全部', 'All')}<ArrowRight className="size-3.5" /></Link>}>
-          {feed.length === 0 ? (
+          {feedLoading && feed.length === 0 ? (
+            <DataLoading label={t('加载动态…', 'Loading feed…')}>
+              <FeedSkeleton rows={5} />
+            </DataLoading>
+          ) : feed.length === 0 ? (
             <p className="px-1 py-2 text-sm text-mute">{t('还没有动态，去孵化或摸摸邻居吧。', 'Nothing here yet. Hatch a kitty or go pat a neighbor.')}</p>
           ) : (
             <ul className="space-y-1">

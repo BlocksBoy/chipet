@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { useAccount } from 'wagmi';
 import { fetchRivals } from '../api.ts';
+import { DataLoading, PetCardGridSkeleton } from '../components/Skeleton.tsx';
 import { Button, Empty, ErrBar, PAGE, PageHeader, Panel, Tag, cn } from '../components/ui.tsx';
 import { Link, go, useRoute } from '../router.tsx';
 import { PetAvatar } from '../chipet/PetAvatar.tsx';
@@ -748,10 +749,12 @@ export function Train() {
   const flashSeq = useRef(0);
   const [flashes, setFlashes] = useState<{ id: number; slot: number; x: number; y: number }[]>([]);
   const [showResult, setShowResult] = useState(false);
+  const [rivalsLoading, setRivalsLoading] = useState(true);
 
   /** 拉其他玩家的链上猫进切磋池；API 已按钱包排除，本地再挡同 id+同名的自家宠。 */
   useEffect(() => {
     let alive = true;
+    setRivalsLoading(true);
     fetchRivals({ exclude: address, limit: 24 }).then((items) => {
       if (!alive) return;
       const localChain = localChipet.list().filter(isChainPet);
@@ -761,6 +764,8 @@ export function Train() {
       });
       social.setChainRivals(pets);
       setTick((n) => n + 1);
+    }).finally(() => {
+      if (alive) setRivalsLoading(false);
     });
     return () => { alive = false; };
   }, [address]);
@@ -1322,6 +1327,11 @@ export function Train() {
             {t('优先展示其他玩家的链上芯宠；人少时再用路过访客和邻居补位。只能和别人的芯宠切磋。', 'Other players’ on-chain Chipets come first; passers-by and neighbors fill in when the list is short. You can only spar with others’ Chipets.')}
           </p>
         </div>
+        {rivalsLoading && rivals.length === 0 ? (
+          <DataLoading className="px-4 pb-4" label={t('加载切磋对手…', 'Loading spar rivals…')}>
+            <PetCardGridSkeleton count={6} cols="grid-cols-2 md:grid-cols-3" />
+          </DataLoading>
+        ) : (
         <ul className="grid grid-cols-2 gap-3 px-4 pb-4 md:grid-cols-3">
           {rivalsPage.map((p) => {
             const o = npcOpp(p);
@@ -1348,7 +1358,8 @@ export function Train() {
             );
           })}
         </ul>
-        {rivalPages > 1 && (
+        )}
+        {rivalPages > 1 && !rivalsLoading && (
           <nav
             aria-label={t('切磋对手分页', 'Spar rivals pagination')}
             className="flex flex-wrap items-center justify-end gap-3 border-t border-line/70 bg-substrate/40 px-4 py-3"

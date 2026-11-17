@@ -6,10 +6,11 @@ import {
 } from 'lucide-react';
 import { Die } from '../components/Die.tsx';
 import { Link } from '../router.tsx';
+import { BountyGridSkeleton, DataLoading } from '../components/Skeleton.tsx';
 import { useApp, useAsync } from '../state.tsx';
 import { amount, left, unit } from '../format.ts';
 import { both, getLang, tr, txt } from '../i18n.ts';
-import { btn, cn, Empty, Loading, PhaseTag } from '../components/ui.tsx';
+import { btn, cn, Empty, PhaseTag } from '../components/ui.tsx';
 
 function HeroDie() {
   const c = useMemo(() => {
@@ -162,7 +163,11 @@ export function Arena() {
         {!deployment?.arena
           ? <div className="rounded-3xl border border-line/80 bg-panel shadow-sm shadow-si/5"><Empty icon={CircuitBoard} title={tr('这条链上还没有部署 TapeArena', 'TapeArena isn\'t deployed on this chain yet')} action={<Link to="/lab/studio" className={btn()}><Sparkles />{tr('打开设计器', 'Open Studio')}</Link>}>{tr('切换到本地演示链，或者先去设计器玩：编译、仿真、AI 设计都不依赖合约。', 'Switch to the local demo chain, or play in the Studio first: compiling, simulation and AI design don\'t need the contract.')}</Empty></div>
           : bounties.loading && !bounties.data
-            ? <Loading>{tr('读取链上擂台…', 'Loading bounties from chain…')}</Loading>
+            ? (
+              <DataLoading label={tr('读取链上擂台…', 'Loading bounties from chain…')}>
+                <BountyGridSkeleton count={6} />
+              </DataLoading>
+            )
             : bounties.error
               ? <div className="rounded-3xl border border-line/80 bg-panel shadow-sm shadow-si/5"><Empty icon={Inbox} title={tr('读取失败', 'Failed to load')} action={<Link to="/lab/studio" className={btn('ghost')}><Sparkles />{tr('先去设计器', 'Open Studio meanwhile')}</Link>}>{tr(`擂台列表暂时读不出来，多半是 ${chain.name} 的节点连不上。可以在右上角切换网络后再试。`, `The bounty list can't be loaded right now, most likely because the ${chain.name} node is unreachable. Try switching networks in the top-right corner.`)}<span className="mt-2 block font-mono text-xs text-danger">{bounties.error.message.split('\n')[0]}</span></Empty></div>
               : sorted.length === 0

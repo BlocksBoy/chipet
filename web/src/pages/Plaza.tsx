@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { Cable, CalendarCheck, Check, Fish, Flame, Hand, Pencil, Sparkles, Swords, ThumbsUp, Trophy, Users } from 'lucide-react';
 import { PaginationBar } from '../components/Pagination.tsx';
+import {
+  DataLoading, FeedSkeleton, PetCardGridSkeleton, PlazaSidebarSkeleton, RankListSkeleton, StatBandSkeleton,
+} from '../components/Skeleton.tsx';
 import { Button, Input, PAGE, PageHeader, Panel, Segmented, StatBand, Tag, cn } from '../components/ui.tsx';
 import { go } from '../router.tsx';
 import { useApp } from '../state.tsx';
@@ -9,7 +12,8 @@ import { ACT_ICON, actTone, PetCard, routeIdOf, timeAgo } from '../chipet/PetCar
 import { heartOf } from '../chipet/heart.ts';
 import { petSeed } from '../chipet/phenotype.ts';
 import {
-  cloudSync, getCachedLeaderboard, getLeaderboardRev, leaderboardItemToPet, subscribeLeaderboard,
+  cloudSync, getCachedLeaderboard, getCloudSyncRev, getLeaderboardRev, isLeaderboardLoading, isPublicLoading,
+  leaderboardItemToPet, subscribeCloudSync, subscribeLeaderboard,
 } from '../chipet/cloudSync.ts';
 import { getSocialRev, maxBonds, social, subscribeSocial } from '../chipet/social.ts';
 import { plural, txt, useLang, useT } from '../i18n.ts';
@@ -29,6 +33,10 @@ export function Plaza() {
   const [feedPage, setFeedPage] = useState(1);
   const socialRev = useSyncExternalStore(subscribeSocial, getSocialRev, getSocialRev);
   const boardRev = useSyncExternalStore(subscribeLeaderboard, getLeaderboardRev, getLeaderboardRev);
+  const cloudRev = useSyncExternalStore(subscribeCloudSync, getCloudSyncRev, getCloudSyncRev);
+  const bootLoading = isPublicLoading();
+  const boardLoading = isLeaderboardLoading();
+  void cloudRev;
   const profile = useMemo(() => social.profile(), [tick, lang, socialRev]);
   const activities = useMemo(() => social.activities(), [tick, socialRev]);
   const feedPages = Math.max(1, Math.ceil(activities.length / FEED_PAGE));
@@ -55,6 +63,9 @@ export function Plaza() {
   const bonds = useMemo(() => social.bonds(), [tick, socialRev]);
   const neighbors = useMemo(() => social.neighbors(), [tick, socialRev]);
   const top = ranks[0]?.score || 1;
+  const showFeedSkeleton = bootLoading && activities.length === 0;
+  const showHotSkeleton = (bootLoading || boardLoading) && hot.length === 0;
+  const showRankSkeleton = (bootLoading || boardLoading) && ranks.length === 0;
 
   useEffect(() => {
     if (tab === 'hot' || tab === 'rank') void cloudSync.refreshLeaderboards();
@@ -103,12 +114,16 @@ export function Plaza() {
         }
       />
 
-      <StatBand className="mt-6" items={[
-        { icon: Users, label: t('邻居芯喵', 'Neighbor kitties'), value: neighbors.length, tone: 'si' },
-        { icon: Cable, label: t('我的线友', 'My wire pals'), value: `${bonds.length}/${maxBonds()}`, tone: 'gold' },
-        { icon: Flame, label: t('连续签到（天）', 'Check-in streak (days)'), value: profile.streak, tone: 'copper' },
-        { icon: Fish, label: t('小鱼干', 'Fish treats'), value: profile.fish, tone: 'violet' },
-      ]} />
+      {bootLoading && neighbors.length === 0 ? (
+        <StatBandSkeleton className="mt-6" />
+      ) : (
+        <StatBand className="mt-6" items={[
+          { icon: Users, label: t('邻居芯喵', 'Neighbor kitties'), value: neighbors.length, tone: 'si' },
+          { icon: Cable, label: t('我的线友', 'My wire pals'), value: `${bonds.length}/${maxBonds()}`, tone: 'gold' },
+          { icon: Flame, label: t('连续签到（天）', 'Check-in streak (days)'), value: profile.streak, tone: 'copper' },
+          { icon: Fish, label: t('小鱼干', 'Fish treats'), value: profile.fish, tone: 'violet' },
+        ]} />
+      )}
       <p className="mt-2 text-right text-xs text-mute">
         <button type="button" className="font-semibold text-copper-dim hover:text-copper" onClick={() => go('/shop')}>
           {t('鱼干不够？BEM 商店补一包 →', 'Low on treats? Buy a pack in the BEM Shop →')}
@@ -125,7 +140,11 @@ export function Plaza() {
 
           {tab === 'feed' && (
             <Panel className="mt-4" bodyClass="p-0">
-              {activities.length === 0 ? (
+              {showFeedSkeleton ? (
+                <DataLoading label={t('加载广场动态…', 'Loading plaza feed…')}>
+                  <FeedSkeleton rows={6} />
+                </DataLoading>
+              ) : activities.length === 0 ? (
                 <p className="p-10 text-center text-sm text-mute">{t('还没有动态，去孵化或摸摸邻居吧。', 'Nothing here yet. Hatch a kitty or go pat a neighbor.')}</p>
               ) : (
                 <>
@@ -169,6 +188,11 @@ export function Plaza() {
               <p className="mb-3 text-[12px] text-pretty text-mute">
                 {t('热度 = 摸头×3 + 串门 + 胜场×2 + 亲密 + 等级×2 + 近两日动态×4 + 稀有度×5；服务端算完写入排行表，全站读同一份。', 'Heat = pats×3 + visits + wins×2 + affection + level×2 + last-2-days feed×4 + rarity×5. Scored on the server, stored in the rank table, same for everyone.')}
               </p>
+              {showHotSkeleton ? (
+                <DataLoading label={t('加载热门芯喵…', 'Loading hot Chipets…')}>
+                  <PetCardGridSkeleton count={6} />
+                </DataLoading>
+              ) : (
               <ul className="grid grid-cols-2 gap-4 md:grid-cols-3">
                 {hot.map(({ pet, score, pats }, i) => (
                   <li key={pet.key}>
@@ -196,6 +220,7 @@ export function Plaza() {
                   </li>
                 ))}
               </ul>
+              )}
             </div>
           )}
 
@@ -207,6 +232,11 @@ export function Plaza() {
                 ['intimacy', t('亲密度', 'Affection')],
                 ['level', t('等级', 'Level')],
               ]} />
+              {showRankSkeleton ? (
+                <DataLoading className="mt-4" label={t('加载排行榜…', 'Loading ranks…')}>
+                  <RankListSkeleton rows={8} />
+                </DataLoading>
+              ) : (
               <ol className="mt-4 space-y-1.5">
                 {ranks.map(({ pet, score }, i) => (
                   <li key={pet.key}>
@@ -226,11 +256,16 @@ export function Plaza() {
                   </li>
                 ))}
               </ol>
+              )}
             </Panel>
           )}
         </div>
 
         <aside className="flex min-w-0 flex-col gap-6">
+          {bootLoading && neighbors.length === 0 ? (
+            <PlazaSidebarSkeleton />
+          ) : (
+          <>
           <Panel title={t('我的名片', 'My card')} icon={Users} bodyClass="p-5">
             <div className="flex items-center gap-3.5">
               <span className="grid size-14 shrink-0 place-items-center rounded-2xl bg-si/10 font-display text-2xl font-bold text-si">{profile.displayName.slice(0, 1).toUpperCase()}</span>
@@ -302,6 +337,8 @@ export function Plaza() {
               ))}
             </ul>
           </Panel>
+          </>
+          )}
         </aside>
       </div>
     </div>

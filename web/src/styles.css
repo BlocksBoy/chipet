@@ -69,6 +69,29 @@
   }
 }
 
+/* 数据加载骨架：浅底 + 横向扫光；尊重 prefers-reduced-motion（见 base） */
+.skeleton-bone {
+  position: relative;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--color-panel-2) 88%, var(--color-line));
+}
+.skeleton-bone::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    color-mix(in srgb, #fff 70%, transparent) 50%,
+    transparent 100%
+  );
+  animation: skeleton-shimmer 1.25s ease-in-out infinite;
+}
+@keyframes skeleton-shimmer {
+  100% { transform: translateX(100%); }
+}
+
 /* Chipet 列表滚动条：细、圆角，硅绿轨道 + 铜色滑块 */
 .chip-scroll {
   scrollbar-width: thin;

@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import {
   ArrowLeft, Bone, Cable, CalendarDays, ChevronDown, ChevronRight, CircleAlert, CircuitBoard, Coins, Cpu, Dna, Fish, Hand, Hash, Heart, History,
   MessageCircle, Share2, Sparkles, Swords, Trophy, Unlink, User, Zap,
 } from 'lucide-react';
+import { DataLoading, PetPageSkeleton, Skeleton } from '../components/Skeleton.tsx';
 import { Button, Empty, Input, KV, Meter, PAGE, Panel, Stat, Tag, cn, useMedia } from '../components/ui.tsx';
 import { go } from '../router.tsx';
 import { short } from '../format.ts';
@@ -17,6 +18,7 @@ import { maxHpOf, MOOD_HP, MOVES, favOf } from '../chipet/battle.ts';
 import { feedChipet, playChipet, readPet } from '@tapearena/chain';
 import { isChainPet, localChipet, xpNeed } from '../chipet/store.ts';
 import { cattributes, geneStory, petSeed, phenotypeOf, typeLabel } from '../chipet/phenotype.ts';
+import { getCloudSyncRev, isPublicLoading, subscribeCloudSync } from '../chipet/cloudSync.ts';
 import { maxBonds, social } from '../chipet/social.ts';
 import { ShareVisitModal } from '../chipet/ShareVisitModal.tsx';
 import { BEM_SKUS, bem } from '../chipet/bem.ts';
@@ -45,10 +47,14 @@ export function PetPage({ id, share: shareToken }: { id?: number; share?: string
   const [shareOpen, setShareOpen] = useState(false);
   const [shareUrl, setShareUrl] = useState('');
   const [talking, setTalking] = useState(false);
+  const [notesLoading, setNotesLoading] = useState(false);
+  const cloudRev = useSyncExternalStore(subscribeCloudSync, getCloudSyncRev, getCloudSyncRev);
+  const bootLoading = isPublicLoading();
+  void cloudRev;
 
   const pet = useMemo(
     () => (shareToken ? social.fromShareToken(shareToken) : id != null ? social.getByRouteId(id) : undefined),
-    [id, shareToken, tick, now],
+    [id, shareToken, tick, now, cloudRev],
   );
   const key = pet?.key ?? '';
   const local = pet?.mine ? localChipet.get(pet.id) : undefined;
@@ -72,12 +78,20 @@ export function PetPage({ id, share: shareToken }: { id?: number; share?: string
     social.recordVisit(key);
     setGameOpen(false);
     setTick((x) => x + 1);
+    setNotesLoading(true);
     void import('../chipet/cloudSync.ts').then(({ cloudSync }) =>
-      cloudSync.hydrateNotes(key).then(() => setTick((x) => x + 1)));
+      cloudSync.hydrateNotes(key).finally(() => {
+        setNotesLoading(false);
+        setTick((x) => x + 1);
+      }));
   }, [key]);
 
   /** 牵线预览用：我最新的那只芯喵，和这位邻居串成合体电路。 */
   const lead = useMemo(() => localChipet.list()[0], [tick]);
+
+  if (!pet && bootLoading) {
+    return <PetPageSkeleton />;
+  }
 
   if (!pet) {
     return (
@@ -545,7 +559,23 @@ export function PetPage({ id, share: shareToken }: { id?: number; share?: string
               {t('禁止链接与敏感词；发送有频率限制。', 'No links or blocked words; posting is rate-limited.')}
             </p>
             <ul className="mt-4 space-y-2.5">
-              {notes.length === 0 ? (
+              {notesLoading && notes.length === 0 ? (
+                <li>
+                  <DataLoading label={t('加载留言…', 'Loading notes…')}>
+                    <div className="space-y-2.5">
+                      {Array.from({ length: 3 }, (_, i) => (
+                        <div key={i} className="flex gap-3 rounded-2xl bg-panel-2/60 px-4 py-3">
+                          <Skeleton className="size-8 shrink-0 rounded-full" />
+                          <div className="min-w-0 flex-1 space-y-2">
+                            <Skeleton className="h-3.5 w-24 rounded-md" />
+                            <Skeleton className="h-3 w-full rounded-md" />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </DataLoading>
+                </li>
+              ) : notes.length === 0 ? (
                 <li className="rounded-2xl bg-panel-2/50 py-8 text-center text-sm text-mute">{t('还没有留言，来做第一个访客吧。', 'No notes yet. Be the first visitor.')}</li>
               ) : notes.map((n) => (
                 <li key={n.id} className="flex gap-3 rounded-2xl bg-panel-2/60 px-4 py-3">

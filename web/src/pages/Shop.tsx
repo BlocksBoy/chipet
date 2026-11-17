@@ -4,6 +4,7 @@ import { CHAIN_LABEL, MAINNET_IDS, transferErc20 } from '@tapearena/chain';
 import {
   ArrowUpRight, Cable, Coins, Egg, Fish, History, Sparkles, Zap,
 } from 'lucide-react';
+import { Skeleton } from '../components/Skeleton.tsx';
 import { Button, PAGE, PageHeader, Panel, SectionTitle, Tag, cn } from '../components/ui.tsx';
 import { Link, go } from '../router.tsx';
 import { reportRecharge } from '../api.ts';
@@ -188,15 +189,15 @@ export function Shop() {
               : t('链上 BEM', 'On-chain BEM')}
           </div>
           <div className="mt-1 flex items-end gap-2">
-            <span className="font-display text-3xl font-bold tabular-nums text-ink">
-              {!bemNet
-                ? '—'
-                : !account
+            {bemNet && account && chainBal === null ? (
+              <Skeleton className="mb-1 h-9 w-24 rounded-lg" />
+            ) : (
+              <span className="font-display text-3xl font-bold tabular-nums text-ink">
+                {!bemNet || !account
                   ? '—'
-                  : chainBal === null
-                    ? '…'
-                    : Number(formatUnits(chainBal, bemNet.decimals)).toLocaleString(undefined, { maximumFractionDigits: 2 })}
-            </span>
+                  : Number(formatUnits(chainBal!, bemNet.decimals)).toLocaleString(undefined, { maximumFractionDigits: 2 })}
+              </span>
+            )}
             <span className="mb-1 font-mono text-sm text-mute">BEM</span>
           </div>
           <p className="mt-2 text-xs text-mute">

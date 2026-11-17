@@ -6,7 +6,8 @@ import { useApp, useAsync } from '../state.tsx';
 import { Link } from '../router.tsx';
 import { short } from '../format.ts';
 import { getLang, tr } from '../i18n.ts';
-import { btn, Button, Empty, Loading, PageHeader, Panel, Select, Tag } from '../components/ui.tsx';
+import { DataLoading, LibraryGridSkeleton } from '../components/Skeleton.tsx';
+import { btn, Button, Empty, PageHeader, Panel, Select, Tag } from '../components/ui.tsx';
 
 function useLine(c: ComponentInfo) {
   const ident = c.name.replace(/[^A-Za-z0-9_]/g, '_').replace(/^(\d)/, '_$1') || 'C';
@@ -100,7 +101,11 @@ export function Library() {
       />
       {!deployment?.library
         ? <Panel><Empty icon={PackageOpen} title={tr('这条链上还没有部署组件库', 'The component library isn\'t deployed on this chain yet')} /></Panel>
-        : q.loading && !q.data ? <Loading>{tr('读取组件…', 'Loading components…')}</Loading>
+        : q.loading && !q.data ? (
+          <DataLoading label={tr('读取组件…', 'Loading components…')}>
+            <LibraryGridSkeleton count={6} />
+          </DataLoading>
+        )
         : list.length === 0
           ? <Panel><Empty icon={PackageOpen} title={tr('还没有组件', 'No components yet')} action={<Link to="/lab/studio" className={btn()}><PenTool />{tr('去设计器流片', 'Tape out in the Studio')}</Link>}>{tr('在设计器里流片后点「登记为组件」，或者赢一场擂台自动入库。', 'Tape out in the Studio and hit "Register as component", or win a bounty to be listed automatically.')}</Empty></Panel>
           : <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{list.map((c) => <Card key={c.key} c={c} />)}</div>}

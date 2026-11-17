@@ -31,17 +31,50 @@ let profileTimer: ReturnType<typeof setTimeout> | null = null;
 let bemTimer: ReturnType<typeof setTimeout> | null = null;
 let petsTimer: ReturnType<typeof setTimeout> | null = null;
 let hydrating = false;
+/** 启动即视为加载中，直到首次 hydratePublic 结束 */
+let publicLoading = true;
 let publicHydrated = false;
+let walletLoading = false;
 const BOOTSTRAP_KEY = 'chipet.social.bootstrapped.v1';
 
 type RankKind = 'pats' | 'wins' | 'intimacy' | 'level' | 'heat';
 const leaderboardCache: Partial<Record<RankKind, ChipetLeaderboardItemDto[]>> = {};
 const leaderboardSubs = new Set<() => void>();
 let leaderboardRev = 0;
+let leaderboardLoading = false;
+
+const cloudSubs = new Set<() => void>();
+let cloudRev = 0;
+
+function notifyCloud() {
+  cloudRev += 1;
+  cloudSubs.forEach((fn) => fn());
+}
 
 function notifyLeaderboard() {
   leaderboardRev += 1;
   leaderboardSubs.forEach((fn) => fn());
+}
+
+export function subscribeCloudSync(fn: () => void) {
+  cloudSubs.add(fn);
+  return () => { cloudSubs.delete(fn); };
+}
+
+export function getCloudSyncRev() {
+  return cloudRev;
+}
+
+export function isPublicLoading() {
+  return publicLoading;
+}
+
+export function isPublicHydrated() {
+  return publicHydrated;
+}
+
+export function isWalletHydrating() {
+  return walletLoading;
 }
 
 export function subscribeLeaderboard(fn: () => void) {
@@ -51,6 +84,10 @@ export function subscribeLeaderboard(fn: () => void) {
 
 export function getLeaderboardRev() {
   return leaderboardRev;
+}
+
+export function isLeaderboardLoading() {
+  return leaderboardLoading;
 }
 
 export function getCachedLeaderboard(kind: RankKind): ChipetLeaderboardItemDto[] | null {
@@ -67,26 +104,33 @@ export const cloudSync = {
    * 这样库不会空，所有人看到的是同一份服务端动态。
    */
   async hydratePublic(): Promise<void> {
-    await this.bootstrapLocalPublic();
+    publicLoading = true;
+    notifyCloud();
+    try {
+      await this.bootstrapLocalPublic();
 
-    const [feed, aggs] = await Promise.all([
-      fetchChipetFeed({ limit: 40 }),
-      fetchChipetPetAggAll(),
-    ]);
-    if (feed?.items?.length) {
-      social.applyCloudFeed(feed.items as Parameters<typeof social.applyCloudFeed>[0], feed.likes, true);
-    }
-    if (aggs?.length) {
-      const pats: Record<string, number> = {};
-      const visits: Record<string, number> = {};
-      for (const a of aggs) {
-        pats[a.petKey] = a.pats;
-        visits[a.petKey] = a.visits;
+      const [feed, aggs] = await Promise.all([
+        fetchChipetFeed({ limit: 40 }),
+        fetchChipetPetAggAll(),
+      ]);
+      if (feed?.items?.length) {
+        social.applyCloudFeed(feed.items as Parameters<typeof social.applyCloudFeed>[0], feed.likes, true);
       }
-      social.applyCloudPetAggBulk(pats, visits);
+      if (aggs?.length) {
+        const pats: Record<string, number> = {};
+        const visits: Record<string, number> = {};
+        for (const a of aggs) {
+          pats[a.petKey] = a.pats;
+          visits[a.petKey] = a.visits;
+        }
+        social.applyCloudPetAggBulk(pats, visits);
+      }
+      await this.refreshLeaderboards();
+      publicHydrated = true;
+    } finally {
+      publicLoading = false;
+      notifyCloud();
     }
-    await this.refreshLeaderboards();
-    publicHydrated = true;
   },
 
   /** 本机 localStorage → 库；每浏览器只跑一次（成功或空载荷也打标）。 */
@@ -140,23 +184,35 @@ export const cloudSync = {
   },
 
   async refreshLeaderboards(): Promise<void> {
-    const kinds: RankKind[] = ['heat', 'pats', 'wins', 'intimacy', 'level'];
-    const results = await Promise.all(kinds.map((k) => fetchChipetLeaderboard(k, k === 'heat' ? 6 : 10)));
-    kinds.forEach((k, i) => {
-      const items = results[i];
-      if (items) leaderboardCache[k] = items;
-    });
+    leaderboardLoading = true;
     notifyLeaderboard();
+    try {
+      const kinds: RankKind[] = ['heat', 'pats', 'wins', 'intimacy', 'level'];
+      const results = await Promise.all(kinds.map((k) => fetchChipetLeaderboard(k, k === 'heat' ? 6 : 10)));
+      kinds.forEach((k, i) => {
+        const items = results[i];
+        if (items) leaderboardCache[k] = items;
+      });
+    } finally {
+      leaderboardLoading = false;
+      notifyLeaderboard();
+    }
   },
 
   async refreshLeaderboard(kind: RankKind, limit?: number): Promise<ChipetLeaderboardItemDto[]> {
-    const items = await fetchChipetLeaderboard(kind, limit ?? (kind === 'heat' ? 6 : 10));
-    if (items) {
-      leaderboardCache[kind] = items;
+    leaderboardLoading = true;
+    notifyLeaderboard();
+    try {
+      const items = await fetchChipetLeaderboard(kind, limit ?? (kind === 'heat' ? 6 : 10));
+      if (items) {
+        leaderboardCache[kind] = items;
+        return items;
+      }
+      return leaderboardCache[kind] ?? [];
+    } finally {
+      leaderboardLoading = false;
       notifyLeaderboard();
-      return items;
     }
-    return leaderboardCache[kind] ?? [];
   },
 
   /** 连钱包后：拉 profile/bem/pets；云端空则上传本地，否则覆盖本地。 */
@@ -164,6 +220,8 @@ export const cloudSync = {
     const addr = address.trim().toLowerCase();
     if (!addr || hydrating) return;
     hydrating = true;
+    walletLoading = true;
+    notifyCloud();
     // 取消 bindAccount/save 触发的待推送，避免用旧本地盖掉刚拉下的云端
     if (profileTimer) { clearTimeout(profileTimer); profileTimer = null; }
     if (bemTimer) { clearTimeout(bemTimer); bemTimer = null; }
@@ -211,6 +269,8 @@ export const cloudSync = {
       }
     } finally {
       hydrating = false;
+      walletLoading = false;
+      notifyCloud();
     }
   },
 

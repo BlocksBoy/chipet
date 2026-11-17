@@ -1,11 +1,14 @@
-import { useMemo } from 'react';
+import { useMemo, useSyncExternalStore } from 'react';
 import { BookOpen, Cat, Cpu, Crown, Egg, Gem, Lock } from 'lucide-react';
+import { DataLoading, PetCardGridSkeleton, StatBandSkeleton } from '../components/Skeleton.tsx';
 import { Button, PAGE, PageHeader, SectionTitle, StatBand, Tag, Trait, cn } from '../components/ui.tsx';
 import { go } from '../router.tsx';
 import { PetCard, rarityTone } from '../chipet/PetCard.tsx';
 import { allHearts, heartOf } from '../chipet/heart.ts';
+import { getCloudSyncRev, isWalletHydrating, subscribeCloudSync } from '../chipet/cloudSync.ts';
 import { localChipet } from '../chipet/store.ts';
 import { cattributes, petSeed, phenotypeOf, rarityLabel, speciesList } from '../chipet/phenotype.ts';
+import { useApp } from '../state.tsx';
 import { useT } from '../i18n.ts';
 
 const DEMO_CPU = '0x000000000000000000000000000000000000c111';
@@ -22,7 +25,10 @@ function sampleIds(n: number): bigint[] {
 
 export function Dex() {
   const t = useT();
-  const pets = useMemo(() => localChipet.list(), []);
+  const { account, refreshKey } = useApp();
+  const cloudRev = useSyncExternalStore(subscribeCloudSync, getCloudSyncRev, getCloudSyncRev);
+  const pets = useMemo(() => localChipet.list(), [refreshKey, cloudRev]);
+  const waitingCloud = !!account && isWalletHydrating() && pets.length === 0;
   const species = speciesList();
   const samples = useMemo(() => sampleIds(species.length), [species.length]);
   const hearts = allHearts();
@@ -51,6 +57,15 @@ export function Dex() {
         right={<Button icon={Egg} onClick={() => go('/')}>{t('去敲蛋', 'Crack an egg')}</Button>}
       />
 
+      {waitingCloud ? (
+        <>
+          <DataLoading className="mt-6" label={t('同步图鉴…', 'Syncing dex…')}>
+            <StatBandSkeleton />
+            <PetCardGridSkeleton className="mt-10" count={8} cols="grid-cols-2 md:grid-cols-3 lg:grid-cols-4" footer={false} />
+          </DataLoading>
+        </>
+      ) : (
+      <>
       <StatBand className="mt-6" items={[
         { icon: BookOpen, label: t(`物种收集 · ${pct}%`, `Species collected · ${pct}%`), value: `${seen.size}/${species.length}`, tone: 'si' },
         { icon: Cat, label: t('已孵化', 'Hatched'), value: pets.length, tone: 'copper' },
@@ -124,6 +139,8 @@ export function Dex() {
           );
         })}
       </ul>
+      </>
+      )}
     </div>
   );
 }

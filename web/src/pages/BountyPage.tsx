@@ -13,7 +13,8 @@ import { Link } from '../router.tsx';
 import { Die } from '../components/Die.tsx';
 import { amount, left, phaseText, short, unit } from '../format.ts';
 import { tr } from '../i18n.ts';
-import { btn, Button, cn, Empty, Input, KV, Loading, Panel, PhaseTag, Tag } from '../components/ui.tsx';
+import { BountyPageSkeleton } from '../components/Skeleton.tsx';
+import { btn, Button, cn, Empty, Input, KV, Panel, PhaseTag, Tag } from '../components/ui.tsx';
 
 export function BountyPage({ id }: { id: number }) {
   const app = useApp();
@@ -40,7 +41,7 @@ export function BountyPage({ id }: { id: number }) {
     return { winner: w.solver, fee, each, owners, comps, prize: b.reward - fee - each * BigInt(owners.length) };
   }, [q.data, app.deployment?.library]);
 
-  if (q.loading && !q.data) return <Loading>{tr('读取擂台…', 'Loading bounty…')}</Loading>;
+  if (q.loading && !q.data) return <BountyPageSkeleton />;
   if (!q.data) return <div className="w-full"><Empty icon={ShieldAlert} title={tr(`找不到擂台 #${id}`, `Bounty #${id} not found`)} action={<Link to="/lab" className={btn('ghost')}><ArrowLeft />{tr('回到擂台', 'Back to the Arena')}</Link>}><span className="text-danger">{q.error?.message}</span></Empty></div>;
   const b = q.data;
   const phase = bountyPhase(b);

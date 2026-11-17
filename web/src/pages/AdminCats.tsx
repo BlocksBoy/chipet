@@ -4,6 +4,7 @@ import {
 } from 'lucide-react';
 import { CHAINS, CHAIN_LABEL, MAINNET_IDS } from '@tapearena/chain';
 import { PaginationBar } from '../components/Pagination.tsx';
+import { DataLoading, TableSkeleton } from '../components/Skeleton.tsx';
 import { Button, Field, PAGE, Panel, Select, Tag, cn } from '../components/ui.tsx';
 import { useT } from '../i18n.ts';
 import { go, Link } from '../router.tsx';
@@ -178,8 +179,10 @@ export function AdminCats() {
 
   if (authed === null) {
     return (
-      <div className={cn(PAGE, 'grid min-h-[50vh] place-items-center py-16')}>
-        <Loader2 className="size-6 animate-spin text-copper" />
+      <div className={cn(PAGE, 'py-6 sm:py-8')}>
+        <DataLoading label={t('校验登录状态…', 'Checking session…')}>
+          <TableSkeleton rows={8} cols={6} />
+        </DataLoading>
       </div>
     );
   }
@@ -318,8 +321,10 @@ export function AdminCats() {
             <tbody className={cn('transition-opacity duration-150', busy && items.length > 0 && 'opacity-55')}>
               {busy && items.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="px-4 py-12 text-center text-mute">
-                    <Loader2 className="mx-auto size-5 animate-spin text-copper" />
+                  <td colSpan={8} className="p-0">
+                    <DataLoading className="px-4 py-6" label={t('加载猫咪存档…', 'Loading cat archive…')}>
+                      <TableSkeleton rows={6} cols={6} className="border-0" />
+                    </DataLoading>
                   </td>
                 </tr>
               )}

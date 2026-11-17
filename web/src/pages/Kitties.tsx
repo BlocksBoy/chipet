@@ -1,17 +1,23 @@
-import { useMemo } from 'react';
+import { useMemo, useSyncExternalStore } from 'react';
 import { ArrowLeft, Cat, Egg } from 'lucide-react';
+import { DataLoading, PetCardGridSkeleton } from '../components/Skeleton.tsx';
 import { Button, Empty, PAGE, PageHeader, Tag, cn } from '../components/ui.tsx';
 import { go } from '../router.tsx';
 import { PetCard } from '../chipet/PetCard.tsx';
 import { heartOf } from '../chipet/heart.ts';
+import { getCloudSyncRev, isWalletHydrating, subscribeCloudSync } from '../chipet/cloudSync.ts';
 import { localChipet } from '../chipet/store.ts';
 import { petSeed, phenotypeOf } from '../chipet/phenotype.ts';
+import { useApp } from '../state.tsx';
 import { useT } from '../i18n.ts';
 
 /** 我持有的芯喵完整列表（家园「查看更多」入口）。 */
 export function Kitties() {
   const t = useT();
-  const pets = useMemo(() => localChipet.list(), []);
+  const { account, refreshKey } = useApp();
+  const cloudRev = useSyncExternalStore(subscribeCloudSync, getCloudSyncRev, getCloudSyncRev);
+  const pets = useMemo(() => localChipet.list(), [refreshKey, cloudRev]);
+  const waitingCloud = !!account && isWalletHydrating() && pets.length === 0;
 
   return (
     <div className={cn(PAGE, 'py-8 sm:py-10')}>
@@ -22,10 +28,14 @@ export function Kitties() {
         desc={t(
           pets.length > 0
             ? `共 ${pets.length} 只。点开任意一只，看它的心脏电路与养成。`
-            : '还没有芯喵。回家园敲开第一枚蛋吧。',
+            : waitingCloud
+              ? '正在同步云端芯喵…'
+              : '还没有芯喵。回家园敲开第一枚蛋吧。',
           pets.length > 0
             ? `${pets.length} in total. Open any one to see its heart circuit and care.`
-            : 'No kitties yet. Crack your first egg at Home.',
+            : waitingCloud
+              ? 'Syncing your Chipets from the cloud…'
+              : 'No kitties yet. Crack your first egg at Home.',
         )}
         right={
           <div className="flex flex-wrap gap-2">
@@ -35,7 +45,11 @@ export function Kitties() {
         }
       />
 
-      {pets.length === 0 ? (
+      {waitingCloud ? (
+        <DataLoading className="mt-8" label={t('同步芯喵…', 'Syncing Chipets…')}>
+          <PetCardGridSkeleton count={4} cols="grid-cols-2 md:grid-cols-3 lg:grid-cols-4" footer={false} />
+        </DataLoading>
+      ) : pets.length === 0 ? (
         <div className="mt-8">
           <Empty
             icon={Egg}

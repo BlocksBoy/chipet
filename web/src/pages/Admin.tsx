@@ -3,6 +3,7 @@ import {
   Cat, Check, ChevronRight, Coins, Copy, Database, ExternalLink, History, KeyRound, Loader2, LogOut, RefreshCw, RotateCcw, ShieldCheck, Swords, Users,
 } from 'lucide-react';
 import { CHAINS, CHAIN_LABEL, MAINNET_IDS, bemNetwork } from '@tapearena/chain';
+import { DataLoading, Skeleton, StatBandSkeleton, TableSkeleton } from '../components/Skeleton.tsx';
 import { Button, PAGE, Panel, Tag, cn } from '../components/ui.tsx';
 import { useT } from '../i18n.ts';
 import {
@@ -299,8 +300,11 @@ export function Admin() {
 
   if (authed === null) {
     return (
-      <div className={cn(PAGE, 'grid min-h-[50vh] place-items-center py-16')}>
-        <Loader2 className="size-6 animate-spin text-copper" />
+      <div className={cn(PAGE, 'py-10 sm:py-16')}>
+        <DataLoading label={t('校验登录状态…', 'Checking session…')}>
+          <StatBandSkeleton className="mb-6" />
+          <TableSkeleton rows={6} cols={4} />
+        </DataLoading>
       </div>
     );
   }
@@ -449,12 +453,28 @@ export function Admin() {
         </div>
       )}
 
+      {!hasAnyStats && busy && (
+        <DataLoading className="mt-6" label={t('正在读取数据库快照…', 'Loading SQLite snapshot…')}>
+          <StatBandSkeleton className="mb-4" />
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {Array.from({ length: 4 }, (_, i) => (
+              <div key={i} className="rounded-3xl border border-line/80 bg-panel p-5">
+                <Skeleton className="h-4 w-24 rounded-md" />
+                <Skeleton className="mt-3 h-8 w-16 rounded-lg" />
+                <Skeleton className="mt-4 h-3 w-full rounded-md" />
+              </div>
+            ))}
+          </div>
+        </DataLoading>
+      )}
+
       {!hasAnyStats && !busy && !scanning && progressLines.length === 0 && (
         <p className="mt-4 text-sm text-mute">
           {t('尚无快照。点「增量入库」开始（首次自动全量分片）。', 'No snapshot yet. Tap “Incremental” (first run is a sliced full scan).')}
         </p>
       )}
 
+      {!(busy && !hasAnyStats) && (
       <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
         {metrics.map(({ icon: I, label, key, swatch, href, hrefLabel }) => {
           const isReg = key === 'registered';
@@ -481,6 +501,7 @@ export function Admin() {
           );
         })}
       </div>
+      )}
 
       <div className="mt-6 grid gap-4 lg:grid-cols-2">
         <Panel title={t('充值明细', 'Recharge detail')} icon={Coins} bodyClass="grid grid-cols-1 gap-3 p-4 sm:grid-cols-2">
