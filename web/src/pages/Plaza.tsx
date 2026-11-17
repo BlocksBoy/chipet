@@ -21,7 +21,7 @@ import { getSocialRev, maxBonds, social, subscribeSocial } from '../chipet/socia
 import { plural, txt, useLang, useT } from '../i18n.ts';
 
 /** 广场动态每页条数（与后端 offset/limit 对齐） */
-const FEED_PAGE = 10;
+const FEED_PAGE = 9;
 
 export function Plaza() {
   const t = useT();

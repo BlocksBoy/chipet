@@ -141,8 +141,8 @@ export const cloudSync = {
         feedTotal = Math.max(0, Number(feed.total) || feed.items?.length || 0);
         const items = (feed.items ?? []) as Parameters<typeof social.applyCloudFeed>[0];
         social.applyCloudFeed(items, feed.likes ?? {}, true);
-        // 预填前几页缓存（与广场 FEED_PAGE=10 对齐）
-        const ps = 10;
+        // 预填前几页缓存（与广场 FEED_PAGE=9 对齐）
+        const ps = 9;
         feedPageSizeCached = ps;
         feedPageCache.clear();
         for (let i = 0; i * ps < items.length; i++) {
