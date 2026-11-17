@@ -263,11 +263,7 @@ export function Home() {
               <Tag tone="si" icon={Fish}>{t('小鱼干', 'Treats')} {profile.fish}</Tag>
               <Tag tone="copper">{t(`连续签到 ${profile.streak} 天`, `${profile.streak}-day streak`)}</Tag>
               <Button size="sm" variant="ghost" disabled={!account || profile.checkedIn} onClick={checkin}>
-                {!account
-                  ? t('连接钱包后可签到', 'Connect wallet to check in')
-                  : profile.checkedIn
-                    ? t('今日已签到', 'Checked in')
-                    : t('每日签到领鱼干', 'Daily check-in')}
+                {profile.checkedIn ? t('今日已签到', 'Checked in') : t('每日签到领鱼干', 'Daily check-in')}
               </Button>
             </div>
 
