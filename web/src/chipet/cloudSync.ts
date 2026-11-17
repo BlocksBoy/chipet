@@ -45,6 +45,9 @@ let leaderboardLoading = false;
 
 const cloudSubs = new Set<() => void>();
 let cloudRev = 0;
+/** 广场动态服务端总数（分页） */
+let feedTotal = 0;
+let feedPageLoading = false;
 
 function notifyCloud() {
   cloudRev += 1;
@@ -75,6 +78,14 @@ export function isPublicHydrated() {
 
 export function isWalletHydrating() {
   return walletLoading;
+}
+
+export function getFeedTotal() {
+  return feedTotal;
+}
+
+export function isFeedPageLoading() {
+  return feedPageLoading;
 }
 
 export function subscribeLeaderboard(fn: () => void) {
@@ -110,11 +121,17 @@ export const cloudSync = {
       await this.bootstrapLocalPublic();
 
       const [feed, aggs] = await Promise.all([
-        fetchChipetFeed({ limit: 40 }),
+        // 首屏多拉一些；总数走 total，后面翻页再 ensureFeedThrough
+        fetchChipetFeed({ limit: 100, offset: 0 }),
         fetchChipetPetAggAll(),
       ]);
-      if (feed?.items?.length) {
-        social.applyCloudFeed(feed.items as Parameters<typeof social.applyCloudFeed>[0], feed.likes, true);
+      if (feed) {
+        feedTotal = Math.max(0, Number(feed.total) || feed.items?.length || 0);
+        social.applyCloudFeed(
+          (feed.items ?? []) as Parameters<typeof social.applyCloudFeed>[0],
+          feed.likes ?? {},
+          true,
+        );
       }
       if (aggs?.length) {
         const pats: Record<string, number> = {};
@@ -129,6 +146,44 @@ export const cloudSync = {
       publicHydrated = true;
     } finally {
       publicLoading = false;
+      notifyCloud();
+    }
+  },
+
+  /**
+   * 保证本地至少有到第 page 页的动态（含）；不够就按 offset 向库续拉。
+   * page 从 1 起；pageSize 与广场 FEED_PAGE 对齐。
+   */
+  async ensureFeedThrough(page: number, pageSize: number): Promise<void> {
+    const need = Math.max(1, page) * Math.max(1, pageSize);
+    if (feedPageLoading) return;
+    feedPageLoading = true;
+    notifyCloud();
+    try {
+      // 可能连续翻多页，循环补齐
+      for (let guard = 0; guard < 30; guard++) {
+        const have = social.activities().length;
+        const total = feedTotal || have;
+        if (have >= need || have >= total) break;
+        const r = await fetchChipetFeed({ limit: pageSize, offset: have });
+        if (!r) break;
+        if (r.total != null) feedTotal = Math.max(0, Number(r.total) || 0);
+        if (!r.items?.length) {
+          feedTotal = have;
+          break;
+        }
+        social.applyCloudFeed(
+          r.items as Parameters<typeof social.applyCloudFeed>[0],
+          r.likes ?? {},
+          false,
+        );
+        if (r.items.length < pageSize) {
+          feedTotal = social.activities().length;
+          break;
+        }
+      }
+    } finally {
+      feedPageLoading = false;
       notifyCloud();
     }
   },

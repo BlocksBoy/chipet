@@ -196,13 +196,15 @@ export function createApp(deps: AppDeps = {}) {
 
   app.get('/api/chipet/feed', (c) => {
     const limit = Number(c.req.query('limit') ?? 40);
+    const offset = Number(c.req.query('offset') ?? 0);
     const beforeRaw = c.req.query('before');
     const before = beforeRaw != null && beforeRaw !== '' ? Number(beforeRaw) : undefined;
     const feed = listFeedWithPending({
       limit: Number.isFinite(limit) ? limit : 40,
+      offset: Number.isFinite(offset) ? offset : 0,
       before: before != null && Number.isFinite(before) ? before : undefined,
     });
-    return json(c, { items: feed.items, likes: feed.likes });
+    return json(c, { items: feed.items, likes: feed.likes, total: feed.total });
   });
 
   /** 浏览器本地广场数据一次性灌库（活动 / 留言 / 摸访）；按 id 去重。 */

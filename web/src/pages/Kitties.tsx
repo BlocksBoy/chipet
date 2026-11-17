@@ -6,7 +6,7 @@ import { go } from '../router.tsx';
 import { PetCard } from '../chipet/PetCard.tsx';
 import { heartOf } from '../chipet/heart.ts';
 import { getCloudSyncRev, isWalletHydrating, subscribeCloudSync } from '../chipet/cloudSync.ts';
-import { localChipet } from '../chipet/store.ts';
+import { getLocalPetsRev, localChipet, subscribeLocalPets } from '../chipet/store.ts';
 import { petSeed, phenotypeOf } from '../chipet/phenotype.ts';
 import { useApp } from '../state.tsx';
 import { useT } from '../i18n.ts';
@@ -14,9 +14,10 @@ import { useT } from '../i18n.ts';
 /** 我持有的芯喵完整列表（家园「查看更多」入口）。 */
 export function Kitties() {
   const t = useT();
-  const { account, refreshKey } = useApp();
+  const { account } = useApp();
   const cloudRev = useSyncExternalStore(subscribeCloudSync, getCloudSyncRev, getCloudSyncRev);
-  const pets = useMemo(() => localChipet.list(), [refreshKey, cloudRev]);
+  const petsRev = useSyncExternalStore(subscribeLocalPets, getLocalPetsRev, getLocalPetsRev);
+  const pets = useMemo(() => localChipet.list(), [petsRev, cloudRev]);
   const waitingCloud = !!account && isWalletHydrating() && pets.length === 0;
 
   return (

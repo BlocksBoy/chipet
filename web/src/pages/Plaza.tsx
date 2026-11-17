@@ -12,7 +12,8 @@ import { ACT_ICON, actTone, PetCard, routeIdOf, timeAgo } from '../chipet/PetCar
 import { heartOf } from '../chipet/heart.ts';
 import { petSeed } from '../chipet/phenotype.ts';
 import {
-  cloudSync, getCachedLeaderboard, getCloudSyncRev, getLeaderboardRev, isLeaderboardLoading, isPublicLoading,
+  cloudSync, getCachedLeaderboard, getCloudSyncRev, getFeedTotal, getLeaderboardRev,
+  isFeedPageLoading, isLeaderboardLoading, isPublicLoading,
   leaderboardItemToPet, subscribeCloudSync, subscribeLeaderboard,
 } from '../chipet/cloudSync.ts';
 import { getSocialRev, maxBonds, social, subscribeSocial } from '../chipet/social.ts';
@@ -36,10 +37,13 @@ export function Plaza() {
   const cloudRev = useSyncExternalStore(subscribeCloudSync, getCloudSyncRev, getCloudSyncRev);
   const bootLoading = isPublicLoading();
   const boardLoading = isLeaderboardLoading();
+  const feedLoading = isFeedPageLoading();
+  const feedTotal = getFeedTotal();
   void cloudRev;
   const profile = useMemo(() => social.profile(), [tick, lang, socialRev]);
   const activities = useMemo(() => social.activities(), [tick, socialRev]);
-  const feedPages = Math.max(1, Math.ceil(activities.length / FEED_PAGE));
+  // 页数以服务端 total 为准，避免只拉到 40 条时永远只有 2 页
+  const feedPages = Math.max(1, Math.ceil(Math.max(feedTotal, activities.length) / FEED_PAGE));
   const feed = useMemo(() => {
     const page = Math.min(Math.max(1, feedPage), feedPages);
     const start = (page - 1) * FEED_PAGE;
@@ -74,7 +78,7 @@ export function Plaza() {
   const bonds = useMemo(() => social.bonds(), [tick, socialRev]);
   const neighbors = useMemo(() => social.neighbors(), [tick, socialRev]);
   const top = ranks[0]?.score || 1;
-  const showFeedSkeleton = bootLoading && activities.length === 0;
+  const showFeedSkeleton = (bootLoading || (feedLoading && feed.length === 0)) && activities.length === 0;
   const showHotSkeleton = (bootLoading || boardLoading) && hot.length === 0;
   const showRankSkeleton = (bootLoading || boardLoading) && ranks.length === 0;
 
@@ -82,7 +86,12 @@ export function Plaza() {
     if (tab === 'hot' || tab === 'rank') void cloudSync.refreshLeaderboards();
   }, [tab, tick, socialRev]);
 
-  useEffect(() => { setFeedPage(1); }, [tick, tab]);
+  useEffect(() => {
+    if (tab !== 'feed') return;
+    void cloudSync.ensureFeedThrough(feedPage, FEED_PAGE);
+  }, [tab, feedPage, cloudRev]);
+
+  useEffect(() => { setFeedPage(1); }, [tab]);
   useEffect(() => {
     setFeedPage((p) => Math.min(Math.max(1, p), feedPages));
   }, [feedPages]);

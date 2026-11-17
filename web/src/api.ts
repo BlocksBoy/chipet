@@ -243,13 +243,15 @@ async function apiSend<T>(path: string, method: 'POST' | 'PUT', body: unknown): 
   }
 }
 
-export async function fetchChipetFeed(opts?: { limit?: number; before?: number }): Promise<{
+export async function fetchChipetFeed(opts?: { limit?: number; before?: number; offset?: number }): Promise<{
   items: ChipetActivityDto[];
   likes: Record<string, number>;
+  total?: number;
 } | null> {
   const q = new URLSearchParams();
   if (opts?.limit != null) q.set('limit', String(opts.limit));
   if (opts?.before != null) q.set('before', String(opts.before));
+  if (opts?.offset != null) q.set('offset', String(opts.offset));
   const qs = q.toString();
   return apiGet(`/api/chipet/feed${qs ? `?${qs}` : ''}`);
 }

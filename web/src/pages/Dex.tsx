@@ -6,7 +6,7 @@ import { go } from '../router.tsx';
 import { PetCard, rarityTone } from '../chipet/PetCard.tsx';
 import { allHearts, heartOf } from '../chipet/heart.ts';
 import { getCloudSyncRev, isWalletHydrating, subscribeCloudSync } from '../chipet/cloudSync.ts';
-import { localChipet } from '../chipet/store.ts';
+import { getLocalPetsRev, localChipet, subscribeLocalPets } from '../chipet/store.ts';
 import { cattributes, petSeed, phenotypeOf, rarityLabel, speciesList } from '../chipet/phenotype.ts';
 import { useApp } from '../state.tsx';
 import { useT } from '../i18n.ts';
@@ -25,9 +25,10 @@ function sampleIds(n: number): bigint[] {
 
 export function Dex() {
   const t = useT();
-  const { account, refreshKey } = useApp();
+  const { account } = useApp();
   const cloudRev = useSyncExternalStore(subscribeCloudSync, getCloudSyncRev, getCloudSyncRev);
-  const pets = useMemo(() => localChipet.list(), [refreshKey, cloudRev]);
+  const petsRev = useSyncExternalStore(subscribeLocalPets, getLocalPetsRev, getLocalPetsRev);
+  const pets = useMemo(() => localChipet.list(), [petsRev, cloudRev]);
   const waitingCloud = !!account && isWalletHydrating() && pets.length === 0;
   const species = speciesList();
   const samples = useMemo(() => sampleIds(species.length), [species.length]);

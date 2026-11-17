@@ -257,15 +257,38 @@ export function getPetAggWithPending(petKey: string): { pats: number; visits: nu
   return { pats: base.pats + (add?.pats ?? 0), visits: base.visits + (add?.visits ?? 0) };
 }
 
-export function listFeedWithPending(opts?: { limit?: number; before?: number }): {
+export function listFeedWithPending(opts?: { limit?: number; before?: number; offset?: number }): {
   items: ChipetActivity[];
   likes: Record<string, number>;
+  total: number;
 } {
-  const limit = Math.min(Math.max(1, opts?.limit ?? 40), 100);
+  const limit = Math.min(Math.max(1, opts?.limit ?? 40), 200);
+  const offset = Math.max(0, Math.floor(opts?.offset ?? 0));
   const before = opts?.before;
   const pending = [...pendingActs.values()]
     .filter((a) => (before == null ? true : a.at < before))
     .sort((a, b) => b.at - a.at);
+  const pendingExtra = pending.length;
+
+  // offset 分页：库直接 OFFSET；首页再并入尚未刷库的 pending
+  if (before == null) {
+    const feed = listFeed({ limit, offset });
+    const byId = new Map<string, ChipetActivity>();
+    if (offset === 0) {
+      for (const a of pending) byId.set(a.id, a);
+    }
+    for (const a of feed.items) {
+      if (!byId.has(a.id)) byId.set(a.id, a);
+    }
+    const items = [...byId.values()]
+      .sort((a, b) => b.at - a.at)
+      .slice(0, limit)
+      .map((a) => ({ ...a, likes: likeCountWithPending(a.id) }));
+    const likes: Record<string, number> = {};
+    for (const a of items) likes[a.id] = a.likes;
+    return { items, likes, total: feed.total + pendingExtra };
+  }
+
   const feed = listFeed({ limit, before });
   const byId = new Map<string, ChipetActivity>();
   for (const a of pending) byId.set(a.id, a);
@@ -278,7 +301,7 @@ export function listFeedWithPending(opts?: { limit?: number; before?: number }):
     .map((a) => ({ ...a, likes: likeCountWithPending(a.id) }));
   const likes: Record<string, number> = {};
   for (const a of items) likes[a.id] = a.likes;
-  return { items, likes };
+  return { items, likes, total: feed.total + pendingExtra };
 }
 
 export function listAllPetAggWithPending(): ChipetPetAggRow[] {

@@ -39,6 +39,23 @@ type Stored = Omit<LocalPet, 'circuitId' | 'xp' | 'wins' | 'losses'> & {
   losses?: number;
 };
 
+const petsSubs = new Set<() => void>();
+let petsRev = 0;
+
+function notifyPets() {
+  petsRev += 1;
+  petsSubs.forEach((fn) => fn());
+}
+
+export function subscribeLocalPets(fn: () => void) {
+  petsSubs.add(fn);
+  return () => { petsSubs.delete(fn); };
+}
+
+export function getLocalPetsRev() {
+  return petsRev;
+}
+
 function load(): LocalPet[] {
   try {
     const raw = JSON.parse(localStorage.getItem(KEY) || '[]') as Stored[];
@@ -50,6 +67,7 @@ function load(): LocalPet[] {
 
 function save(pets: LocalPet[]) {
   localStorage.setItem(KEY, JSON.stringify(pets.map((p) => ({ ...p, circuitId: p.circuitId.toString() }))));
+  notifyPets();
   // 仅本地孵化宠上云；链上宠仍走 petArchive
   void import('./cloudSync.ts').then(({ cloudSync }) => cloudSync.schedulePetsPush());
 }
@@ -152,10 +170,11 @@ export const localChipet = {
       lastPlay: Number(p.lastPlay) || 0,
       hatchedAt: Number(p.hatchedAt) || Date.now(),
     }));
-    // 直接写盘，避免再触发 schedulePetsPush
+    // 直接写盘，避免再触发 schedulePetsPush；仍通知订阅方刷新列表
     localStorage.setItem(KEY, JSON.stringify(
       [...chain, ...locals].map((p) => ({ ...p, circuitId: p.circuitId.toString() })),
     ));
+    notifyPets();
   },
   hatch(name: string, opts?: { guarantee?: 'fancy' }): LocalPet {
     const pets = load();

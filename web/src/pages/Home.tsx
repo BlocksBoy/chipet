@@ -11,7 +11,7 @@ import { KittyEgg } from '../chipet/KittyEgg.tsx';
 import { FxOverlay, type ChipImpulse } from '../chipet/FxOverlay.tsx';
 import { SceneStage } from '../chipet/SceneStage.tsx';
 import { hatchChipet, nameAvailable, petsOfOwner } from '@tapearena/chain';
-import { localChipet } from '../chipet/store.ts';
+import { getLocalPetsRev, localChipet, subscribeLocalPets } from '../chipet/store.ts';
 import { cattributes, petSeed, phenotypeOf, SPECIES_COUNT, typeLabel } from '../chipet/phenotype.ts';
 import { heartOf } from '../chipet/heart.ts';
 import { ACT_ICON, actTone, PetCard, routeIdOf, timeAgo } from '../chipet/PetCard.tsx';
@@ -71,9 +71,10 @@ export function Home() {
   const route = useRoute();
   const socialRev = useSyncExternalStore(subscribeSocial, getSocialRev, getSocialRev);
   const cloudRev = useSyncExternalStore(subscribeCloudSync, getCloudSyncRev, getCloudSyncRev);
+  const petsRev = useSyncExternalStore(subscribeLocalPets, getLocalPetsRev, getLocalPetsRev);
   const feedLoading = isPublicLoading();
   void cloudRev;
-  const pets = useMemo(() => localChipet.list(), [tick, refreshKey]);
+  const pets = useMemo(() => localChipet.list(), [tick, refreshKey, petsRev]);
   // 路由回到家园 / 社交存档变更时都重算，避免任务进度卡住
   const profile = useMemo(() => social.profile(), [tick, socialRev, route.path]);
   const quests = useMemo(() => social.quests(), [tick, socialRev, route.path]);

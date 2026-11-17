@@ -308,11 +308,24 @@ function likeCounts(ids: string[]): Record<string, number> {
   return out;
 }
 
-export function listFeed(opts?: { limit?: number; before?: number }): { items: ChipetActivity[]; likes: Record<string, number> } {
+export function countActivities(): number {
   seedIfEmpty();
-  const limit = Math.min(Math.max(1, opts?.limit ?? 40), 100);
+  return Number(
+    (getAdminDb().prepare(`SELECT COUNT(*) AS n FROM chipet_activities`).get() as { n: number } | undefined)?.n,
+  ) || 0;
+}
+
+export function listFeed(opts?: { limit?: number; before?: number; offset?: number }): {
+  items: ChipetActivity[];
+  likes: Record<string, number>;
+  total: number;
+} {
+  seedIfEmpty();
+  const limit = Math.min(Math.max(1, opts?.limit ?? 40), 200);
+  const offset = Math.max(0, Math.floor(opts?.offset ?? 0));
   const before = opts?.before;
   const db = getAdminDb();
+  const total = countActivities();
   const rows = (before != null
     ? db.prepare(`
         SELECT id, at, kind, actor_json, pet_key, pet_name, text_json, wallet
@@ -320,8 +333,8 @@ export function listFeed(opts?: { limit?: number; before?: number }): { items: C
       `).all(before, limit)
     : db.prepare(`
         SELECT id, at, kind, actor_json, pet_key, pet_name, text_json, wallet
-        FROM chipet_activities ORDER BY at DESC LIMIT ?
-      `).all(limit)) as Record<string, unknown>[];
+        FROM chipet_activities ORDER BY at DESC LIMIT ? OFFSET ?
+      `).all(limit, offset)) as Record<string, unknown>[];
 
   const items: ChipetActivity[] = rows.map((r) => ({
     id: String(r.id),
@@ -336,7 +349,7 @@ export function listFeed(opts?: { limit?: number; before?: number }): { items: C
   }));
   const likes = likeCounts(items.map((a) => a.id));
   for (const a of items) a.likes = likes[a.id] ?? 0;
-  return { items, likes };
+  return { items, likes, total };
 }
 
 export function insertActivity(input: {

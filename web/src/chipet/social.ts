@@ -587,7 +587,8 @@ function me(s: SocialState): Text {
 function pushAct(s: SocialState, act: Omit<Activity, 'id' | 'at'>): Activity {
   const full: Activity = { ...act, id: `a${Date.now()}${Math.random()}`, at: Date.now() };
   s.activities.unshift(full);
-  s.activities = s.activities.slice(0, 40);
+  // 保留足够多条，避免云端拉下来的分页被本地新动态截断成「只有两页」
+  s.activities = s.activities.slice(0, 2000);
   void import('./cloudSync.ts').then(({ cloudSync }) => cloudSync.pushActivity(full));
   return full;
 }
@@ -1173,9 +1174,17 @@ export const social = {
    */
   applyCloudFeed(items: Activity[], likes: Record<string, number>, replace = true) {
     const s = load();
+    if (!items.length && replace) {
+      s.activities = [];
+      s.likes = {};
+      localStorage.setItem(KEY, JSON.stringify(s));
+      socialRev += 1;
+      socialSubs.forEach((fn) => fn());
+      return;
+    }
     if (!items.length) return;
     if (replace) {
-      s.activities = [...items].sort((a, b) => b.at - a.at).slice(0, 60);
+      s.activities = [...items].sort((a, b) => b.at - a.at).slice(0, 2000);
       s.likes = { ...likes };
       // 保留仍存在的动态上的「我赞过」标记
       const nextLiked: Record<string, boolean> = {};
@@ -1186,7 +1195,7 @@ export const social = {
     } else {
       const byId = new Map(s.activities.map((a) => [a.id, a]));
       for (const a of items) byId.set(a.id, a);
-      s.activities = [...byId.values()].sort((a, b) => b.at - a.at).slice(0, 60);
+      s.activities = [...byId.values()].sort((a, b) => b.at - a.at).slice(0, 2000);
       s.likes = { ...s.likes, ...likes };
     }
     localStorage.setItem(KEY, JSON.stringify(s));
