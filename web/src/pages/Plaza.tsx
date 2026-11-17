@@ -119,10 +119,21 @@ export function Plaza() {
     if (tab === 'hot' || tab === 'rank') void cloudSync.refreshLeaderboards();
   }, [tab, tick, socialRev]);
 
-  // 已打开的批次：按页打后端
+  // 进动态 Tab：强制重拉首页（清掉旧缓存）；停留时每 30s 再刷一次头
   useEffect(() => {
     if (tab !== 'feed') return;
-    for (let p = 1; p <= safeLoadedPages; p++) {
+    setFeedLoadedPages(1);
+    void cloudSync.refreshFeedHead(FEED_PAGE);
+    const timer = window.setInterval(() => {
+      void cloudSync.refreshFeedHead(FEED_PAGE);
+    }, 30_000);
+    return () => window.clearInterval(timer);
+  }, [tab]);
+
+  // 已打开的后续批次：按页打后端（首页由 refreshFeedHead 负责）
+  useEffect(() => {
+    if (tab !== 'feed') return;
+    for (let p = 2; p <= safeLoadedPages; p++) {
       void cloudSync.loadFeedPage(p, FEED_PAGE);
     }
   }, [tab, safeLoadedPages]);
@@ -152,7 +163,6 @@ export function Plaza() {
     void hydrateChainRivals({ exclude: account, limit: 48 });
   }, [account]);
 
-  useEffect(() => { setFeedLoadedPages(1); }, [tab]);
   useEffect(() => {
     setFeedLoadedPages((p) => Math.min(Math.max(1, p), feedPages));
   }, [feedPages]);

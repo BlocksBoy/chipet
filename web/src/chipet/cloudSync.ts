@@ -169,17 +169,24 @@ export const cloudSync = {
   /**
    * 按页直打后端 /api/chipet/feed?offset&limit。
    * page 从 1 起；不攒本地长列表，不拿「本地条数」当 offset。
+   * force：强制重拉；force 第 1 页时清掉后续页缓存（新动态插顶会挪页）。
    */
   async loadFeedPage(page: number, pageSize: number, opts?: { force?: boolean }): Promise<void> {
     const size = Math.max(1, pageSize);
     const p = Math.max(1, page);
+    const force = !!opts?.force;
     if (feedPageSizeCached && feedPageSizeCached !== size) {
       feedPageCache.clear();
     }
     feedPageSizeCached = size;
-    if (!opts?.force && feedPageCache.has(p)) return;
-    const existing = feedPagePromises.get(p);
-    if (existing) return existing;
+    if (!force && feedPageCache.has(p)) return;
+    if (!force) {
+      const existing = feedPagePromises.get(p);
+      if (existing) return existing;
+    }
+    if (force && p === 1) {
+      feedPageCache.clear();
+    }
 
     feedLoadingPages.add(p);
     feedPageLoading = true;
@@ -197,6 +204,7 @@ export const cloudSync = {
         feedPageCache.set(p, items);
         // 点赞态仍走 social；顺带合并进本地列表供家园预览等使用
         if (items.length) {
+          // 合并进 social（家园预览等）；广场列表以 feedPageCache 为准
           social.applyCloudFeed(items, r.likes ?? {}, false);
         } else if (offset >= feedTotal) {
           // 越界空页：把 total 收到实有，避免页码虚高
@@ -211,6 +219,11 @@ export const cloudSync = {
     })();
     feedPagePromises.set(p, job);
     return job;
+  },
+
+  /** 重拉广场动态首页（清缓存）；给停留在广场时的轮询 / 切回 Tab 用 */
+  async refreshFeedHead(pageSize: number): Promise<void> {
+    return this.loadFeedPage(1, pageSize, { force: true });
   },
 
   /** @deprecated 改用 loadFeedPage；保留别名以免旧调用炸掉 */
