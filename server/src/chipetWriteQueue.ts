@@ -270,6 +270,18 @@ export function listFeedWithPending(opts?: { limit?: number; before?: number; of
     .sort((a, b) => b.at - a.at);
   const pendingExtra = pending.length;
 
+  const attachLikes = (rows: ChipetActivity[], baseLikes: Record<string, number>): ChipetActivity[] => {
+    // 无 pending 点赞时直接用 listFeed 批量结果，避免每条再 COUNT 一次
+    if (pendingLikes.size === 0) {
+      return rows.map((a) => ({ ...a, likes: baseLikes[a.id] ?? a.likes ?? 0 }));
+    }
+    return rows.map((a) => (
+      pendingLikes.has(a.id)
+        ? { ...a, likes: likeCountWithPending(a.id) }
+        : { ...a, likes: baseLikes[a.id] ?? a.likes ?? 0 }
+    ));
+  };
+
   // offset 分页：库直接 OFFSET；首页再并入尚未刷库的 pending
   if (before == null) {
     const feed = listFeed({ limit, offset });
@@ -280,10 +292,10 @@ export function listFeedWithPending(opts?: { limit?: number; before?: number; of
     for (const a of feed.items) {
       if (!byId.has(a.id)) byId.set(a.id, a);
     }
-    const items = [...byId.values()]
-      .sort((a, b) => b.at - a.at)
-      .slice(0, limit)
-      .map((a) => ({ ...a, likes: likeCountWithPending(a.id) }));
+    const items = attachLikes(
+      [...byId.values()].sort((a, b) => b.at - a.at).slice(0, limit),
+      feed.likes,
+    );
     const likes: Record<string, number> = {};
     for (const a of items) likes[a.id] = a.likes;
     return { items, likes, total: feed.total + pendingExtra };
@@ -295,10 +307,10 @@ export function listFeedWithPending(opts?: { limit?: number; before?: number; of
   for (const a of feed.items) {
     if (!byId.has(a.id)) byId.set(a.id, a);
   }
-  const items = [...byId.values()]
-    .sort((a, b) => b.at - a.at)
-    .slice(0, limit)
-    .map((a) => ({ ...a, likes: likeCountWithPending(a.id) }));
+  const items = attachLikes(
+    [...byId.values()].sort((a, b) => b.at - a.at).slice(0, limit),
+    feed.likes,
+  );
   const likes: Record<string, number> = {};
   for (const a of items) likes[a.id] = a.likes;
   return { items, likes, total: feed.total + pendingExtra };

@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { closeAdminDb } from '../src/adminDb.ts';
-import { listFeed } from '../src/chipetSocial.ts';
+import { listFeed, resetChipetSocialSchemaCacheForTests } from '../src/chipetSocial.ts';
 import {
   enqueueActivity, enqueueLikeToggle, enqueuePetAggBump, flushWriteQueue,
   listFeedWithPending, resetWriteQueueForTests, writeQueueDepth,
@@ -18,6 +18,7 @@ describe('chipetWriteQueue', () => {
 
   beforeEach(() => {
     closeAdminDb();
+    resetChipetSocialSchemaCacheForTests();
     resetWriteQueueForTests();
     dir = mkdtempSync(join(tmpdir(), 'chipet-wq-'));
     process.env.ADMIN_DB_PATH = join(dir, 'wq.sqlite');
@@ -28,6 +29,7 @@ describe('chipetWriteQueue', () => {
     await flushWriteQueue();
     resetWriteQueueForTests();
     closeAdminDb();
+    resetChipetSocialSchemaCacheForTests();
     rmSync(dir, { recursive: true, force: true });
     if (prevDb === undefined) delete process.env.ADMIN_DB_PATH;
     else process.env.ADMIN_DB_PATH = prevDb;

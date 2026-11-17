@@ -52,7 +52,12 @@ const NOTE_PET_WINDOW_MS = 5 * 60_000;
 const NOTE_PET_WINDOW_MAX = 3;
 const NOTE_COOLDOWN_MS = 8_000;
 
+/** 表结构只需检查一次；原先每次 listFeed 都跑 CREATE/PRAGMA，无谓 IO */
+let schemaReady = false;
+let seedChecked = false;
+
 function ensureTables() {
+  if (schemaReady) return;
   getAdminDb().exec(`
     CREATE TABLE IF NOT EXISTS chipet_activities (
       id TEXT PRIMARY KEY,
@@ -167,6 +172,7 @@ function ensureTables() {
   add('circuit_id', "circuit_id TEXT NOT NULL DEFAULT '0'");
   add('route_id', 'route_id INTEGER NOT NULL DEFAULT 0');
   add('updated_at', 'updated_at INTEGER NOT NULL DEFAULT 0');
+  schemaReady = true;
 }
 
 function parseJson<T>(raw: string, fallback: T): T {
@@ -185,13 +191,18 @@ const SEED_ACTOR = (zh: string, en: string) => ({ zh, en });
 
 function seedIfEmpty() {
   ensureTables();
+  if (seedChecked) return;
   const db = getAdminDb();
   const meta = db.prepare(`SELECT value FROM chipet_social_meta WHERE key = 'seeded'`).get() as { value: string } | undefined;
-  if (meta?.value === '1') return;
+  if (meta?.value === '1') {
+    seedChecked = true;
+    return;
+  }
 
   const count = db.prepare(`SELECT COUNT(*) AS n FROM chipet_activities`).get() as { n: number };
   if (Number(count.n) > 0) {
     db.prepare(`INSERT OR REPLACE INTO chipet_social_meta (key, value) VALUES ('seeded', '1')`).run();
+    seedChecked = true;
     return;
   }
 
@@ -294,18 +305,31 @@ function seedIfEmpty() {
   }
 
   db.prepare(`INSERT OR REPLACE INTO chipet_social_meta (key, value) VALUES ('seeded', '1')`).run();
+  seedChecked = true;
 }
 
+/** 单条 SQL 批量取赞数，避免 listFeed 每页 N 次 COUNT */
 function likeCounts(ids: string[]): Record<string, number> {
   if (!ids.length) return {};
   const db = getAdminDb();
   const out: Record<string, number> = {};
-  const stmt = db.prepare(`SELECT COUNT(*) AS n FROM chipet_activity_likes WHERE activity_id = ?`);
-  for (const id of ids) {
-    const row = stmt.get(id) as { n: number };
-    out[id] = Number(row.n) || 0;
+  for (const id of ids) out[id] = 0;
+  const chunk = 80;
+  for (let i = 0; i < ids.length; i += chunk) {
+    const part = ids.slice(i, i + chunk);
+    const ph = part.map(() => '?').join(',');
+    const rows = db.prepare(
+      `SELECT activity_id AS id, COUNT(*) AS n FROM chipet_activity_likes WHERE activity_id IN (${ph}) GROUP BY activity_id`,
+    ).all(...part) as { id: string; n: number }[];
+    for (const r of rows) out[String(r.id)] = Number(r.n) || 0;
   }
   return out;
+}
+
+/** 测试换库时清掉 schema/seed 内存标记 */
+export function resetChipetSocialSchemaCacheForTests() {
+  schemaReady = false;
+  seedChecked = false;
 }
 
 export function countActivities(): number {

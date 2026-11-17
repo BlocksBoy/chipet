@@ -79,6 +79,9 @@ export function Plaza() {
   /** DOM 提交后再钉住/补偿 scrollTop，避免加载时视口跳动 */
   const feedScrollPinRef = useRef<number | null>(null);
   const feedScrollBoostRef = useRef<number | null>(null);
+  /** 预取下一页：外网 RTT~1s，触底时优先吃缓存，避免干等一整轮网络 */
+  const feedPrefetchRef = useRef<{ offset: number; items: FeedRow[]; total: number } | null>(null);
+  const feedPrefetchingRef = useRef(false);
   const feedScrollRef = useRef<HTMLDivElement>(null);
   const feedSentinelRef = useRef<HTMLDivElement>(null);
   const [feedThumbTop, setFeedThumbTop] = useState(0);
@@ -152,10 +155,43 @@ export function Plaza() {
     if (tab === 'hot' || tab === 'rank') void cloudSync.refreshLeaderboards();
   }, [tab, tick, socialRev]);
 
+  const prefetchFeedNext = useCallback(async (fromOffset?: number) => {
+    const offset = fromOffset ?? feedItemsRef.current.length;
+    const total = feedTotalRef.current;
+    if (offset >= total && total > 0) return;
+    if (feedPrefetchRef.current?.offset === offset) return;
+    if (feedPrefetchingRef.current || feedMoreLoadingRef.current) return;
+    const epoch = feedReqEpoch.current;
+    feedPrefetchingRef.current = true;
+    try {
+      const r = await fetchChipetFeed({ limit: FEED_PAGE, offset });
+      if (epoch !== feedReqEpoch.current) return;
+      if (!r) return;
+      // 显式 offset：列表已滚过该页则作废；否则要求与当前长度一致
+      if (fromOffset != null) {
+        if (feedItemsRef.current.length > fromOffset) return;
+      } else if (feedItemsRef.current.length !== offset) {
+        return;
+      }
+      const items = (r.items ?? []) as Activity[];
+      const likes = r.likes ?? {};
+      if (r.total != null) setFeedTotal(Math.max(0, Number(r.total) || 0));
+      feedPrefetchRef.current = {
+        offset,
+        items: mergeLikeState(items, likes),
+        total: Math.max(0, Number(r.total) || items.length),
+      };
+      if (items.length) social.applyCloudFeed(items, likes, false);
+    } finally {
+      feedPrefetchingRef.current = false;
+    }
+  }, []);
+
   /** replace：进 Tab / 发动态后整表对齐；soft：轮询只补新帖，不裁掉已加载页，避免滚动跳动 */
   const loadFeedHead = useCallback(async (mode: 'replace' | 'soft' = 'replace') => {
     const hadItems = feedItemsRef.current.length > 0;
     const epoch = mode === 'replace' ? ++feedReqEpoch.current : feedReqEpoch.current;
+    if (mode === 'replace') feedPrefetchRef.current = null;
     if (mode === 'replace' && !hadItems) setFeedHeadLoading(true);
     try {
       const r = await fetchChipetFeed({ limit: FEED_PAGE, offset: 0 });
@@ -176,12 +212,14 @@ export function Plaza() {
         setFeedItems(next);
       }
       if (items.length) social.applyCloudFeed(items, likes, false);
+      // 首屏回来立刻预取第 2 页，滚动时不卡在跨洋 RTT
+      if (mode === 'replace') void prefetchFeedNext(next.length);
     } finally {
       if (mode === 'replace' && epoch === feedReqEpoch.current) setFeedHeadLoading(false);
     }
-  }, []);
+  }, [prefetchFeedNext]);
 
-  /** 触底：再拉后面一批并追加；锁 scrollTop，底栏高度固定，减少抖动 */
+  /** 触底：优先吃预取；锁 scrollTop，底栏高度固定，减少抖动 */
   const loadFeedMore = useCallback(async () => {
     if (feedMoreLoadingRef.current || feedHeadLoadingRef.current) return;
     const offset = feedItemsRef.current.length;
@@ -192,29 +230,44 @@ export function Plaza() {
     setFeedMoreLoading(true);
     const scroller = feedScrollRef.current;
     const pinnedTop = scroller?.scrollTop ?? 0;
+    let nextPrefetchAt: number | null = null;
     try {
-      const r = await fetchChipetFeed({ limit: FEED_PAGE, offset });
-      if (epoch !== feedReqEpoch.current) return;
-      if (!r) return;
-      const items = (r.items ?? []) as Activity[];
-      const likes = r.likes ?? {};
-      if (r.total != null) setFeedTotal(Math.max(0, Number(r.total) || 0));
-      if (!items.length) {
+      const cached = feedPrefetchRef.current;
+      let pageItems: FeedRow[] = [];
+      let pageTotal = total;
+      if (cached && cached.offset === offset) {
+        feedPrefetchRef.current = null;
+        pageItems = cached.items;
+        pageTotal = cached.total;
+        setFeedTotal(pageTotal);
+      } else {
+        const r = await fetchChipetFeed({ limit: FEED_PAGE, offset });
+        if (epoch !== feedReqEpoch.current) return;
+        if (!r) return;
+        const items = (r.items ?? []) as Activity[];
+        const likes = r.likes ?? {};
+        pageTotal = r.total != null ? Math.max(0, Number(r.total) || 0) : total;
+        setFeedTotal(pageTotal);
+        pageItems = mergeLikeState(items, likes);
+        if (items.length) social.applyCloudFeed(items, likes, false);
+      }
+      if (!pageItems.length) {
         setFeedTotal((prev) => Math.min(prev, offset));
         return;
       }
       feedScrollPinRef.current = pinnedTop;
       setFeedItems((prev) => {
         const seen = new Set(prev.map((a) => a.id));
-        const next = mergeLikeState(items, likes).filter((a) => !seen.has(a.id));
-        return [...prev, ...next];
+        return [...prev, ...pageItems.filter((a) => !seen.has(a.id))];
       });
-      social.applyCloudFeed(items, likes, false);
+      nextPrefetchAt = offset + pageItems.length;
     } finally {
       feedMoreLoadingRef.current = false;
       setFeedMoreLoading(false);
     }
-  }, []);
+    // finally 清掉 loading 后再预取，避免被 moreLoading 挡掉
+    if (nextPrefetchAt != null) void prefetchFeedNext(nextPrefetchAt);
+  }, [prefetchFeedNext]);
 
   useLayoutEffect(() => {
     const el = feedScrollRef.current;
@@ -344,11 +397,18 @@ export function Plaza() {
 
       <div className="mt-6 grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
         <div className="min-w-0">
-          <Segmented value={tab} onChange={setTab} options={[
-            ['feed', t('动态', 'Feed'), Users],
-            ['hot', t('热门', 'Hot'), Sparkles],
-            ['rank', t('排行', 'Ranks'), Trophy],
-          ]} />
+          <div className="flex items-center gap-3">
+            <Segmented value={tab} onChange={setTab} options={[
+              ['feed', t('动态', 'Feed'), Users],
+              ['hot', t('热门', 'Hot'), Sparkles],
+              ['rank', t('排行', 'Ranks'), Trophy],
+            ]} />
+            {tab === 'feed' && !showFeedSkeleton && feedTotal > 0 && (
+              <span className="ml-auto shrink-0 font-mono text-[11px] tabular-nums text-mute">
+                {t(`共 ${feedTotal} 条动态`, `${plural(feedTotal, 'post')} in total`)}
+              </span>
+            )}
+          </div>
 
           {tab === 'feed' && (
             <>

@@ -6,6 +6,7 @@ import { closeAdminDb } from '../src/adminDb.ts';
 import {
   bootstrapPublic, getWalletProfile, insertActivity, insertNote, listFeed, listLeaderboard, listNotes,
   putWalletProfile, toggleLike, bumpPetAgg, upsertPetStats, recomputeAndStoreLeaderboards, scorePet,
+  resetChipetSocialSchemaCacheForTests,
 } from '../src/chipetSocial.ts';
 import { getAdminDb } from '../src/adminDb.ts';
 import { getWalletBem, putWalletBem } from '../src/chipetBem.ts';
@@ -27,12 +28,14 @@ describe('chipet social sync', () => {
 
   beforeEach(() => {
     closeAdminDb();
+    resetChipetSocialSchemaCacheForTests();
     dir = mkdtempSync(join(tmpdir(), 'chipet-social-'));
     process.env.ADMIN_DB_PATH = join(dir, 'social.sqlite');
   });
 
   afterEach(() => {
     closeAdminDb();
+    resetChipetSocialSchemaCacheForTests();
     rmSync(dir, { recursive: true, force: true });
     if (prev === undefined) delete process.env.ADMIN_DB_PATH;
     else process.env.ADMIN_DB_PATH = prev;
