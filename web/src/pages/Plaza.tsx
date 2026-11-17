@@ -185,9 +185,6 @@ export function Plaza() {
 
           {tab === 'hot' && (
             <div className="mt-4">
-              <p className="mb-3 text-[12px] text-pretty text-mute">
-                {t('热度 = 摸头×3 + 串门 + 胜场×2 + 亲密 + 等级×2 + 近两日动态×4 + 稀有度×5；服务端算完写入排行表，全站读同一份。', 'Heat = pats×3 + visits + wins×2 + affection + level×2 + last-2-days feed×4 + rarity×5. Scored on the server, stored in the rank table, same for everyone.')}
-              </p>
               {showHotSkeleton ? (
                 <DataLoading label={t('加载热门芯喵…', 'Loading hot Chipets…')}>
                   <PetCardGridSkeleton count={6} />
