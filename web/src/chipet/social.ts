@@ -673,6 +673,10 @@ function visitBack(s: SocialState, from: PublicPet, text: Txt) {
     kind: 'pat', actor: ownerOf(from), petKey: key, petName: mine.name,
     text: both(`带着「${who.zh}」回访，摸了摸「${mine.name}」`, `Visited back with ${who.en} and patted ${mine.name}`),
   });
+  void import('./cloudSync.ts').then(({ cloudSync }) => {
+    cloudSync.pushPetAgg(key, 'pats', 1);
+    cloudSync.pushPetAgg(key, 'visits', 1);
+  });
 }
 
 export const social = {
@@ -920,6 +924,7 @@ export const social = {
       ),
     });
     save(s);
+    void import('./cloudSync.ts').then(({ cloudSync }) => cloudSync.pushLocalPetStats(pet, me(s)));
   },
 
   // ── 今日任务 ─────────────────────────────────────
@@ -1023,6 +1028,25 @@ export const social = {
           live.mood = clamp(live.mood + 2, 35, 100);
           live.energy = clamp(live.energy - 10, 20, 100);
         }
+        // 固定邻居胜场/亲密上云，排行榜跨端一致（访客日替不上云）
+        if (!isVisitor) {
+          void import('./cloudSync.ts').then(({ cloudSync }) => {
+            cloudSync.pushPetStats({
+              petKey: a.opKey,
+              wins: live.wins,
+              level: live.level,
+              intimacy: live.intimacy,
+              energy: live.energy,
+              mood: live.mood,
+              rarity: n.rarity,
+              name: txt(n.name),
+              owner: n.owner,
+              cpu: n.cpu,
+              circuitId: n.circuitId.toString(),
+              routeId: n.id,
+            });
+          });
+        }
       }
       const line =
         a.result === 'win' ? both(`带「${my}」来切磋，赢了一场！`, `Came to spar with ${my} and won!`)
@@ -1032,6 +1056,11 @@ export const social = {
       s.notes[a.opKey] = [note, ...(s.notes[a.opKey] ?? [])].slice(0, 20);
     }
     save(s);
+    // 自己的宠对战后也刷新排行档案
+    const mine = localChipet.get(a.myId);
+    if (mine) {
+      void import('./cloudSync.ts').then(({ cloudSync }) => cloudSync.pushLocalPetStats(mine, me(s)));
+    }
     return { fish };
   },
   /** 今天打赢这只野怪还能不能再拿鱼干 */
@@ -1138,18 +1167,65 @@ export const social = {
 
   // ── 云端同步钩子（cloudSync 调用；不改页面 API） ─────────
 
-  /** 用服务端 feed 覆盖本地动态与赞数（保留个人 liked）。 */
-  applyCloudFeed(items: Activity[], likes: Record<string, number>) {
+  /**
+   * 用服务端 feed 覆盖本地动态（公共广场以库为准）。
+   * replace=true 时整表替换；false 时仅合并（兼容旧调用）。
+   */
+  applyCloudFeed(items: Activity[], likes: Record<string, number>, replace = true) {
     const s = load();
     if (!items.length) return;
-    const byId = new Map(s.activities.map((a) => [a.id, a]));
-    for (const a of items) byId.set(a.id, a);
-    s.activities = [...byId.values()].sort((a, b) => b.at - a.at).slice(0, 60);
-    s.likes = { ...s.likes, ...likes };
-    // 直接写盘，避免再触发 scheduleProfilePush 循环刷
+    if (replace) {
+      s.activities = [...items].sort((a, b) => b.at - a.at).slice(0, 60);
+      s.likes = { ...likes };
+      // 保留仍存在的动态上的「我赞过」标记
+      const nextLiked: Record<string, boolean> = {};
+      for (const a of s.activities) {
+        if (s.liked[a.id]) nextLiked[a.id] = true;
+      }
+      s.liked = nextLiked;
+    } else {
+      const byId = new Map(s.activities.map((a) => [a.id, a]));
+      for (const a of items) byId.set(a.id, a);
+      s.activities = [...byId.values()].sort((a, b) => b.at - a.at).slice(0, 60);
+      s.likes = { ...s.likes, ...likes };
+    }
     localStorage.setItem(KEY, JSON.stringify(s));
     socialRev += 1;
     socialSubs.forEach((fn) => fn());
+  },
+
+  /** 导出本地广场公共数据，供一次性灌库。 */
+  exportBootstrapPayload() {
+    const s = load();
+    const notes: { id: string; petKey: string; from: Text; text: Text; at: number }[] = [];
+    for (const [petKey, list] of Object.entries(s.notes ?? {})) {
+      for (const n of list ?? []) {
+        notes.push({ id: n.id, petKey, from: n.from, text: n.text, at: n.at });
+      }
+    }
+    const keys = new Set([...Object.keys(s.pats ?? {}), ...Object.keys(s.visits ?? {})]);
+    const petAggs = [...keys].map((petKey) => ({
+      petKey,
+      pats: Number(s.pats[petKey]) || 0,
+      visits: Number(s.visits[petKey]) || 0,
+    }));
+    const likes = Object.entries(s.likes ?? {})
+      .filter(([, n]) => Number(n) > 0)
+      .map(([activityId, count]) => ({ activityId, count: Number(count) || 0 }));
+    return {
+      activities: (s.activities ?? []).map((a) => ({
+        id: a.id,
+        at: a.at,
+        kind: a.kind,
+        actor: a.actor,
+        petKey: a.petKey,
+        petName: a.petName,
+        text: a.text,
+      })),
+      notes,
+      petAggs,
+      likes,
+    };
   },
 
   applyCloudNotes(petKey: string, notes: GuestNote[]) {
@@ -1230,6 +1306,16 @@ export const social = {
     const s = load();
     s.pats[petKey] = pats;
     s.visits[petKey] = visits;
+    localStorage.setItem(KEY, JSON.stringify(s));
+    socialRev += 1;
+    socialSubs.forEach((fn) => fn());
+  },
+
+  /** 用服务端全量 pet_agg 覆盖本地 pats/visits（热门/排行一致）。 */
+  applyCloudPetAggBulk(pats: Record<string, number>, visits: Record<string, number>) {
+    const s = load();
+    s.pats = { ...s.pats, ...pats };
+    s.visits = { ...s.visits, ...visits };
     localStorage.setItem(KEY, JSON.stringify(s));
     socialRev += 1;
     socialSubs.forEach((fn) => fn());

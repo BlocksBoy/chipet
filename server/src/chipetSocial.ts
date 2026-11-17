@@ -87,7 +87,19 @@ function ensureTables() {
     CREATE TABLE IF NOT EXISTS chipet_pet_agg (
       pet_key TEXT PRIMARY KEY,
       pats INTEGER NOT NULL DEFAULT 0,
-      visits INTEGER NOT NULL DEFAULT 0
+      visits INTEGER NOT NULL DEFAULT 0,
+      wins INTEGER NOT NULL DEFAULT 0,
+      level INTEGER NOT NULL DEFAULT 1,
+      intimacy INTEGER NOT NULL DEFAULT 0,
+      rarity INTEGER NOT NULL DEFAULT 0,
+      energy INTEGER NOT NULL DEFAULT 80,
+      mood INTEGER NOT NULL DEFAULT 70,
+      name TEXT NOT NULL DEFAULT '',
+      owner_json TEXT NOT NULL DEFAULT '""',
+      cpu TEXT NOT NULL DEFAULT '',
+      circuit_id TEXT NOT NULL DEFAULT '0',
+      route_id INTEGER NOT NULL DEFAULT 0,
+      updated_at INTEGER NOT NULL DEFAULT 0
     );
 
     CREATE TABLE IF NOT EXISTS chipet_wallet_profiles (
@@ -113,6 +125,24 @@ function ensureTables() {
       value TEXT NOT NULL
     );
   `);
+  // 兼容旧库：补齐排行榜字段
+  const cols = getAdminDb().prepare(`PRAGMA table_info(chipet_pet_agg)`).all() as { name: string }[];
+  const names = new Set(cols.map((c) => c.name));
+  const add = (col: string, ddl: string) => {
+    if (!names.has(col)) getAdminDb().exec(`ALTER TABLE chipet_pet_agg ADD COLUMN ${ddl}`);
+  };
+  add('wins', 'wins INTEGER NOT NULL DEFAULT 0');
+  add('level', 'level INTEGER NOT NULL DEFAULT 1');
+  add('intimacy', 'intimacy INTEGER NOT NULL DEFAULT 0');
+  add('rarity', 'rarity INTEGER NOT NULL DEFAULT 0');
+  add('energy', 'energy INTEGER NOT NULL DEFAULT 80');
+  add('mood', 'mood INTEGER NOT NULL DEFAULT 70');
+  add('name', "name TEXT NOT NULL DEFAULT ''");
+  add('owner_json', "owner_json TEXT NOT NULL DEFAULT '\"\"'");
+  add('cpu', "cpu TEXT NOT NULL DEFAULT ''");
+  add('circuit_id', "circuit_id TEXT NOT NULL DEFAULT '0'");
+  add('route_id', 'route_id INTEGER NOT NULL DEFAULT 0');
+  add('updated_at', 'updated_at INTEGER NOT NULL DEFAULT 0');
 }
 
 function parseJson<T>(raw: string, fallback: T): T {
@@ -211,10 +241,32 @@ function seedIfEmpty() {
     insertNote.run(n.id, n.petKey, toJson(n.from), toJson(n.text), n.at);
   }
 
-  // NPC pet agg seed
-  const agg = db.prepare(`INSERT OR IGNORE INTO chipet_pet_agg (pet_key, pats, visits) VALUES (?, ?, ?)`);
-  for (const id of [-1, -2, -3, -4, -5, -6]) {
-    agg.run(`npc:${id}`, 3 + (Math.abs(id) * 7) % 40, 20 + (Math.abs(id) * 11) % 80);
+  // NPC 排行榜种子（与前端 NEIGHBORS 对齐）
+  const MOCK_CPU = '0x000000000000000000000000000000000000c111';
+  const npcSeed: {
+    id: number; name: string; owner: JsonText; circuitId: string; rarity: number;
+    intimacy: number; level: number; wins: number; energy: number; mood: number;
+  }[] = [
+    { id: -1, name: '青橘', owner: SEED_ACTOR('林间小站', 'ForestStop'), circuitId: '2048', rarity: 1, intimacy: 24, level: 4, wins: 6, energy: 88, mood: 92 },
+    { id: -2, name: '比特', owner: SEED_ACTOR('XLayerFans', 'XLayerFans'), circuitId: '3110', rarity: 0, intimacy: 11, level: 2, wins: 2, energy: 70, mood: 65 },
+    { id: -3, name: '糖芯', owner: SEED_ACTOR('喵呜研究所', 'MeowLabs'), circuitId: '7777', rarity: 2, intimacy: 56, level: 7, wins: 15, energy: 95, mood: 98 },
+    { id: -4, name: '豆皮', owner: SEED_ACTOR('周末玩家', 'WeekendPlayer'), circuitId: '1201', rarity: 0, intimacy: 8, level: 1, wins: 1, energy: 60, mood: 80 },
+    { id: -5, name: '海盐', owner: SEED_ACTOR('DeWEB旅行者', 'DeWEBNomad'), circuitId: '9090', rarity: 1, intimacy: 19, level: 3, wins: 4, energy: 75, mood: 70 },
+    { id: -6, name: '脉冲', owner: SEED_ACTOR('电路夜猫', 'CircuitNightOwl'), circuitId: '4242', rarity: 2, intimacy: 41, level: 6, wins: 11, energy: 90, mood: 85 },
+  ];
+  const agg = db.prepare(`
+    INSERT OR IGNORE INTO chipet_pet_agg (
+      pet_key, pats, visits, wins, level, intimacy, rarity, energy, mood,
+      name, owner_json, cpu, circuit_id, route_id, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+  for (const n of npcSeed) {
+    const pats = 3 + (Math.abs(n.id) * 7) % 40;
+    const visits = 20 + (Math.abs(n.id) * 11) % 80;
+    agg.run(
+      `npc:${n.id}`, pats, visits, n.wins, n.level, n.intimacy, n.rarity, n.energy, n.mood,
+      n.name, toJson(n.owner), MOCK_CPU, n.circuitId, n.id, now,
+    );
   }
 
   db.prepare(`INSERT OR REPLACE INTO chipet_social_meta (key, value) VALUES ('seeded', '1')`).run();
@@ -387,15 +439,16 @@ export function toggleLike(activityId: string, wallet: string): { liked: boolean
 
 export function bumpPetAgg(petKey: string, field: 'pats' | 'visits', delta = 1): { pats: number; visits: number } {
   seedIfEmpty();
+  ensureNpcProfiles();
   const key = petKey.trim().slice(0, 128);
   if (!key) throw new Error('missing petKey');
   const d = Math.max(0, Math.floor(delta));
   const db = getAdminDb();
-  db.prepare(`INSERT OR IGNORE INTO chipet_pet_agg (pet_key, pats, visits) VALUES (?, 0, 0)`).run(key);
+  db.prepare(`INSERT OR IGNORE INTO chipet_pet_agg (pet_key, pats, visits, updated_at) VALUES (?, 0, 0, ?)`).run(key, Date.now());
   if (field === 'pats') {
-    db.prepare(`UPDATE chipet_pet_agg SET pats = pats + ? WHERE pet_key = ?`).run(d, key);
+    db.prepare(`UPDATE chipet_pet_agg SET pats = pats + ?, updated_at = ? WHERE pet_key = ?`).run(d, Date.now(), key);
   } else {
-    db.prepare(`UPDATE chipet_pet_agg SET visits = visits + ? WHERE pet_key = ?`).run(d, key);
+    db.prepare(`UPDATE chipet_pet_agg SET visits = visits + ?, updated_at = ? WHERE pet_key = ?`).run(d, Date.now(), key);
   }
   const row = db.prepare(`SELECT pats, visits FROM chipet_pet_agg WHERE pet_key = ?`).get(key) as { pats: number; visits: number };
   return { pats: Number(row.pats) || 0, visits: Number(row.visits) || 0 };
@@ -407,6 +460,212 @@ export function getPetAgg(petKey: string): { pats: number; visits: number } {
   if (!key) return { pats: 0, visits: 0 };
   const row = getAdminDb().prepare(`SELECT pats, visits FROM chipet_pet_agg WHERE pet_key = ?`).get(key) as { pats: number; visits: number } | undefined;
   return { pats: Number(row?.pats) || 0, visits: Number(row?.visits) || 0 };
+}
+
+export interface ChipetPetAggRow {
+  petKey: string;
+  pats: number;
+  visits: number;
+  wins: number;
+  level: number;
+  intimacy: number;
+  rarity: number;
+  energy: number;
+  mood: number;
+  name: string;
+  owner: JsonText;
+  cpu: string;
+  circuitId: string;
+  routeId: number;
+  updatedAt: number;
+}
+
+export type LeaderboardKind = 'pats' | 'wins' | 'intimacy' | 'level' | 'heat';
+
+export interface ChipetLeaderboardItem extends ChipetPetAggRow {
+  score: number;
+  recent: number;
+}
+
+const MOCK_CPU = '0x000000000000000000000000000000000000c111';
+
+/** 旧库已 seeded 但缺 NPC 档案时补齐（不覆盖已有 pats/visits）。 */
+function ensureNpcProfiles() {
+  ensureTables();
+  const db = getAdminDb();
+  const now = Date.now();
+  const npcSeed: {
+    id: number; name: string; owner: JsonText; circuitId: string; rarity: number;
+    intimacy: number; level: number; wins: number; energy: number; mood: number;
+  }[] = [
+    { id: -1, name: '青橘', owner: { zh: '林间小站', en: 'ForestStop' }, circuitId: '2048', rarity: 1, intimacy: 24, level: 4, wins: 6, energy: 88, mood: 92 },
+    { id: -2, name: '比特', owner: { zh: 'XLayerFans', en: 'XLayerFans' }, circuitId: '3110', rarity: 0, intimacy: 11, level: 2, wins: 2, energy: 70, mood: 65 },
+    { id: -3, name: '糖芯', owner: { zh: '喵呜研究所', en: 'MeowLabs' }, circuitId: '7777', rarity: 2, intimacy: 56, level: 7, wins: 15, energy: 95, mood: 98 },
+    { id: -4, name: '豆皮', owner: { zh: '周末玩家', en: 'WeekendPlayer' }, circuitId: '1201', rarity: 0, intimacy: 8, level: 1, wins: 1, energy: 60, mood: 80 },
+    { id: -5, name: '海盐', owner: { zh: 'DeWEB旅行者', en: 'DeWEBNomad' }, circuitId: '9090', rarity: 1, intimacy: 19, level: 3, wins: 4, energy: 75, mood: 70 },
+    { id: -6, name: '脉冲', owner: { zh: '电路夜猫', en: 'CircuitNightOwl' }, circuitId: '4242', rarity: 2, intimacy: 41, level: 6, wins: 11, energy: 90, mood: 85 },
+  ];
+  for (const n of npcSeed) {
+    const key = `npc:${n.id}`;
+    const row = db.prepare(`SELECT pet_key, name FROM chipet_pet_agg WHERE pet_key = ?`).get(key) as { pet_key: string; name: string } | undefined;
+    if (!row) {
+      const pats = 3 + (Math.abs(n.id) * 7) % 40;
+      const visits = 20 + (Math.abs(n.id) * 11) % 80;
+      db.prepare(`
+        INSERT INTO chipet_pet_agg (
+          pet_key, pats, visits, wins, level, intimacy, rarity, energy, mood,
+          name, owner_json, cpu, circuit_id, route_id, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        key, pats, visits, n.wins, n.level, n.intimacy, n.rarity, n.energy, n.mood,
+        n.name, toJson(n.owner), MOCK_CPU, n.circuitId, n.id, now,
+      );
+    } else if (!row.name) {
+      db.prepare(`
+        UPDATE chipet_pet_agg SET
+          wins = ?, level = ?, intimacy = ?, rarity = ?, energy = ?, mood = ?,
+          name = ?, owner_json = ?, cpu = ?, circuit_id = ?, route_id = ?,
+          updated_at = ?
+        WHERE pet_key = ?
+      `).run(
+        n.wins, n.level, n.intimacy, n.rarity, n.energy, n.mood,
+        n.name, toJson(n.owner), MOCK_CPU, n.circuitId, n.id, now, key,
+      );
+    }
+  }
+}
+
+function rowToAgg(r: Record<string, unknown>): ChipetPetAggRow {
+  const petKey = String(r.pet_key ?? '');
+  let routeId = Number(r.route_id) || 0;
+  if (!routeId) {
+    if (petKey.startsWith('npc:')) routeId = Number(petKey.slice(4)) || 0;
+    else if (petKey.startsWith('mine:')) routeId = Number(petKey.slice(5)) || 0;
+  }
+  return {
+    petKey,
+    pats: Number(r.pats) || 0,
+    visits: Number(r.visits) || 0,
+    wins: Number(r.wins) || 0,
+    level: Math.max(1, Number(r.level) || 1),
+    intimacy: Math.max(0, Number(r.intimacy) || 0),
+    rarity: Math.max(0, Math.min(2, Number(r.rarity) || 0)),
+    energy: Math.max(0, Math.min(100, Number(r.energy) || 80)),
+    mood: Math.max(0, Math.min(100, Number(r.mood) || 70)),
+    name: String(r.name ?? '') || petKey,
+    owner: parseJson<JsonText>(String(r.owner_json ?? '""'), ''),
+    cpu: String(r.cpu ?? '') || MOCK_CPU,
+    circuitId: String(r.circuit_id ?? '0') || '0',
+    routeId,
+    updatedAt: Number(r.updated_at) || 0,
+  };
+}
+
+export function listAllPetAgg(): ChipetPetAggRow[] {
+  seedIfEmpty();
+  ensureNpcProfiles();
+  const rows = getAdminDb().prepare(`SELECT * FROM chipet_pet_agg`).all() as Record<string, unknown>[];
+  return rows.map(rowToAgg);
+}
+
+/** 写入/更新宠的排行榜档案（摸头增量仍走 bumpPetAgg）。 */
+export function upsertPetStats(input: {
+  petKey: string;
+  pats?: number;
+  visits?: number;
+  wins?: number;
+  level?: number;
+  intimacy?: number;
+  rarity?: number;
+  energy?: number;
+  mood?: number;
+  name?: string;
+  owner?: JsonText;
+  cpu?: string;
+  circuitId?: string;
+  routeId?: number;
+}): ChipetPetAggRow {
+  seedIfEmpty();
+  ensureNpcProfiles();
+  const key = String(input.petKey).trim().slice(0, 128);
+  if (!key) throw new Error('missing petKey');
+  const db = getAdminDb();
+  const prev = db.prepare(`SELECT * FROM chipet_pet_agg WHERE pet_key = ?`).get(key) as Record<string, unknown> | undefined;
+  const now = Date.now();
+  const next = {
+    pats: input.pats != null ? Math.max(0, Math.floor(input.pats)) : (Number(prev?.pats) || 0),
+    visits: input.visits != null ? Math.max(0, Math.floor(input.visits)) : (Number(prev?.visits) || 0),
+    wins: input.wins != null ? Math.max(0, Math.floor(input.wins)) : (Number(prev?.wins) || 0),
+    level: input.level != null ? Math.max(1, Math.floor(input.level)) : Math.max(1, Number(prev?.level) || 1),
+    intimacy: input.intimacy != null ? Math.max(0, Math.floor(input.intimacy)) : Math.max(0, Number(prev?.intimacy) || 0),
+    rarity: input.rarity != null ? Math.max(0, Math.min(2, Math.floor(input.rarity))) : Math.max(0, Math.min(2, Number(prev?.rarity) || 0)),
+    energy: input.energy != null ? Math.max(0, Math.min(100, Math.floor(input.energy))) : Math.max(0, Math.min(100, Number(prev?.energy) || 80)),
+    mood: input.mood != null ? Math.max(0, Math.min(100, Math.floor(input.mood))) : Math.max(0, Math.min(100, Number(prev?.mood) || 70)),
+    name: (input.name ?? String(prev?.name ?? '')).slice(0, 32),
+    owner: input.owner ?? parseJson<JsonText>(String(prev?.owner_json ?? '""'), ''),
+      cpu: (input.cpu ?? (String(prev?.cpu ?? '') || MOCK_CPU)).slice(0, 66),
+      circuitId: (input.circuitId ?? (String(prev?.circuit_id ?? '0') || '0')).slice(0, 64),
+    routeId: input.routeId != null ? Math.trunc(input.routeId) : (Number(prev?.route_id) || 0),
+  };
+  if (!next.routeId) {
+    if (key.startsWith('npc:')) next.routeId = Number(key.slice(4)) || 0;
+    else if (key.startsWith('mine:')) next.routeId = Number(key.slice(5)) || 0;
+  }
+  db.prepare(`
+    INSERT INTO chipet_pet_agg (
+      pet_key, pats, visits, wins, level, intimacy, rarity, energy, mood,
+      name, owner_json, cpu, circuit_id, route_id, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(pet_key) DO UPDATE SET
+      pats = excluded.pats,
+      visits = excluded.visits,
+      wins = excluded.wins,
+      level = excluded.level,
+      intimacy = excluded.intimacy,
+      rarity = excluded.rarity,
+      energy = excluded.energy,
+      mood = excluded.mood,
+      name = excluded.name,
+      owner_json = excluded.owner_json,
+      cpu = excluded.cpu,
+      circuit_id = excluded.circuit_id,
+      route_id = excluded.route_id,
+      updated_at = excluded.updated_at
+  `).run(
+    key, next.pats, next.visits, next.wins, next.level, next.intimacy, next.rarity, next.energy, next.mood,
+    next.name, toJson(next.owner), next.cpu, next.circuitId, next.routeId, now,
+  );
+  return rowToAgg(db.prepare(`SELECT * FROM chipet_pet_agg WHERE pet_key = ?`).get(key) as Record<string, unknown>);
+}
+
+export function listLeaderboard(kind: LeaderboardKind, limit = 10): ChipetLeaderboardItem[] {
+  seedIfEmpty();
+  ensureNpcProfiles();
+  const lim = Math.min(Math.max(1, limit), 50);
+  const recentAt = Date.now() - 2 * 86_400_000;
+  const recentRows = getAdminDb().prepare(`
+    SELECT pet_key, COUNT(*) AS n FROM chipet_activities
+    WHERE at > ? AND pet_key != '' GROUP BY pet_key
+  `).all(recentAt) as { pet_key: string; n: number }[];
+  const recentMap = new Map(recentRows.map((r) => [r.pet_key, Number(r.n) || 0]));
+
+  const pets = listAllPetAgg().filter((p) => p.name || p.pats > 0 || p.visits > 0 || p.wins > 0);
+  const scored: ChipetLeaderboardItem[] = pets.map((p) => {
+    const recent = recentMap.get(p.petKey) ?? 0;
+    let score = 0;
+    if (kind === 'pats') score = p.pats;
+    else if (kind === 'wins') score = p.wins;
+    else if (kind === 'intimacy') score = p.intimacy;
+    else if (kind === 'level') score = p.level;
+    else {
+      // heat：与前端 social.leaderboard('heat') 同公式
+      score = p.pats * 3 + p.visits + p.wins * 2 + p.intimacy + p.level * 2 + recent * 4 + p.rarity * 5;
+    }
+    return { ...p, score, recent };
+  });
+  return scored
+    .sort((a, b) => b.score - a.score || b.rarity - a.rarity || b.wins - a.wins)
+    .slice(0, lim);
 }
 
 export function getWalletProfile(address: string): ChipetWalletProfile {
@@ -529,4 +788,134 @@ export function putWalletProfile(input: {
     now,
   );
   return { ...getWalletProfile(addr), exists: true };
+}
+
+/**
+ * 把浏览器本地广场数据一次性灌进库（活动 / 留言 / 摸访聚合）。
+ * 活动与留言按 id INSERT OR IGNORE；摸访取 max(本地, 库)，避免空库或种子盖掉用户数据。
+ */
+export function bootstrapPublic(input: {
+  wallet?: string;
+  activities?: {
+    id?: string;
+    at?: number;
+    kind: string;
+    actor: JsonText;
+    petKey?: string;
+    petName?: string;
+    text: JsonText;
+  }[];
+  notes?: {
+    id?: string;
+    petKey: string;
+    from: JsonText;
+    text: JsonText;
+    at?: number;
+  }[];
+  petAggs?: {
+    petKey: string;
+    pats?: number;
+    visits?: number;
+    wins?: number;
+    level?: number;
+    intimacy?: number;
+    rarity?: number;
+    energy?: number;
+    mood?: number;
+    name?: string;
+    owner?: JsonText;
+    cpu?: string;
+    circuitId?: string;
+    routeId?: number;
+  }[];
+  likes?: { activityId: string; count?: number }[];
+}): { activities: number; notes: number; petAggs: number; likes: number } {
+  seedIfEmpty();
+  ensureNpcProfiles();
+  const db = getAdminDb();
+  const wallet = input.wallet ? (normalizeAddress(input.wallet) ?? '') : '';
+  let nAct = 0;
+  let nNote = 0;
+  let nAgg = 0;
+  let nLike = 0;
+
+  const acts = (input.activities ?? []).slice(0, 80);
+  const insertAct = db.prepare(`
+    INSERT OR IGNORE INTO chipet_activities (id, at, kind, actor_json, pet_key, pet_name, text_json, wallet)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+  for (const a of acts) {
+    if (!a?.kind || a.text == null) continue;
+    const id = String(a.id ?? `a${Date.now()}${Math.random().toString(36).slice(2, 8)}`).slice(0, 64);
+    const r = insertAct.run(
+      id,
+      Number(a.at) || Date.now(),
+      String(a.kind).slice(0, 32),
+      toJson(a.actor ?? ''),
+      String(a.petKey ?? '').slice(0, 128),
+      String(a.petName ?? '').slice(0, 64),
+      toJson(a.text),
+      wallet,
+    );
+    if (Number(r.changes) > 0) nAct += 1;
+  }
+
+  const notes = (input.notes ?? []).slice(0, 120);
+  const insertNote = db.prepare(`
+    INSERT OR IGNORE INTO chipet_notes (id, pet_key, from_json, text_json, at, wallet)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `);
+  for (const n of notes) {
+    if (!n?.petKey || n.text == null) continue;
+    const id = String(n.id ?? `n${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`).slice(0, 64);
+    const r = insertNote.run(
+      id,
+      String(n.petKey).trim().slice(0, 128),
+      toJson(n.from ?? ''),
+      toJson(n.text),
+      Number(n.at) || Date.now(),
+      wallet,
+    );
+    if (Number(r.changes) > 0) nNote += 1;
+  }
+
+  for (const p of (input.petAggs ?? []).slice(0, 120)) {
+    if (!p?.petKey) continue;
+    const key = String(p.petKey).trim().slice(0, 128);
+    const prev = db.prepare(`SELECT * FROM chipet_pet_agg WHERE pet_key = ?`).get(key) as Record<string, unknown> | undefined;
+    const pats = Math.max(Number(prev?.pats) || 0, Math.max(0, Math.floor(Number(p.pats) || 0)));
+    const visits = Math.max(Number(prev?.visits) || 0, Math.max(0, Math.floor(Number(p.visits) || 0)));
+    upsertPetStats({
+      petKey: key,
+      pats,
+      visits,
+      wins: p.wins,
+      level: p.level,
+      intimacy: p.intimacy,
+      rarity: p.rarity,
+      energy: p.energy,
+      mood: p.mood,
+      name: p.name,
+      owner: p.owner,
+      cpu: p.cpu,
+      circuitId: p.circuitId,
+      routeId: p.routeId,
+    });
+    nAgg += 1;
+  }
+
+  const likeIns = db.prepare(`INSERT OR IGNORE INTO chipet_activity_likes (activity_id, wallet, at) VALUES (?, ?, ?)`);
+  for (const L of (input.likes ?? []).slice(0, 200)) {
+    const aid = String(L.activityId ?? '').slice(0, 64);
+    if (!aid) continue;
+    const count = Math.min(20, Math.max(0, Math.floor(Number(L.count) || 0)));
+    const exists = db.prepare(`SELECT id FROM chipet_activities WHERE id = ?`).get(aid);
+    if (!exists) continue;
+    for (let i = 0; i < count; i++) {
+      const r = likeIns.run(aid, `boot:${aid}:${i}`, Date.now());
+      if (Number(r.changes) > 0) nLike += 1;
+    }
+  }
+
+  return { activities: nAct, notes: nNote, petAggs: nAgg, likes: nLike };
 }

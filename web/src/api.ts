@@ -254,6 +254,45 @@ export async function fetchChipetFeed(opts?: { limit?: number; before?: number }
   return apiGet(`/api/chipet/feed${qs ? `?${qs}` : ''}`);
 }
 
+/** 本地广场数据一次性灌库。 */
+export async function postChipetBootstrap(body: {
+  address?: string;
+  activities?: ChipetActivityDto[];
+  notes?: ChipetNoteDto[];
+  petAggs?: Array<{
+    petKey: string;
+    pats?: number;
+    visits?: number;
+    wins?: number;
+    level?: number;
+    intimacy?: number;
+    rarity?: number;
+    energy?: number;
+    mood?: number;
+    name?: string;
+    owner?: ChipetText;
+    cpu?: string;
+    circuitId?: string;
+    routeId?: number;
+  }>;
+  likes?: { activityId: string; count?: number }[];
+}): Promise<{ activities: number; notes: number; petAggs: number; likes: number } | null> {
+  const data = await apiSend<{
+    ok?: boolean;
+    activities?: number;
+    notes?: number;
+    petAggs?: number;
+    likes?: number;
+  }>('/api/chipet/bootstrap', 'POST', body);
+  if (!data?.ok) return null;
+  return {
+    activities: Number(data.activities) || 0,
+    notes: Number(data.notes) || 0,
+    petAggs: Number(data.petAggs) || 0,
+    likes: Number(data.likes) || 0,
+  };
+}
+
 export async function fetchChipetNotes(petKey: string): Promise<ChipetNoteDto[] | null> {
   const data = await apiGet<{ items?: ChipetNoteDto[] }>(`/api/chipet/notes?petKey=${encodeURIComponent(petKey)}`);
   return data ? (Array.isArray(data.items) ? data.items : []) : null;
@@ -295,6 +334,62 @@ export async function postChipetPetAgg(petKey: string, field: 'pats' | 'visits',
   const data = await apiSend<{ ok?: boolean; pats?: number; visits?: number }>('/api/chipet/pet-agg', 'POST', { petKey, field, delta });
   if (!data?.ok) return null;
   return { pats: Number(data.pats) || 0, visits: Number(data.visits) || 0 };
+}
+
+export interface ChipetPetAggDto {
+  petKey: string;
+  pats: number;
+  visits: number;
+  wins: number;
+  level: number;
+  intimacy: number;
+  rarity: number;
+  energy: number;
+  mood: number;
+  name: string;
+  owner: ChipetText;
+  cpu: string;
+  circuitId: string;
+  routeId: number;
+  updatedAt?: number;
+}
+
+export interface ChipetLeaderboardItemDto extends ChipetPetAggDto {
+  score: number;
+  recent: number;
+}
+
+export async function fetchChipetPetAggAll(): Promise<ChipetPetAggDto[] | null> {
+  const data = await apiGet<{ items?: ChipetPetAggDto[] }>('/api/chipet/pet-agg?petKey=all');
+  return data ? (Array.isArray(data.items) ? data.items : []) : null;
+}
+
+export async function putChipetPetStats(body: {
+  petKey: string;
+  wins?: number;
+  level?: number;
+  intimacy?: number;
+  rarity?: number;
+  energy?: number;
+  mood?: number;
+  name?: string;
+  owner?: ChipetText;
+  cpu?: string;
+  circuitId?: string;
+  routeId?: number;
+}): Promise<ChipetPetAggDto | null> {
+  const data = await apiSend<{ ok?: boolean; pet?: ChipetPetAggDto }>('/api/chipet/pet-stats', 'PUT', body);
+  return data?.ok && data.pet ? data.pet : null;
+}
+
+export async function fetchChipetLeaderboard(
+  kind: 'pats' | 'wins' | 'intimacy' | 'level' | 'heat',
+  limit = 10,
+): Promise<ChipetLeaderboardItemDto[] | null> {
+  const data = await apiGet<{ items?: ChipetLeaderboardItemDto[] }>(
+    `/api/chipet/leaderboard?kind=${encodeURIComponent(kind)}&limit=${limit}`,
+  );
+  return data ? (Array.isArray(data.items) ? data.items : []) : null;
 }
 
 export async function fetchChipetProfile(address: string): Promise<ChipetProfileDto | null> {

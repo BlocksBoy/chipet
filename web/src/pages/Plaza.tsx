@@ -8,6 +8,9 @@ import { PetAvatar } from '../chipet/PetAvatar.tsx';
 import { ACT_ICON, actTone, PetCard, routeIdOf, timeAgo } from '../chipet/PetCard.tsx';
 import { heartOf } from '../chipet/heart.ts';
 import { petSeed } from '../chipet/phenotype.ts';
+import {
+  cloudSync, getCachedLeaderboard, getLeaderboardRev, leaderboardItemToPet, subscribeLeaderboard,
+} from '../chipet/cloudSync.ts';
 import { getSocialRev, maxBonds, social, subscribeSocial } from '../chipet/social.ts';
 import { plural, txt, useLang, useT } from '../i18n.ts';
 
@@ -25,6 +28,7 @@ export function Plaza() {
   const [tick, setTick] = useState(0);
   const [feedPage, setFeedPage] = useState(1);
   const socialRev = useSyncExternalStore(subscribeSocial, getSocialRev, getSocialRev);
+  const boardRev = useSyncExternalStore(subscribeLeaderboard, getLeaderboardRev, getLeaderboardRev);
   const profile = useMemo(() => social.profile(), [tick, lang, socialRev]);
   const activities = useMemo(() => social.activities(), [tick, socialRev]);
   const feedPages = Math.max(1, Math.ceil(activities.length / FEED_PAGE));
@@ -33,12 +37,28 @@ export function Plaza() {
     const start = (page - 1) * FEED_PAGE;
     return activities.slice(start, start + FEED_PAGE);
   }, [activities, feedPage, feedPages]);
-  // 热门：综合热度现算；排行：按单项指标现算
-  const hot = useMemo(() => social.leaderboard('heat').slice(0, 6), [tick, socialRev]);
-  const ranks = useMemo(() => social.leaderboard(rankKind), [tick, socialRev, rankKind]);
+  // 热门 / 排行：优先读库缓存；未拉到时回退本地现算
+  const hot = useMemo(() => {
+    const cloud = getCachedLeaderboard('heat');
+    if (cloud?.length) {
+      return cloud.map((row) => ({ pet: leaderboardItemToPet(row), score: row.score, pats: row.pats, visits: row.visits }));
+    }
+    return social.leaderboard('heat').slice(0, 6);
+  }, [tick, socialRev, boardRev]);
+  const ranks = useMemo(() => {
+    const cloud = getCachedLeaderboard(rankKind);
+    if (cloud?.length) {
+      return cloud.map((row) => ({ pet: leaderboardItemToPet(row), score: row.score, pats: row.pats, visits: row.visits }));
+    }
+    return social.leaderboard(rankKind);
+  }, [tick, socialRev, boardRev, rankKind]);
   const bonds = useMemo(() => social.bonds(), [tick, socialRev]);
   const neighbors = useMemo(() => social.neighbors(), [tick, socialRev]);
   const top = ranks[0]?.score || 1;
+
+  useEffect(() => {
+    if (tab === 'hot' || tab === 'rank') void cloudSync.refreshLeaderboards();
+  }, [tab, tick, socialRev]);
 
   useEffect(() => { setFeedPage(1); }, [tick, tab]);
   useEffect(() => {
@@ -147,7 +167,7 @@ export function Plaza() {
           {tab === 'hot' && (
             <div className="mt-4">
               <p className="mb-3 text-[12px] text-pretty text-mute">
-                {t('热度按摸头、串门、胜场、亲密、等级与近两日动态综合现算，摸一摸排行就会变。', 'Heat is live-scored from pats, visits, wins, affection, level, and last-two-days activity — pat someone and the ranking moves.')}
+                {t('热度按摸头、串门、胜场、亲密、等级与近两日动态在服务端综合计算，全站共用，摸一摸排行就会变。', 'Heat is scored on the server from pats, visits, wins, affection, level, and last-two-days activity — shared for everyone, and it moves when you pat.')}
               </p>
               <ul className="grid grid-cols-2 gap-4 md:grid-cols-3">
                 {hot.map(({ pet, score, pats }, i) => (

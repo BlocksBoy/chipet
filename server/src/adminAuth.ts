@@ -31,7 +31,8 @@ function sessKey(id: string) {
   return `${SESS_PREFIX}${id}`;
 }
 
-async function getRedis(): Promise<RedisClientType | null> {
+/** 供写队列等模块复用同一 Redis 连接 */
+export async function getRedis(): Promise<RedisClientType | null> {
   const url = (process.env.REDIS_URL ?? '').trim();
   if (!url) return null;
   if (redisClient?.isOpen) return redisClient;

@@ -4,39 +4,159 @@
 import {
   fetchChipetBem,
   fetchChipetFeed,
+  fetchChipetLeaderboard,
   fetchChipetLocalPets,
   fetchChipetNotes,
+  fetchChipetPetAggAll,
   fetchChipetProfile,
   postChipetActivity,
+  postChipetBootstrap,
   postChipetLike,
   postChipetNote,
   postChipetPetAgg,
   putChipetBem,
   putChipetLocalPets,
+  putChipetPetStats,
   putChipetProfile,
+  type ChipetLeaderboardItemDto,
   type ChipetText,
 } from '../api.ts';
 import { bem } from './bem.ts';
 import { social } from './social.ts';
-import { localChipet } from './store.ts';
+import { isChainPet, localChipet, type LocalPet } from './store.ts';
+import type { Address } from 'viem';
+import { txt } from '../i18n.ts';
 
 let profileTimer: ReturnType<typeof setTimeout> | null = null;
 let bemTimer: ReturnType<typeof setTimeout> | null = null;
 let petsTimer: ReturnType<typeof setTimeout> | null = null;
 let hydrating = false;
 let publicHydrated = false;
+const BOOTSTRAP_KEY = 'chipet.social.bootstrapped.v1';
+
+type RankKind = 'pats' | 'wins' | 'intimacy' | 'level' | 'heat';
+const leaderboardCache: Partial<Record<RankKind, ChipetLeaderboardItemDto[]>> = {};
+const leaderboardSubs = new Set<() => void>();
+let leaderboardRev = 0;
+
+function notifyLeaderboard() {
+  leaderboardRev += 1;
+  leaderboardSubs.forEach((fn) => fn());
+}
+
+export function subscribeLeaderboard(fn: () => void) {
+  leaderboardSubs.add(fn);
+  return () => { leaderboardSubs.delete(fn); };
+}
+
+export function getLeaderboardRev() {
+  return leaderboardRev;
+}
+
+export function getCachedLeaderboard(kind: RankKind): ChipetLeaderboardItemDto[] | null {
+  return leaderboardCache[kind] ?? null;
+}
 
 function wallet(): string {
   return (social.profile().boundWallet || '').toLowerCase();
 }
 
 export const cloudSync = {
-  /** 启动时拉公共动态（未连钱包也可）。 */
+  /**
+   * 启动：先把本机广场数据灌进库（一次性），再拉库覆盖展示。
+   * 这样库不会空，所有人看到的是同一份服务端动态。
+   */
   async hydratePublic(): Promise<void> {
-    const feed = await fetchChipetFeed({ limit: 40 });
-    if (!feed?.items?.length) return;
-    social.applyCloudFeed(feed.items as Parameters<typeof social.applyCloudFeed>[0], feed.likes);
+    await this.bootstrapLocalPublic();
+
+    const [feed, aggs] = await Promise.all([
+      fetchChipetFeed({ limit: 40 }),
+      fetchChipetPetAggAll(),
+    ]);
+    if (feed?.items?.length) {
+      social.applyCloudFeed(feed.items as Parameters<typeof social.applyCloudFeed>[0], feed.likes, true);
+    }
+    if (aggs?.length) {
+      const pats: Record<string, number> = {};
+      const visits: Record<string, number> = {};
+      for (const a of aggs) {
+        pats[a.petKey] = a.pats;
+        visits[a.petKey] = a.visits;
+      }
+      social.applyCloudPetAggBulk(pats, visits);
+    }
+    await this.refreshLeaderboards();
     publicHydrated = true;
+  },
+
+  /** 本机 localStorage → 库；每浏览器只跑一次（成功或空载荷也打标）。 */
+  async bootstrapLocalPublic(): Promise<void> {
+    try {
+      if (localStorage.getItem(BOOTSTRAP_KEY) === '1') return;
+    } catch { /* ignore */ }
+
+    const payload = social.exportBootstrapPayload();
+    const has =
+      payload.activities.length > 0
+      || payload.notes.length > 0
+      || payload.petAggs.some((p) => p.pats > 0 || p.visits > 0);
+
+    if (has) {
+      const addr = wallet() || undefined;
+      // 本地宠也带进排行档案
+      const localPets = localChipet.list().filter((p) => !isChainPet(p));
+      const petAggs = [
+        ...payload.petAggs,
+        ...localPets.map((p) => ({
+          petKey: `mine:${p.id}`,
+          pats: payload.petAggs.find((x) => x.petKey === `mine:${p.id}`)?.pats ?? 0,
+          visits: payload.petAggs.find((x) => x.petKey === `mine:${p.id}`)?.visits ?? 0,
+          wins: p.wins,
+          level: p.level,
+          intimacy: p.intimacy,
+          rarity: p.rarity,
+          energy: p.energy,
+          mood: p.mood,
+          name: p.name,
+          owner: social.profile().displayName,
+          cpu: p.cpu,
+          circuitId: p.circuitId.toString(),
+          routeId: p.id,
+        })),
+      ];
+      const r = await postChipetBootstrap({
+        address: addr,
+        activities: payload.activities,
+        notes: payload.notes,
+        petAggs,
+        likes: payload.likes,
+      });
+      if (!r) return; // 失败不打标，下次启动再试
+    }
+
+    try {
+      localStorage.setItem(BOOTSTRAP_KEY, '1');
+    } catch { /* ignore */ }
+  },
+
+  async refreshLeaderboards(): Promise<void> {
+    const kinds: RankKind[] = ['heat', 'pats', 'wins', 'intimacy', 'level'];
+    const results = await Promise.all(kinds.map((k) => fetchChipetLeaderboard(k, k === 'heat' ? 6 : 10)));
+    kinds.forEach((k, i) => {
+      const items = results[i];
+      if (items) leaderboardCache[k] = items;
+    });
+    notifyLeaderboard();
+  },
+
+  async refreshLeaderboard(kind: RankKind, limit?: number): Promise<ChipetLeaderboardItemDto[]> {
+    const items = await fetchChipetLeaderboard(kind, limit ?? (kind === 'heat' ? 6 : 10));
+    if (items) {
+      leaderboardCache[kind] = items;
+      notifyLeaderboard();
+      return items;
+    }
+    return leaderboardCache[kind] ?? [];
   },
 
   /** 连钱包后：拉 profile/bem/pets；云端空则上传本地，否则覆盖本地。 */
@@ -134,7 +254,11 @@ export const cloudSync = {
     petsTimer = setTimeout(() => {
       if (hydrating) return;
       const pets = localChipet.exportLocalForCloud();
-      void putChipetLocalPets(addr, pets);
+      void putChipetLocalPets(addr, pets).then(() => {
+        for (const p of localChipet.list().filter((x) => !isChainPet(x))) {
+          this.pushLocalPetStats(p);
+        }
+      });
     }, 400);
   },
 
@@ -192,6 +316,65 @@ export const cloudSync = {
     void postChipetPetAgg(petKey, field, delta).then((r) => {
       if (!r) return;
       social.applyCloudPetAgg(petKey, r.pats, r.visits);
+      void this.refreshLeaderboards();
+    });
+  },
+
+  /** 上报宠档案到排行榜（孵化/对战/本地宠变更）。 */
+  pushPetStats(input: {
+    petKey: string;
+    wins?: number;
+    level?: number;
+    intimacy?: number;
+    rarity?: number;
+    energy?: number;
+    mood?: number;
+    name?: string;
+    owner?: ChipetText;
+    cpu?: string;
+    circuitId?: string;
+    routeId?: number;
+  }) {
+    void putChipetPetStats(input).then((row) => {
+      if (!row) return;
+      void this.refreshLeaderboards();
+    });
+  },
+
+  pushLocalPetStats(pet: LocalPet, owner?: ChipetText) {
+    this.pushPetStats({
+      petKey: `mine:${pet.id}`,
+      wins: pet.wins,
+      level: pet.level,
+      intimacy: pet.intimacy,
+      rarity: pet.rarity,
+      energy: pet.energy,
+      mood: pet.mood,
+      name: pet.name,
+      owner: owner ?? social.profile().displayName,
+      cpu: pet.cpu,
+      circuitId: pet.circuitId.toString(),
+      routeId: pet.id,
     });
   },
 };
+
+/** 把排行榜 DTO 转成 Plaza 用的 pet 展示形状 */
+export function leaderboardItemToPet(item: ChipetLeaderboardItemDto) {
+  const owner = typeof item.owner === 'string' ? item.owner : txt(item.owner);
+  return {
+    key: item.petKey,
+    id: item.routeId || (item.petKey.startsWith('npc:') ? Number(item.petKey.slice(4)) : Number(item.petKey.replace(/^mine:/, '')) || 0),
+    name: item.name,
+    owner,
+    cpu: (item.cpu || '0x000000000000000000000000000000000000c111') as Address,
+    circuitId: BigInt(item.circuitId || '0'),
+    rarity: (Math.max(0, Math.min(2, item.rarity)) || 0) as 0 | 1 | 2,
+    energy: item.energy,
+    mood: item.mood,
+    intimacy: item.intimacy,
+    level: item.level,
+    wins: item.wins,
+    mine: item.petKey.startsWith('mine:'),
+  };
+}

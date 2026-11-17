@@ -4,8 +4,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { closeAdminDb } from '../src/adminDb.ts';
 import {
-  getWalletProfile, insertActivity, insertNote, listFeed, listNotes,
-  putWalletProfile, toggleLike, bumpPetAgg,
+  bootstrapPublic, getWalletProfile, insertActivity, insertNote, listFeed, listLeaderboard, listNotes,
+  putWalletProfile, toggleLike, bumpPetAgg, upsertPetStats,
 } from '../src/chipetSocial.ts';
 import { getWalletBem, putWalletBem } from '../src/chipetBem.ts';
 import { getWalletPets, putWalletPets } from '../src/chipetWalletPets.ts';
@@ -85,6 +85,48 @@ describe('chipet social sync', () => {
       xp: 0, wins: 0, losses: 0, lastFeed: 0, lastPlay: 0, hatchedAt: Date.now(),
     }]);
     expect(getWalletPets(ADDR).pets).toHaveLength(1);
+  });
+
+  it('bootstrap 把本地动态/留言/摸访灌进库，重复 id 不重复插', () => {
+    const r1 = bootstrapPublic({
+      activities: [{
+        id: 'boot-a1', at: Date.now(), kind: 'pat', actor: 'Alice',
+        petKey: 'npc:-1', petName: '青橘', text: '摸了摸',
+      }],
+      notes: [{
+        id: 'boot-n1', petKey: 'npc:-1', from: 'Alice', text: '你好', at: Date.now(),
+      }],
+      petAggs: [{ petKey: 'npc:-1', pats: 99, visits: 50 }],
+    });
+    expect(r1.activities).toBe(1);
+    expect(r1.notes).toBe(1);
+    expect(listFeed({ limit: 20 }).items.some((a) => a.id === 'boot-a1')).toBe(true);
+    expect(listNotes('npc:-1').some((n) => n.id === 'boot-n1')).toBe(true);
+
+    const r2 = bootstrapPublic({
+      activities: [{
+        id: 'boot-a1', at: Date.now(), kind: 'pat', actor: 'Alice',
+        petKey: 'npc:-1', petName: '青橘', text: '摸了摸',
+      }],
+      petAggs: [{ petKey: 'npc:-1', pats: 10, visits: 80 }],
+    });
+    expect(r2.activities).toBe(0);
+    // pats 取 max(99,10)=99；visits 取 max(50,80)=80
+    const heat = listLeaderboard('pats', 10);
+    const row = heat.find((p) => p.petKey === 'npc:-1');
+    expect(row?.pats).toBe(99);
+  });
+
+  it('排行榜 / pet-stats 读写', () => {
+    bumpPetAgg('npc:-3', 'pats', 10);
+    upsertPetStats({ petKey: 'mine:1', name: '测试猫', wins: 3, level: 2, intimacy: 9, rarity: 1, circuitId: '99', routeId: 1 });
+    const heat = listLeaderboard('heat', 10);
+    expect(heat.length).toBeGreaterThan(0);
+    expect(heat[0]!.score).toBeGreaterThan(0);
+    const pats = listLeaderboard('pats', 3);
+    expect(pats.some((p) => p.petKey === 'npc:-3')).toBe(true);
+    const wins = listLeaderboard('wins', 10);
+    expect(wins.some((p) => p.petKey === 'mine:1' && p.wins === 3)).toBe(true);
   });
 
   it('HTTP：feed 公开；profile 需 address；留言限流', async () => {

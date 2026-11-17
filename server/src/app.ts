@@ -19,9 +19,14 @@ import { overlayRechargeStats, recordRecharge } from './rechargeEvents.ts';
 import { countArchivedPets, listArchivedPets, listRivalPets } from './petArchive.ts';
 import { syncChipetPetsFully } from './petSync.ts';
 import {
-  bumpPetAgg, getPetAgg, getWalletProfile, insertActivity, insertNote,
-  listFeed, listNotes, putWalletProfile, toggleLike,
+  bootstrapPublic, getWalletProfile, insertNote,
+  listNotes, putWalletProfile, upsertPetStats, type LeaderboardKind,
 } from './chipetSocial.ts';
+import {
+  enqueueActivity, enqueueLikeToggle, enqueuePetAggBump,
+  getPetAggWithPending, listAllPetAggWithPending, listFeedWithPending,
+  listLeaderboardWithPending,
+} from './chipetWriteQueue.ts';
 import { getWalletBem, putWalletBem } from './chipetBem.ts';
 import { getWalletPets, putWalletPets, type ChipetLocalPetDto } from './chipetWalletPets.ts';
 
@@ -193,11 +198,63 @@ export function createApp(deps: AppDeps = {}) {
     const limit = Number(c.req.query('limit') ?? 40);
     const beforeRaw = c.req.query('before');
     const before = beforeRaw != null && beforeRaw !== '' ? Number(beforeRaw) : undefined;
-    const feed = listFeed({
+    const feed = listFeedWithPending({
       limit: Number.isFinite(limit) ? limit : 40,
       before: before != null && Number.isFinite(before) ? before : undefined,
     });
     return json(c, { items: feed.items, likes: feed.likes });
+  });
+
+  /** 浏览器本地广场数据一次性灌库（活动 / 留言 / 摸访）；按 id 去重。 */
+  app.post('/api/chipet/bootstrap', async (c) => {
+    const b = await body<{
+      address?: string;
+      activities?: {
+        id?: string;
+        at?: number;
+        kind: string;
+        actor: string | { zh: string; en: string };
+        petKey?: string;
+        petName?: string;
+        text: string | { zh: string; en: string };
+      }[];
+      notes?: {
+        id?: string;
+        petKey: string;
+        from: string | { zh: string; en: string };
+        text: string | { zh: string; en: string };
+        at?: number;
+      }[];
+      petAggs?: {
+        petKey: string;
+        pats?: number;
+        visits?: number;
+        wins?: number;
+        level?: number;
+        intimacy?: number;
+        rarity?: number;
+        energy?: number;
+        mood?: number;
+        name?: string;
+        owner?: string | { zh: string; en: string };
+        cpu?: string;
+        circuitId?: string;
+        routeId?: number;
+      }[];
+      likes?: { activityId: string; count?: number }[];
+    }>(c);
+    try {
+      const r = bootstrapPublic({
+        wallet: b.address ? String(b.address) : undefined,
+        activities: b.activities,
+        notes: b.notes,
+        petAggs: b.petAggs,
+        likes: b.likes,
+      });
+      return json(c, { ok: true, ...r });
+    } catch (e) {
+      throw new HttpError(400, e instanceof Error ? e.message : 'bootstrap failed');
+    }
   });
 
   app.get('/api/chipet/notes', (c) => {
@@ -250,7 +307,7 @@ export function createApp(deps: AppDeps = {}) {
     need(b.kind, 'kind');
     need(b.text, 'text');
     try {
-      const item = insertActivity({
+      const item = await enqueueActivity({
         id: b.id ? String(b.id) : undefined,
         at: b.at != null ? Number(b.at) : undefined,
         kind: String(b.kind),
@@ -271,7 +328,7 @@ export function createApp(deps: AppDeps = {}) {
     need(b.address, 'address');
     need(b.activityId, 'activityId');
     try {
-      const r = toggleLike(String(b.activityId), String(b.address));
+      const r = await enqueueLikeToggle(String(b.activityId), String(b.address));
       return json(c, { ok: true, ...r });
     } catch (e) {
       throw new HttpError(400, e instanceof Error ? e.message : 'invalid like');
@@ -280,8 +337,10 @@ export function createApp(deps: AppDeps = {}) {
 
   app.get('/api/chipet/pet-agg', (c) => {
     const petKey = (c.req.query('petKey') ?? '').trim();
-    need(petKey, 'petKey');
-    return json(c, getPetAgg(petKey));
+    if (!petKey || petKey === 'all') {
+      return json(c, { items: listAllPetAggWithPending() });
+    }
+    return json(c, getPetAggWithPending(petKey));
   });
 
   app.post('/api/chipet/pet-agg', async (c) => {
@@ -290,11 +349,63 @@ export function createApp(deps: AppDeps = {}) {
     need(b.field, 'field');
     if (b.field !== 'pats' && b.field !== 'visits') throw new HttpError(400, 'field must be pats or visits');
     try {
-      const r = bumpPetAgg(String(b.petKey), b.field, b.delta != null ? Number(b.delta) : 1);
+      const r = await enqueuePetAggBump(String(b.petKey), b.field, b.delta != null ? Number(b.delta) : 1);
       return json(c, { ok: true, ...r });
     } catch (e) {
       throw new HttpError(400, e instanceof Error ? e.message : 'invalid pet-agg');
     }
+  });
+
+  app.put('/api/chipet/pet-stats', async (c) => {
+    const b = await body<{
+      petKey?: string;
+      pats?: number;
+      visits?: number;
+      wins?: number;
+      level?: number;
+      intimacy?: number;
+      rarity?: number;
+      energy?: number;
+      mood?: number;
+      name?: string;
+      owner?: string | { zh: string; en: string };
+      cpu?: string;
+      circuitId?: string;
+      routeId?: number;
+    }>(c);
+    need(b.petKey, 'petKey');
+    try {
+      const row = upsertPetStats({
+        petKey: String(b.petKey),
+        pats: b.pats,
+        visits: b.visits,
+        wins: b.wins,
+        level: b.level,
+        intimacy: b.intimacy,
+        rarity: b.rarity,
+        energy: b.energy,
+        mood: b.mood,
+        name: b.name,
+        owner: b.owner,
+        cpu: b.cpu,
+        circuitId: b.circuitId,
+        routeId: b.routeId,
+      });
+      return json(c, { ok: true, pet: row });
+    } catch (e) {
+      throw new HttpError(400, e instanceof Error ? e.message : 'invalid pet-stats');
+    }
+  });
+
+  app.get('/api/chipet/leaderboard', (c) => {
+    const kindRaw = (c.req.query('kind') ?? 'heat').trim() as LeaderboardKind;
+    const allowed: LeaderboardKind[] = ['pats', 'wins', 'intimacy', 'level', 'heat'];
+    if (!allowed.includes(kindRaw)) throw new HttpError(400, 'invalid kind');
+    const limit = Number(c.req.query('limit') ?? 10);
+    return json(c, {
+      kind: kindRaw,
+      items: listLeaderboardWithPending(kindRaw, Number.isFinite(limit) ? limit : 10),
+    });
   });
 
   app.get('/api/chipet/profile', (c) => {
