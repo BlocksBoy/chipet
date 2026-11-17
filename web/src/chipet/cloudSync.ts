@@ -47,10 +47,12 @@ const cloudSubs = new Set<() => void>();
 let cloudRev = 0;
 /** 广场动态服务端总数（分页） */
 let feedTotal = 0;
+/** 按页缓存：key=页码(从1起)，避免用「本地条数」当 offset 对不齐 */
+const feedPageCache = new Map<number, Parameters<typeof social.applyCloudFeed>[0]>();
+let feedPageSizeCached = 0;
+const feedLoadingPages = new Set<number>();
+const feedPagePromises = new Map<number, Promise<void>>();
 let feedPageLoading = false;
-/** 当前 ensureFeedThrough 要凑齐的条数（并发翻页时取 max，避免丢请求） */
-let feedWantedNeed = 0;
-let feedEnsureChain: Promise<void> | null = null;
 
 function notifyCloud() {
   cloudRev += 1;
@@ -87,8 +89,15 @@ export function getFeedTotal() {
   return feedTotal;
 }
 
-export function isFeedPageLoading() {
-  return feedPageLoading;
+export function isFeedPageLoading(page?: number) {
+  if (page != null) return feedLoadingPages.has(Math.max(1, page));
+  return feedPageLoading || feedLoadingPages.size > 0;
+}
+
+/** 已拉过的广场动态页；未拉过返回 undefined（区分「空页」与「还没请求」） */
+export function getCachedFeedPage(page: number) {
+  const p = Math.max(1, page);
+  return feedPageCache.has(p) ? feedPageCache.get(p)! : undefined;
 }
 
 export function subscribeLeaderboard(fn: () => void) {
@@ -124,17 +133,21 @@ export const cloudSync = {
       await this.bootstrapLocalPublic();
 
       const [feed, aggs] = await Promise.all([
-        // 首屏多拉一些；总数走 total，后面翻页再 ensureFeedThrough
+        // 首屏多拉一些；广场分页按页直拉，不依赖本地累计条数
         fetchChipetFeed({ limit: 100, offset: 0 }),
         fetchChipetPetAggAll(),
       ]);
       if (feed) {
         feedTotal = Math.max(0, Number(feed.total) || feed.items?.length || 0);
-        social.applyCloudFeed(
-          (feed.items ?? []) as Parameters<typeof social.applyCloudFeed>[0],
-          feed.likes ?? {},
-          true,
-        );
+        const items = (feed.items ?? []) as Parameters<typeof social.applyCloudFeed>[0];
+        social.applyCloudFeed(items, feed.likes ?? {}, true);
+        // 预填前几页缓存（与广场 FEED_PAGE=20 对齐）
+        const ps = 20;
+        feedPageSizeCached = ps;
+        feedPageCache.clear();
+        for (let i = 0; i * ps < items.length; i++) {
+          feedPageCache.set(i + 1, items.slice(i * ps, (i + 1) * ps));
+        }
       }
       if (aggs?.length) {
         const pats: Record<string, number> = {};
@@ -154,76 +167,55 @@ export const cloudSync = {
   },
 
   /**
-   * 保证本地至少有到第 page 页的动态（含）；不够就按 offset 向库续拉。
-   * page 从 1 起；pageSize 与广场 FEED_PAGE 对齐。
-   * 并发翻页会抬高 wantedNeed，不会因 feedPageLoading 直接丢请求。
+   * 按页直打后端 /api/chipet/feed?offset&limit。
+   * page 从 1 起；不攒本地长列表，不拿「本地条数」当 offset。
    */
-  async ensureFeedThrough(page: number, pageSize: number): Promise<void> {
+  async loadFeedPage(page: number, pageSize: number, opts?: { force?: boolean }): Promise<void> {
     const size = Math.max(1, pageSize);
-    const need = Math.max(1, page) * size;
-    feedWantedNeed = Math.max(feedWantedNeed, need);
-    if (feedEnsureChain) return feedEnsureChain;
+    const p = Math.max(1, page);
+    if (feedPageSizeCached && feedPageSizeCached !== size) {
+      feedPageCache.clear();
+    }
+    feedPageSizeCached = size;
+    if (!opts?.force && feedPageCache.has(p)) return;
+    const existing = feedPagePromises.get(p);
+    if (existing) return existing;
 
+    feedLoadingPages.add(p);
     feedPageLoading = true;
     notifyCloud();
-    feedEnsureChain = (async () => {
+    const job = (async () => {
       try {
-        for (let guard = 0; guard < 40; guard++) {
-          const target = feedWantedNeed;
-          const have = social.activities().length;
-          const total = feedTotal > 0 ? feedTotal : Number.POSITIVE_INFINITY;
-          if (have >= target || have >= total) {
-            if (Number.isFinite(total) && have >= total) {
-              feedTotal = have;
-            }
-            // 等待期间又翻到更后面：继续补
-            if (feedWantedNeed > target) continue;
-            break;
-          }
-          const gap = Math.min(100, Math.max(size, target - have));
-          const r = await fetchChipetFeed({ limit: gap, offset: have });
-          if (!r) {
-            // 网络失败：别再拿虚高 total 画出空页
-            feedTotal = have;
-            break;
-          }
-          if (r.total != null) feedTotal = Math.max(0, Number(r.total) || 0);
-          if (!r.items?.length) {
-            feedTotal = have;
-            break;
-          }
-          const before = have;
-          social.applyCloudFeed(
-            r.items as Parameters<typeof social.applyCloudFeed>[0],
-            r.likes ?? {},
-            false,
-          );
-          const after = social.activities().length;
-          if (after <= before) {
-            // 合并没涨（全是重复）→ 视为到头，避免死循环空页
-            feedTotal = after;
-            break;
-          }
-          if (r.items.length < gap) {
-            feedTotal = after;
-            break;
-          }
+        const offset = (p - 1) * size;
+        const r = await fetchChipetFeed({ limit: size, offset });
+        if (!r) {
+          feedPageCache.set(p, []);
+          return;
+        }
+        if (r.total != null) feedTotal = Math.max(0, Number(r.total) || 0);
+        const items = (r.items ?? []) as Parameters<typeof social.applyCloudFeed>[0];
+        feedPageCache.set(p, items);
+        // 点赞态仍走 social；顺带合并进本地列表供家园预览等使用
+        if (items.length) {
+          social.applyCloudFeed(items, r.likes ?? {}, false);
+        } else if (offset >= feedTotal) {
+          // 越界空页：把 total 收到实有，避免页码虚高
+          feedTotal = Math.min(feedTotal, offset);
         }
       } finally {
-        feedPageLoading = false;
-        feedEnsureChain = null;
-        const have = social.activities().length;
-        const total = feedTotal > 0 ? feedTotal : have;
-        if (have >= total) feedTotal = have;
+        feedLoadingPages.delete(p);
+        feedPagePromises.delete(p);
+        feedPageLoading = feedLoadingPages.size > 0;
         notifyCloud();
-        // 链结束时目标又被抬高且还没凑齐 → 再开一轮
-        if (have < feedWantedNeed && have < total) {
-          void this.ensureFeedThrough(Math.ceil(feedWantedNeed / size), size);
-        }
       }
     })();
+    feedPagePromises.set(p, job);
+    return job;
+  },
 
-    return feedEnsureChain;
+  /** @deprecated 改用 loadFeedPage；保留别名以免旧调用炸掉 */
+  async ensureFeedThrough(page: number, pageSize: number): Promise<void> {
+    return this.loadFeedPage(page, pageSize);
   },
 
   /** 本机 localStorage → 库；每浏览器只跑一次（成功或空载荷也打标）。 */

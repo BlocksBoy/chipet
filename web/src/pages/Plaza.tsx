@@ -12,7 +12,7 @@ import { ACT_ICON, actTone, PetCard, routeIdOf, timeAgo } from '../chipet/PetCar
 import { heartOf } from '../chipet/heart.ts';
 import { petSeed } from '../chipet/phenotype.ts';
 import {
-  cloudSync, getCachedLeaderboard, getCloudSyncRev, getFeedTotal, getLeaderboardRev,
+  cloudSync, getCachedFeedPage, getCachedLeaderboard, getCloudSyncRev, getFeedTotal, getLeaderboardRev,
   isFeedPageLoading, isLeaderboardLoading, isPublicLoading,
   leaderboardItemToPet, subscribeCloudSync, subscribeLeaderboard,
 } from '../chipet/cloudSync.ts';
@@ -20,7 +20,7 @@ import { hydrateChainRivals } from '../chipet/rivals.ts';
 import { getSocialRev, maxBonds, social, subscribeSocial } from '../chipet/social.ts';
 import { plural, txt, useLang, useT } from '../i18n.ts';
 
-/** 广场动态每页条数 */
+/** 广场动态每页条数（与后端 offset/limit 对齐） */
 const FEED_PAGE = 20;
 
 export function Plaza() {
@@ -38,20 +38,28 @@ export function Plaza() {
   const cloudRev = useSyncExternalStore(subscribeCloudSync, getCloudSyncRev, getCloudSyncRev);
   const bootLoading = isPublicLoading();
   const boardLoading = isLeaderboardLoading();
-  const feedLoading = isFeedPageLoading();
   const feedTotal = getFeedTotal();
   void cloudRev;
   const profile = useMemo(() => social.profile(), [tick, lang, socialRev]);
-  const activities = useMemo(() => social.activities(), [tick, socialRev]);
-  // 页数跟服务端 total（ensure 发现到头会把 total 收回本地实有条数，避免空页）
-  const feedPages = Math.max(1, Math.ceil(Math.max(feedTotal, activities.length) / FEED_PAGE));
+  // 页数完全跟服务端 total
+  const feedPages = Math.max(1, Math.ceil(Math.max(0, feedTotal) / FEED_PAGE));
+  const safeFeedPage = Math.min(Math.max(1, feedPage), feedPages);
+  const cachedPage = getCachedFeedPage(safeFeedPage);
+  const pageFetching = isFeedPageLoading(safeFeedPage);
+  // 当前页：API 按页缓存 + social 里的点赞态
   const feed = useMemo(() => {
-    const page = Math.min(Math.max(1, feedPage), feedPages);
-    const start = (page - 1) * FEED_PAGE;
-    return activities.slice(start, start + FEED_PAGE);
-  }, [activities, feedPage, feedPages]);
-  // 翻到尚未续拉完的页：先转圈，别亮空列表
-  const feedPagePending = feed.length === 0 && feedPage > 1 && (feedLoading || bootLoading || activities.length < feedPage * FEED_PAGE);
+    if (!cachedPage) return [];
+    const liked = social.activities();
+    const byId = new Map(liked.map((a) => [a.id, a]));
+    return cachedPage.map((a) => {
+      const local = byId.get(a.id);
+      return local
+        ? { ...a, likes: local.likes, liked: local.liked }
+        : { ...a, likes: (a as { likes?: number }).likes ?? 0, liked: false };
+    });
+  }, [cachedPage, tick, socialRev, cloudRev]);
+  // 本页还没拿到 API 结果时转圈
+  const feedPagePending = cachedPage === undefined && (pageFetching || bootLoading);
   // 热门 / 排行：优先读库缓存；找不到/已消失的宠直接丢掉
   const hot = useMemo(() => {
     const cloud = getCachedLeaderboard('heat');
@@ -89,7 +97,7 @@ export function Plaza() {
     });
   }, [tick, socialRev]);
   const top = ranks[0]?.score || 1;
-  const showFeedSkeleton = (bootLoading || (feedLoading && feed.length === 0)) && activities.length === 0;
+  const showFeedSkeleton = feedPagePending && safeFeedPage === 1 && !cachedPage;
   const showHotSkeleton = (bootLoading || boardLoading) && hot.length === 0;
   const showRankSkeleton = (bootLoading || boardLoading) && ranks.length === 0;
 
@@ -97,10 +105,11 @@ export function Plaza() {
     if (tab === 'hot' || tab === 'rank') void cloudSync.refreshLeaderboards();
   }, [tab, tick, socialRev]);
 
+  // 翻页：直接打后端 offset/limit
   useEffect(() => {
     if (tab !== 'feed') return;
-    void cloudSync.ensureFeedThrough(feedPage, FEED_PAGE);
-  }, [tab, feedPage, cloudRev]);
+    void cloudSync.loadFeedPage(safeFeedPage, FEED_PAGE);
+  }, [tab, safeFeedPage]);
 
   // 侧栏邻居 /「更多邻居」混入其他玩家的链上芯喵
   useEffect(() => {
@@ -176,50 +185,52 @@ export function Plaza() {
 
           {tab === 'feed' && (
             <Panel className="mt-4" bodyClass="p-0">
-              {showFeedSkeleton ? (
-                <DataLoading label={t('加载广场动态…', 'Loading plaza feed…')}>
-                  <FeedSkeleton rows={6} />
-                </DataLoading>
-              ) : activities.length === 0 ? (
+              {showFeedSkeleton || feedPagePending ? (
+                <>
+                  <DataLoading label={t('加载广场动态…', 'Loading plaza feed…')}>
+                    <FeedSkeleton rows={6} />
+                  </DataLoading>
+                  <PaginationBar
+                    page={safeFeedPage}
+                    pages={feedPages}
+                    onChange={setFeedPage}
+                    label={t('动态分页', 'Feed pagination')}
+                  />
+                </>
+              ) : feedTotal === 0 ? (
                 <p className="p-10 text-center text-sm text-mute">{t('还没有动态，去孵化或摸摸邻居吧。', 'Nothing here yet. Hatch a kitty or go pat a neighbor.')}</p>
               ) : (
                 <>
-                  {feedPagePending ? (
-                    <DataLoading label={t('加载广场动态…', 'Loading plaza feed…')}>
-                      <FeedSkeleton rows={6} />
-                    </DataLoading>
-                  ) : (
-                    <div className="divide-y divide-line/70">
-                      {feed.length === 0 ? (
-                        <p className="p-10 text-center text-sm text-mute">
-                          {t('这一页没有动态了。', 'No more feed items on this page.')}
-                        </p>
-                      ) : feed.map((a) => {
-                        const I = ACT_ICON[a.kind] ?? Sparkles;
-                        return (
-                          <div key={a.id} className="flex min-h-[4.75rem] items-center gap-2 pr-4 transition hover:bg-panel-2/50">
-                            <button type="button" onClick={() => a.petKey && go(`/pet/${routeIdOf(a.petKey)}`)}
-                              className="flex min-w-0 flex-1 items-start gap-3 py-4 pl-5 text-left">
-                              <span className={cn('mt-0.5 grid size-9 shrink-0 place-items-center rounded-xl', actTone(a.kind))}>
-                                <I className="size-4" />
-                              </span>
-                              <span className="min-w-0 flex-1">
-                                <span className="block text-sm text-pretty text-ink">{txt(a.text)}</span>
-                                <span className="mt-1 block text-xs text-faint">{txt(a.actor)} · {timeAgo(a.at)}</span>
-                              </span>
-                            </button>
-                            <button type="button" onClick={() => like(a.id)} aria-pressed={a.liked} aria-label={t('击掌', 'High five')}
-                              className={cn('flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3 font-mono text-xs transition active:scale-95', a.liked ? 'bg-copper/10 text-copper-dim ring-1 ring-copper/40' : 'text-faint ring-1 ring-line hover:text-copper-dim hover:ring-copper/40')}>
-                              <ThumbsUp className={cn('size-3.5', a.liked && 'fill-copper/30')} />
-                              {a.likes > 0 ? a.likes : t('击掌', 'High five')}
-                            </button>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
+                  <div className="divide-y divide-line/70">
+                    {feed.length === 0 ? (
+                      <p className="p-10 text-center text-sm text-mute">
+                        {t('这一页没有动态了。', 'No more feed items on this page.')}
+                      </p>
+                    ) : feed.map((a) => {
+                      const I = ACT_ICON[a.kind] ?? Sparkles;
+                      return (
+                        <div key={a.id} className="flex min-h-[4.75rem] items-center gap-2 pr-4 transition hover:bg-panel-2/50">
+                          <button type="button" onClick={() => a.petKey && go(`/pet/${routeIdOf(a.petKey)}`)}
+                            className="flex min-w-0 flex-1 items-start gap-3 py-4 pl-5 text-left">
+                            <span className={cn('mt-0.5 grid size-9 shrink-0 place-items-center rounded-xl', actTone(a.kind))}>
+                              <I className="size-4" />
+                            </span>
+                            <span className="min-w-0 flex-1">
+                              <span className="block text-sm text-pretty text-ink">{txt(a.text)}</span>
+                              <span className="mt-1 block text-xs text-faint">{txt(a.actor)} · {timeAgo(a.at)}</span>
+                            </span>
+                          </button>
+                          <button type="button" onClick={() => like(a.id)} aria-pressed={a.liked} aria-label={t('击掌', 'High five')}
+                            className={cn('flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3 font-mono text-xs transition active:scale-95', a.liked ? 'bg-copper/10 text-copper-dim ring-1 ring-copper/40' : 'text-faint ring-1 ring-line hover:text-copper-dim hover:ring-copper/40')}>
+                            <ThumbsUp className={cn('size-3.5', a.liked && 'fill-copper/30')} />
+                            {a.likes > 0 ? a.likes : t('击掌', 'High five')}
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
                   <PaginationBar
-                    page={feedPage}
+                    page={safeFeedPage}
                     pages={feedPages}
                     onChange={setFeedPage}
                     label={t('动态分页', 'Feed pagination')}
