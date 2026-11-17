@@ -234,7 +234,7 @@ export function Home() {
   const doQuest = (id: QuestId) => {
     if (id === 'checkin') return checkin();
     if (id === 'battle') return go('/train');
-    if (id === 'visit') return go('/plaza');
+    if (id === 'visit') return go('/neighbors');
     const first = pets[0];
     if (first) return go(`/pet/${first.id}`);
     document.getElementById(NAME_INPUT_ID)?.focus();
