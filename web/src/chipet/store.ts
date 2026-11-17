@@ -50,6 +50,8 @@ function load(): LocalPet[] {
 
 function save(pets: LocalPet[]) {
   localStorage.setItem(KEY, JSON.stringify(pets.map((p) => ({ ...p, circuitId: p.circuitId.toString() }))));
+  // 仅本地孵化宠上云；链上宠仍走 petArchive
+  void import('./cloudSync.ts').then(({ cloudSync }) => cloudSync.schedulePetsPush());
 }
 
 function rollRarity(): Rarity {
@@ -91,6 +93,69 @@ export const localChipet = {
   },
   get(id: number) {
     return load().find((p) => p.id === id);
+  },
+  /** 仅导出本地 MOCK 宠给云端（不含链上缓存）。 */
+  exportLocalForCloud() {
+    return load()
+      .filter((p) => !isChainPet(p))
+      .map((p) => ({
+        id: p.id,
+        name: p.name,
+        cpu: p.cpu,
+        circuitId: p.circuitId.toString(),
+        rarity: p.rarity,
+        energy: p.energy,
+        mood: p.mood,
+        intimacy: p.intimacy,
+        level: p.level,
+        xp: p.xp,
+        wins: p.wins,
+        losses: p.losses,
+        lastFeed: p.lastFeed,
+        lastPlay: p.lastPlay,
+        hatchedAt: p.hatchedAt,
+      }));
+  },
+  /** 用云端本地宠覆盖；保留链上缓存宠。 */
+  applyCloudLocal(remote: {
+    id: number;
+    name: string;
+    cpu: string;
+    circuitId: string;
+    rarity: number;
+    energy: number;
+    mood: number;
+    intimacy: number;
+    level: number;
+    xp?: number;
+    wins?: number;
+    losses?: number;
+    lastFeed: number;
+    lastPlay: number;
+    hatchedAt: number;
+  }[]) {
+    const chain = load().filter((p) => isChainPet(p));
+    const locals: LocalPet[] = remote.map((p) => ({
+      id: p.id,
+      name: p.name,
+      cpu: p.cpu as Address,
+      circuitId: BigInt(p.circuitId || '0'),
+      rarity: (Math.max(0, Math.min(2, Number(p.rarity) || 0)) as Rarity),
+      energy: Math.max(0, Math.min(100, Number(p.energy) || 0)),
+      mood: Math.max(0, Math.min(100, Number(p.mood) || 0)),
+      intimacy: Math.max(0, Number(p.intimacy) || 0),
+      level: Math.max(1, Number(p.level) || 1),
+      xp: Math.max(0, Number(p.xp) || 0),
+      wins: Math.max(0, Number(p.wins) || 0),
+      losses: Math.max(0, Number(p.losses) || 0),
+      lastFeed: Number(p.lastFeed) || 0,
+      lastPlay: Number(p.lastPlay) || 0,
+      hatchedAt: Number(p.hatchedAt) || Date.now(),
+    }));
+    // 直接写盘，避免再触发 schedulePetsPush
+    localStorage.setItem(KEY, JSON.stringify(
+      [...chain, ...locals].map((p) => ({ ...p, circuitId: p.circuitId.toString() })),
+    ));
   },
   hatch(name: string, opts?: { guarantee?: 'fancy' }): LocalPet {
     const pets = load();

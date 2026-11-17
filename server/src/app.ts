@@ -18,6 +18,12 @@ import { countWalletUsers, overlayRegisteredStats, registerWallet } from './wall
 import { overlayRechargeStats, recordRecharge } from './rechargeEvents.ts';
 import { countArchivedPets, listArchivedPets, listRivalPets } from './petArchive.ts';
 import { syncChipetPetsFully } from './petSync.ts';
+import {
+  bumpPetAgg, getPetAgg, getWalletProfile, insertActivity, insertNote,
+  listFeed, listNotes, putWalletProfile, toggleLike,
+} from './chipetSocial.ts';
+import { getWalletBem, putWalletBem } from './chipetBem.ts';
+import { getWalletPets, putWalletPets, type ChipetLocalPetDto } from './chipetWalletPets.ts';
 
 export interface AppDeps {
   ctx?: (chainId?: number) => ChainCtx;
@@ -61,7 +67,7 @@ export function createApp(deps: AppDeps = {}) {
     origin: corsOrigin?.length ? corsOrigin : (origin) => origin || '*',
     credentials: true,
     allowHeaders: ['Content-Type', 'Authorization'],
-    allowMethods: ['GET', 'POST', 'OPTIONS'],
+    allowMethods: ['GET', 'POST', 'PUT', 'OPTIONS'],
   }));
 
   app.onError((err, c) => {
@@ -178,6 +184,223 @@ export function createApp(deps: AppDeps = {}) {
       return json(c, { ok: true, isNew: r.isNew, ...overlay });
     } catch (e) {
       throw new HttpError(400, e instanceof Error ? e.message : 'invalid recharge');
+    }
+  });
+
+  // ---------------------------------------------------------------- Chipet 广场 / 钱包进度同步（公开；声明式 address）
+
+  app.get('/api/chipet/feed', (c) => {
+    const limit = Number(c.req.query('limit') ?? 40);
+    const beforeRaw = c.req.query('before');
+    const before = beforeRaw != null && beforeRaw !== '' ? Number(beforeRaw) : undefined;
+    const feed = listFeed({
+      limit: Number.isFinite(limit) ? limit : 40,
+      before: before != null && Number.isFinite(before) ? before : undefined,
+    });
+    return json(c, { items: feed.items, likes: feed.likes });
+  });
+
+  app.get('/api/chipet/notes', (c) => {
+    const petKey = (c.req.query('petKey') ?? '').trim();
+    need(petKey, 'petKey');
+    const limit = Number(c.req.query('limit') ?? 20);
+    return json(c, { items: listNotes(petKey, Number.isFinite(limit) ? limit : 20) });
+  });
+
+  app.post('/api/chipet/notes', async (c) => {
+    const b = await body<{
+      address?: string;
+      petKey?: string;
+      from?: unknown;
+      text?: unknown;
+      id?: string;
+      at?: number;
+    }>(c);
+    need(b.address, 'address');
+    need(b.petKey, 'petKey');
+    need(b.text, 'text');
+    try {
+      const note = insertNote({
+        id: b.id ? String(b.id) : undefined,
+        petKey: String(b.petKey),
+        from: (b.from ?? '') as string | { zh: string; en: string },
+        text: b.text as string | { zh: string; en: string },
+        at: b.at != null ? Number(b.at) : undefined,
+        wallet: String(b.address),
+      });
+      return json(c, { ok: true, note });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'invalid note';
+      if (msg.includes('rate') || msg.includes('cooldown')) throw new HttpError(429, msg);
+      throw new HttpError(400, msg);
+    }
+  });
+
+  app.post('/api/chipet/activities', async (c) => {
+    const b = await body<{
+      address?: string;
+      id?: string;
+      at?: number;
+      kind?: string;
+      actor?: unknown;
+      petKey?: string;
+      petName?: string;
+      text?: unknown;
+    }>(c);
+    need(b.kind, 'kind');
+    need(b.text, 'text');
+    try {
+      const item = insertActivity({
+        id: b.id ? String(b.id) : undefined,
+        at: b.at != null ? Number(b.at) : undefined,
+        kind: String(b.kind),
+        actor: (b.actor ?? '') as string | { zh: string; en: string },
+        petKey: b.petKey ? String(b.petKey) : '',
+        petName: b.petName ? String(b.petName) : '',
+        text: b.text as string | { zh: string; en: string },
+        wallet: b.address ? String(b.address) : '',
+      });
+      return json(c, { ok: true, item });
+    } catch (e) {
+      throw new HttpError(400, e instanceof Error ? e.message : 'invalid activity');
+    }
+  });
+
+  app.post('/api/chipet/like', async (c) => {
+    const b = await body<{ address?: string; activityId?: string }>(c);
+    need(b.address, 'address');
+    need(b.activityId, 'activityId');
+    try {
+      const r = toggleLike(String(b.activityId), String(b.address));
+      return json(c, { ok: true, ...r });
+    } catch (e) {
+      throw new HttpError(400, e instanceof Error ? e.message : 'invalid like');
+    }
+  });
+
+  app.get('/api/chipet/pet-agg', (c) => {
+    const petKey = (c.req.query('petKey') ?? '').trim();
+    need(petKey, 'petKey');
+    return json(c, getPetAgg(petKey));
+  });
+
+  app.post('/api/chipet/pet-agg', async (c) => {
+    const b = await body<{ petKey?: string; field?: 'pats' | 'visits'; delta?: number }>(c);
+    need(b.petKey, 'petKey');
+    need(b.field, 'field');
+    if (b.field !== 'pats' && b.field !== 'visits') throw new HttpError(400, 'field must be pats or visits');
+    try {
+      const r = bumpPetAgg(String(b.petKey), b.field, b.delta != null ? Number(b.delta) : 1);
+      return json(c, { ok: true, ...r });
+    } catch (e) {
+      throw new HttpError(400, e instanceof Error ? e.message : 'invalid pet-agg');
+    }
+  });
+
+  app.get('/api/chipet/profile', (c) => {
+    const address = (c.req.query('address') ?? '').trim();
+    need(address, 'address');
+    try {
+      return json(c, getWalletProfile(address));
+    } catch (e) {
+      throw new HttpError(400, e instanceof Error ? e.message : 'invalid address');
+    }
+  });
+
+  app.put('/api/chipet/profile', async (c) => {
+    const b = await body<{
+      address?: string;
+      displayName?: string;
+      nameCustomized?: boolean;
+      friendCode?: string;
+      checkinDay?: string;
+      streak?: number;
+      fish?: number;
+      quest?: { day: string; n: Record<string, number>; claimed: Record<string, boolean> };
+      myPatsToday?: Record<string, string>;
+      giftsToday?: Record<string, string>;
+      wildDay?: Record<string, string>;
+      bonds?: string[];
+      liked?: Record<string, boolean>;
+      bubbles?: Record<string, string | { zh: string; en: string }>;
+    }>(c);
+    need(b.address, 'address');
+    try {
+      const profile = putWalletProfile({
+        address: String(b.address),
+        displayName: b.displayName,
+        nameCustomized: b.nameCustomized,
+        friendCode: b.friendCode,
+        checkinDay: b.checkinDay,
+        streak: b.streak,
+        fish: b.fish,
+        quest: b.quest,
+        myPatsToday: b.myPatsToday,
+        giftsToday: b.giftsToday,
+        wildDay: b.wildDay,
+        bonds: b.bonds,
+        liked: b.liked,
+        bubbles: b.bubbles,
+      });
+      return json(c, { ok: true, profile });
+    } catch (e) {
+      throw new HttpError(400, e instanceof Error ? e.message : 'invalid profile');
+    }
+  });
+
+  app.get('/api/chipet/bem', (c) => {
+    const address = (c.req.query('address') ?? '').trim();
+    need(address, 'address');
+    try {
+      return json(c, getWalletBem(address));
+    } catch (e) {
+      throw new HttpError(400, e instanceof Error ? e.message : 'invalid address');
+    }
+  });
+
+  app.put('/api/chipet/bem', async (c) => {
+    const b = await body<{
+      address?: string;
+      demoBal?: number;
+      bondSlots?: number;
+      eggCredits?: number;
+      faucetDay?: string;
+      log?: { at: number; sku: string; price: number; via: 'demo' | 'chain'; note?: string }[];
+    }>(c);
+    need(b.address, 'address');
+    try {
+      const bem = putWalletBem({
+        address: String(b.address),
+        demoBal: b.demoBal,
+        bondSlots: b.bondSlots,
+        eggCredits: b.eggCredits,
+        faucetDay: b.faucetDay,
+        log: b.log,
+      });
+      return json(c, { ok: true, bem });
+    } catch (e) {
+      throw new HttpError(400, e instanceof Error ? e.message : 'invalid bem');
+    }
+  });
+
+  app.get('/api/chipet/local-pets', (c) => {
+    const address = (c.req.query('address') ?? '').trim();
+    need(address, 'address');
+    try {
+      return json(c, getWalletPets(address));
+    } catch (e) {
+      throw new HttpError(400, e instanceof Error ? e.message : 'invalid address');
+    }
+  });
+
+  app.put('/api/chipet/local-pets', async (c) => {
+    const b = await body<{ address?: string; pets?: ChipetLocalPetDto[] }>(c);
+    need(b.address, 'address');
+    try {
+      const pets = putWalletPets(String(b.address), Array.isArray(b.pets) ? b.pets : []);
+      return json(c, { ok: true, ...pets });
+    } catch (e) {
+      throw new HttpError(400, e instanceof Error ? e.message : 'invalid local-pets');
     }
   });
 

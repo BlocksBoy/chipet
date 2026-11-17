@@ -564,6 +564,10 @@ function save(s: SocialState) {
   localStorage.setItem(KEY, JSON.stringify(s));
   socialRev += 1;
   socialSubs.forEach((fn) => fn());
+  // 延迟推送，避免与 cloudSync 循环依赖
+  if (s.boundWallet) {
+    void import('./cloudSync.ts').then(({ cloudSync }) => cloudSync.scheduleProfilePush());
+  }
 }
 
 export function subscribeSocial(fn: () => void) {
@@ -580,9 +584,12 @@ function me(s: SocialState): Text {
   return s.displayName || pickRandomName();
 }
 
-function pushAct(s: SocialState, act: Omit<Activity, 'id' | 'at'>) {
-  s.activities.unshift({ ...act, id: `a${Date.now()}${Math.random()}`, at: Date.now() });
+function pushAct(s: SocialState, act: Omit<Activity, 'id' | 'at'>): Activity {
+  const full: Activity = { ...act, id: `a${Date.now()}${Math.random()}`, at: Date.now() };
+  s.activities.unshift(full);
   s.activities = s.activities.slice(0, 40);
+  void import('./cloudSync.ts').then(({ cloudSync }) => cloudSync.pushActivity(full));
+  return full;
 }
 
 /** 今日任务进度 +1（跨天自动清零）。 */
@@ -809,6 +816,7 @@ export const social = {
     const s = load();
     s.visits[key] = (s.visits[key] ?? 0) + 1;
     save(s);
+    void import('./cloudSync.ts').then(({ cloudSync }) => cloudSync.pushPetAgg(key, 'visits', 1));
   },
   canPat(key: string) {
     return load().myPatsToday[key] !== DAY();
@@ -825,6 +833,7 @@ export const social = {
     if (pet.mine) localChipet.cheer(pet.id, 6, 1);
     else bump(s, 'visit');
     save(s);
+    void import('./cloudSync.ts').then(({ cloudSync }) => cloudSync.pushPetAgg(key, 'pats', 1));
     return s.pats[key];
   },
   canGift(key: string) {
@@ -845,6 +854,7 @@ export const social = {
     pushAct(s, { kind: 'gift', actor: me(s), petKey: key, petName: pet.name, text: both(`给「${who.zh}」投喂了小鱼干`, `Fed ${who.en} a fish treat`) });
     if (!pet.mine) visitBack(s, pet, pick(THANKS));
     save(s);
+    void import('./cloudSync.ts').then(({ cloudSync }) => cloudSync.pushPetAgg(key, 'pats', 2));
     return s.fish;
   },
   notes(key: string) {
@@ -865,6 +875,8 @@ export const social = {
     const who = namesOf(pet);
     pushAct(s, { kind: 'note', actor: me(s), petKey: key, petName: pet.name, text: both(`在「${who.zh}」家留言：${t}`, `Left a note for ${who.en}: ${t}`) });
     save(s);
+    void import('./cloudSync.ts').then(({ cloudSync }) =>
+      cloudSync.pushNote({ id: note.id, petKey: key, from: note.from, text: note.text, at: note.at }));
     return note;
   },
   /** line 可由 AI 生成；缺省回落本地台词池。 */
@@ -895,6 +907,7 @@ export const social = {
     s.liked[id] = on;
     s.likes[id] = Math.max(0, (s.likes[id] ?? 0) + (on ? 1 : -1));
     save(s);
+    void import('./cloudSync.ts').then(({ cloudSync }) => cloudSync.pushLike(id));
     return on;
   },
   announceHatch(pet: LocalPet) {
@@ -1121,6 +1134,105 @@ export const social = {
       wins: Math.max(0, Math.floor(data.w ?? 0)),
       mine: false,
     };
+  },
+
+  // ── 云端同步钩子（cloudSync 调用；不改页面 API） ─────────
+
+  /** 用服务端 feed 覆盖本地动态与赞数（保留个人 liked）。 */
+  applyCloudFeed(items: Activity[], likes: Record<string, number>) {
+    const s = load();
+    if (!items.length) return;
+    const byId = new Map(s.activities.map((a) => [a.id, a]));
+    for (const a of items) byId.set(a.id, a);
+    s.activities = [...byId.values()].sort((a, b) => b.at - a.at).slice(0, 60);
+    s.likes = { ...s.likes, ...likes };
+    // 直接写盘，避免再触发 scheduleProfilePush 循环刷
+    localStorage.setItem(KEY, JSON.stringify(s));
+    socialRev += 1;
+    socialSubs.forEach((fn) => fn());
+  },
+
+  applyCloudNotes(petKey: string, notes: GuestNote[]) {
+    const s = load();
+    s.notes[petKey] = notes.slice(0, 20);
+    localStorage.setItem(KEY, JSON.stringify(s));
+    socialRev += 1;
+    socialSubs.forEach((fn) => fn());
+  },
+
+  applyCloudProfile(p: {
+    displayName: string;
+    nameCustomized: boolean;
+    friendCode: string;
+    checkinDay: string;
+    streak: number;
+    fish: number;
+    quest: SocialState['quest'];
+    myPatsToday: Record<string, string>;
+    giftsToday: Record<string, string>;
+    wildDay: Record<string, string>;
+    bonds: string[];
+    liked: Record<string, boolean>;
+    bubbles: Record<string, Text>;
+  }) {
+    const s = load();
+    if (p.displayName) {
+      s.displayName = p.displayName.slice(0, 16);
+      s.nameCustomized = Boolean(p.nameCustomized);
+    }
+    if (p.friendCode) s.friendCode = p.friendCode;
+    s.checkinDay = p.checkinDay ?? '';
+    s.streak = Number(p.streak) || 0;
+    s.fish = Math.max(0, Number(p.fish) || 0);
+    s.quest = normalizeQuest(p.quest);
+    s.myPatsToday = { ...(p.myPatsToday ?? {}) };
+    s.giftsToday = { ...(p.giftsToday ?? {}) };
+    s.wildDay = { ...(p.wildDay ?? {}) };
+    s.bonds = Array.isArray(p.bonds) ? p.bonds : [];
+    s.liked = { ...(p.liked ?? {}) };
+    s.bubbles = { ...(p.bubbles ?? {}) };
+    if (s.boundWallet) s.walletIdentities[s.boundWallet] = snapshotWallet(s);
+    localStorage.setItem(KEY, JSON.stringify(s));
+    socialRev += 1;
+    socialSubs.forEach((fn) => fn());
+  },
+
+  exportProfileForCloud() {
+    const s = load();
+    if (!s.boundWallet) return null;
+    return {
+      displayName: s.displayName,
+      nameCustomized: s.nameCustomized,
+      friendCode: s.friendCode,
+      checkinDay: s.checkinDay,
+      streak: s.streak,
+      fish: s.fish,
+      quest: normalizeQuest(s.quest),
+      myPatsToday: s.myPatsToday,
+      giftsToday: s.giftsToday,
+      wildDay: s.wildDay,
+      bonds: s.bonds,
+      liked: s.liked,
+      bubbles: s.bubbles,
+    };
+  },
+
+  applyCloudLikeResult(id: string, liked: boolean, likes: number) {
+    const s = load();
+    s.liked[id] = liked;
+    s.likes[id] = likes;
+    localStorage.setItem(KEY, JSON.stringify(s));
+    socialRev += 1;
+    socialSubs.forEach((fn) => fn());
+  },
+
+  applyCloudPetAgg(petKey: string, pats: number, visits: number) {
+    const s = load();
+    s.pats[petKey] = pats;
+    s.visits[petKey] = visits;
+    localStorage.setItem(KEY, JSON.stringify(s));
+    socialRev += 1;
+    socialSubs.forEach((fn) => fn());
   },
 };
 

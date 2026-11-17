@@ -5,6 +5,7 @@ import { getWalletClient } from 'wagmi/actions';
 import { useConnectModal } from '@rainbow-me/rainbowkit';
 import { CHAINS, ChainLibrary, DEPLOYMENTS, type Deployment, type Signer } from '@tapearena/chain';
 import { registerWalletUser } from './api.ts';
+import { cloudSync } from './chipet/cloudSync.ts';
 import { social } from './chipet/social.ts';
 import { errMsg } from './format.ts';
 import { tr } from './i18n.ts';
@@ -84,15 +85,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
     else setWalletGuide(true);
   }, [connectors.length, openConnectModal]);
 
+  // 启动拉公共广场（未连钱包也能看）
+  useEffect(() => {
+    void cloudSync.hydratePublic();
+  }, []);
+
   // 连上钱包 → 后端登记独立地址；新地址计入运营看板「注册人数」
   useEffect(() => {
     if (!account) return;
     void registerWalletUser(account, walletChainId ?? chainId);
   }, [account, walletChainId, chainId]);
 
-  // 切钱包时同步主人昵称：未自定义则重抽；已自定义按钱包记住
+  // 切钱包时同步主人昵称：未自定义则重抽；已自定义按钱包记住；再 hydrate 云端进度
   useEffect(() => {
     social.bindAccount(account);
+    if (account) void cloudSync.hydrateWallet(account);
   }, [account]);
 
   const signer = useCallback(async (): Promise<Signer> => {

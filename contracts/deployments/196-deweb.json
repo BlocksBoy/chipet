@@ -1,0 +1,19 @@
+{
+  "chainId": 196,
+  "cpu": "0x550992f2dC407BfFDd82c516C0984dc5e00B37d3",
+  "cpuName": "Chipet Heart",
+  "circuitId": 1,
+  "name": "1.422.tape",
+  "owner": "0xBd435f285916F437A2971D62233F08d1f1434e00",
+  "container": "0xe1c8421F46038e6d56E1C7C2DFAfe8a05A7a8786",
+  "opened": true,
+  "live": true,
+  "fallback": "index.html",
+  "files": 172,
+  "site": "tape://1.422.tape",
+  "gatewayCandidates": [
+    "https://1-422.tapekit.org/",
+    "https://1-2-422.tapekit.org/"
+  ],
+  "publishedAt": "2026-11-17T07:08:00.000Z"
+}

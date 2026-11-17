@@ -103,6 +103,7 @@ function load(): BemState {
 
 function save(s: BemState) {
   localStorage.setItem(KEY, JSON.stringify({ ...s, log: s.log.slice(0, 40) }));
+  void import('./cloudSync.ts').then(({ cloudSync }) => cloudSync.scheduleBemPush());
 }
 
 export function bemAmount(units: number, decimals = BEM_DECIMALS): bigint {
@@ -121,6 +122,36 @@ export const bem = {
 
   state(): BemState {
     return load();
+  },
+  /** 导出给云端；hasLocal=是否有过演示交互（余额/位/蛋/日志）。 */
+  exportForCloud() {
+    const s = load();
+    const hasLocal = s.demoBal > 0 || s.bondSlots > BOND_SLOTS_DEFAULT || s.eggCredits > 0 || s.faucetDay !== '' || s.log.length > 0;
+    return {
+      hasLocal,
+      state: {
+        demoBal: s.demoBal,
+        bondSlots: s.bondSlots,
+        eggCredits: s.eggCredits,
+        faucetDay: s.faucetDay,
+        log: s.log,
+      },
+    };
+  },
+  applyCloud(p: {
+    demoBal: number;
+    bondSlots: number;
+    eggCredits: number;
+    faucetDay: string;
+    log: BemState['log'];
+  }) {
+    localStorage.setItem(KEY, JSON.stringify({
+      demoBal: Math.max(0, Number(p.demoBal) || 0),
+      bondSlots: Math.min(BOND_SLOTS_MAX, Math.max(BOND_SLOTS_DEFAULT, Number(p.bondSlots) || BOND_SLOTS_DEFAULT)),
+      eggCredits: Math.max(0, Number(p.eggCredits) || 0),
+      faucetDay: typeof p.faucetDay === 'string' ? p.faucetDay : '',
+      log: Array.isArray(p.log) ? p.log.slice(0, 40) : [],
+    }));
   },
   demoBal(): number {
     return load().demoBal;

@@ -72,6 +72,8 @@ export function PetPage({ id, share: shareToken }: { id?: number; share?: string
     social.recordVisit(key);
     setGameOpen(false);
     setTick((x) => x + 1);
+    void import('../chipet/cloudSync.ts').then(({ cloudSync }) =>
+      cloudSync.hydrateNotes(key).then(() => setTick((x) => x + 1)));
   }, [key]);
 
   /** 牵线预览用：我最新的那只芯喵，和这位邻居串成合体电路。 */

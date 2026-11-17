@@ -140,6 +140,194 @@ export async function fetchRivals(opts?: {
   }
 }
 
+// ---------------------------------------------------------------- Chipet 广场 / 钱包进度同步
+
+export type ChipetText = string | { zh: string; en: string };
+
+export interface ChipetActivityDto {
+  id: string;
+  at: number;
+  kind: string;
+  actor: ChipetText;
+  petKey: string;
+  petName: string;
+  text: ChipetText;
+  wallet?: string;
+  likes?: number;
+}
+
+export interface ChipetNoteDto {
+  id: string;
+  petKey: string;
+  from: ChipetText;
+  text: ChipetText;
+  at: number;
+  wallet?: string;
+}
+
+export interface ChipetProfileDto {
+  address: string;
+  displayName: string;
+  nameCustomized: boolean;
+  friendCode: string;
+  checkinDay: string;
+  streak: number;
+  fish: number;
+  quest: { day: string; n: Record<string, number>; claimed: Record<string, boolean> };
+  myPatsToday: Record<string, string>;
+  giftsToday: Record<string, string>;
+  wildDay: Record<string, string>;
+  bonds: string[];
+  liked: Record<string, boolean>;
+  bubbles: Record<string, ChipetText>;
+  updatedAt: number;
+  exists: boolean;
+}
+
+export interface ChipetBemDto {
+  address: string;
+  demoBal: number;
+  bondSlots: number;
+  eggCredits: number;
+  faucetDay: string;
+  log: { at: number; sku: string; price: number; via: 'demo' | 'chain'; note?: string }[];
+  updatedAt: number;
+  exists: boolean;
+}
+
+export interface ChipetLocalPetDto {
+  id: number;
+  name: string;
+  cpu: string;
+  circuitId: string;
+  rarity: number;
+  energy: number;
+  mood: number;
+  intimacy: number;
+  level: number;
+  xp?: number;
+  wins?: number;
+  losses?: number;
+  lastFeed: number;
+  lastPlay: number;
+  hatchedAt: number;
+}
+
+function apiReady(): boolean {
+  return !(DEWEB && !BASE);
+}
+
+async function apiGet<T>(path: string): Promise<T | null> {
+  if (!apiReady()) return null;
+  try {
+    const r = await fetch(`${BASE}${path}`);
+    if (!r.ok) return null;
+    return await r.json() as T;
+  } catch {
+    return null;
+  }
+}
+
+async function apiSend<T>(path: string, method: 'POST' | 'PUT', body: unknown): Promise<T | null> {
+  if (!apiReady()) return null;
+  try {
+    const r = await fetch(`${BASE}${path}`, {
+      method,
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!r.ok) return null;
+    return await r.json() as T;
+  } catch {
+    return null;
+  }
+}
+
+export async function fetchChipetFeed(opts?: { limit?: number; before?: number }): Promise<{
+  items: ChipetActivityDto[];
+  likes: Record<string, number>;
+} | null> {
+  const q = new URLSearchParams();
+  if (opts?.limit != null) q.set('limit', String(opts.limit));
+  if (opts?.before != null) q.set('before', String(opts.before));
+  const qs = q.toString();
+  return apiGet(`/api/chipet/feed${qs ? `?${qs}` : ''}`);
+}
+
+export async function fetchChipetNotes(petKey: string): Promise<ChipetNoteDto[] | null> {
+  const data = await apiGet<{ items?: ChipetNoteDto[] }>(`/api/chipet/notes?petKey=${encodeURIComponent(petKey)}`);
+  return data ? (Array.isArray(data.items) ? data.items : []) : null;
+}
+
+export async function postChipetNote(body: {
+  address: string;
+  petKey: string;
+  from: ChipetText;
+  text: ChipetText;
+  id?: string;
+  at?: number;
+}): Promise<ChipetNoteDto | null> {
+  const data = await apiSend<{ ok?: boolean; note?: ChipetNoteDto }>('/api/chipet/notes', 'POST', body);
+  return data?.ok && data.note ? data.note : null;
+}
+
+export async function postChipetActivity(body: {
+  address?: string;
+  id?: string;
+  at?: number;
+  kind: string;
+  actor: ChipetText;
+  petKey?: string;
+  petName?: string;
+  text: ChipetText;
+}): Promise<ChipetActivityDto | null> {
+  const data = await apiSend<{ ok?: boolean; item?: ChipetActivityDto }>('/api/chipet/activities', 'POST', body);
+  return data?.ok && data.item ? data.item : null;
+}
+
+export async function postChipetLike(address: string, activityId: string): Promise<{ liked: boolean; likes: number } | null> {
+  const data = await apiSend<{ ok?: boolean; liked?: boolean; likes?: number }>('/api/chipet/like', 'POST', { address, activityId });
+  if (!data?.ok) return null;
+  return { liked: Boolean(data.liked), likes: Number(data.likes) || 0 };
+}
+
+export async function postChipetPetAgg(petKey: string, field: 'pats' | 'visits', delta = 1): Promise<{ pats: number; visits: number } | null> {
+  const data = await apiSend<{ ok?: boolean; pats?: number; visits?: number }>('/api/chipet/pet-agg', 'POST', { petKey, field, delta });
+  if (!data?.ok) return null;
+  return { pats: Number(data.pats) || 0, visits: Number(data.visits) || 0 };
+}
+
+export async function fetchChipetProfile(address: string): Promise<ChipetProfileDto | null> {
+  return apiGet(`/api/chipet/profile?address=${encodeURIComponent(address)}`);
+}
+
+export async function putChipetProfile(body: Partial<ChipetProfileDto> & { address: string }): Promise<ChipetProfileDto | null> {
+  const data = await apiSend<{ ok?: boolean; profile?: ChipetProfileDto }>('/api/chipet/profile', 'PUT', body);
+  return data?.ok && data.profile ? data.profile : null;
+}
+
+export async function fetchChipetBem(address: string): Promise<ChipetBemDto | null> {
+  return apiGet(`/api/chipet/bem?address=${encodeURIComponent(address)}`);
+}
+
+export async function putChipetBem(body: Partial<ChipetBemDto> & { address: string }): Promise<ChipetBemDto | null> {
+  const data = await apiSend<{ ok?: boolean; bem?: ChipetBemDto }>('/api/chipet/bem', 'PUT', body);
+  return data?.ok && data.bem ? data.bem : null;
+}
+
+export async function fetchChipetLocalPets(address: string): Promise<{ pets: ChipetLocalPetDto[]; exists: boolean } | null> {
+  const data = await apiGet<{ pets?: ChipetLocalPetDto[]; exists?: boolean }>(
+    `/api/chipet/local-pets?address=${encodeURIComponent(address)}`,
+  );
+  if (!data) return null;
+  return { pets: Array.isArray(data.pets) ? data.pets : [], exists: Boolean(data.exists) };
+}
+
+export async function putChipetLocalPets(address: string, pets: ChipetLocalPetDto[]): Promise<ChipetLocalPetDto[] | null> {
+  const data = await apiSend<{ ok?: boolean; pets?: ChipetLocalPetDto[] }>('/api/chipet/local-pets', 'PUT', { address, pets });
+  return data?.ok && Array.isArray(data.pets) ? data.pets : null;
+}
+
 /** 芯宠说话：成功返回双语台词；失败抛错，由调用方回落本地台词池。 */
 export async function aiPetTalk(body: PetTalkBody, signal?: AbortSignal): Promise<{ zh: string; en: string }> {
   if (DEWEB && !BASE) throw new Error(tr('当前环境无 AI 后端', 'No AI backend in this build'));
