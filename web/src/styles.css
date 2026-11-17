@@ -92,10 +92,11 @@
   100% { transform: translateX(100%); }
 }
 
-/* Chipet 列表滚动条：细、圆角，硅绿轨道 + 铜色滑块 */
+/* Chipet 列表滚动条：细、圆角，跟主题硅绿一致 */
 .chip-scroll {
   scrollbar-width: thin;
-  scrollbar-color: color-mix(in srgb, var(--color-copper) 55%, transparent) color-mix(in srgb, var(--color-line) 70%, transparent);
+  scrollbar-color: color-mix(in srgb, var(--color-si) 70%, var(--color-line-2))
+    color-mix(in srgb, var(--color-panel-2) 85%, var(--color-line));
 }
 .chip-scroll::-webkit-scrollbar {
   width: 8px;
@@ -103,17 +104,21 @@
 }
 .chip-scroll::-webkit-scrollbar-track {
   margin: 6px 0;
-  background: color-mix(in srgb, var(--color-panel-2) 80%, transparent);
+  background: color-mix(in srgb, var(--color-panel-2) 75%, var(--color-line));
   border-radius: 999px;
 }
 .chip-scroll::-webkit-scrollbar-thumb {
-  background: linear-gradient(180deg, color-mix(in srgb, var(--color-copper) 70%, #fff), var(--color-copper-dim));
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--color-si) 55%, #fff),
+    var(--color-si-dim)
+  );
   border: 2px solid transparent;
   border-radius: 999px;
   background-clip: padding-box;
 }
 .chip-scroll::-webkit-scrollbar-thumb:hover {
-  background: linear-gradient(180deg, var(--color-copper-hi), var(--color-copper-dim));
+  background: linear-gradient(180deg, var(--color-si), var(--color-si-dim));
   border: 2px solid transparent;
   background-clip: padding-box;
 }

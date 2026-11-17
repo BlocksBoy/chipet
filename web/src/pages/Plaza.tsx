@@ -1,6 +1,5 @@
-import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { ArrowRight, Cable, CalendarCheck, Check, Fish, Flame, Hand, Pencil, Sparkles, Swords, ThumbsUp, Trophy, Users } from 'lucide-react';
-import { PaginationBar } from '../components/Pagination.tsx';
 import {
   DataLoading, FeedSkeleton, PetCardGridSkeleton, PlazaSidebarSkeleton, RankListSkeleton, StatBandSkeleton,
 } from '../components/Skeleton.tsx';
@@ -17,11 +16,13 @@ import {
   leaderboardItemToPet, subscribeCloudSync, subscribeLeaderboard,
 } from '../chipet/cloudSync.ts';
 import { hydrateChainRivals } from '../chipet/rivals.ts';
-import { getSocialRev, maxBonds, social, subscribeSocial } from '../chipet/social.ts';
+import { getSocialRev, maxBonds, social, subscribeSocial, type Activity } from '../chipet/social.ts';
 import { plural, txt, useLang, useT } from '../i18n.ts';
 
-/** 广场动态每页条数（与后端 offset/limit 对齐） */
+/** 广场动态每批条数（与后端 offset/limit 对齐） */
 const FEED_PAGE = 10;
+/** 可视区约 10 行高（与行 min-h-[4.75rem] 对齐） */
+const FEED_VIEW_CLASS = 'max-h-[47.5rem]';
 
 export function Plaza() {
   const t = useT();
@@ -32,7 +33,10 @@ export function Plaza() {
   const [name, setName] = useState(social.profile().displayName);
   const [editing, setEditing] = useState(false);
   const [tick, setTick] = useState(0);
-  const [feedPage, setFeedPage] = useState(1);
+  /** 已拼进列表的批次数（滚动触底 +1） */
+  const [feedLoadedPages, setFeedLoadedPages] = useState(1);
+  const feedScrollRef = useRef<HTMLDivElement>(null);
+  const feedSentinelRef = useRef<HTMLDivElement>(null);
   const socialRev = useSyncExternalStore(subscribeSocial, getSocialRev, getSocialRev);
   const boardRev = useSyncExternalStore(subscribeLeaderboard, getLeaderboardRev, getLeaderboardRev);
   const cloudRev = useSyncExternalStore(subscribeCloudSync, getCloudSyncRev, getCloudSyncRev);
@@ -41,25 +45,35 @@ export function Plaza() {
   const feedTotal = getFeedTotal();
   void cloudRev;
   const profile = useMemo(() => social.profile(), [tick, lang, socialRev]);
-  // 页数完全跟服务端 total
   const feedPages = Math.max(1, Math.ceil(Math.max(0, feedTotal) / FEED_PAGE));
-  const safeFeedPage = Math.min(Math.max(1, feedPage), feedPages);
-  const cachedPage = getCachedFeedPage(safeFeedPage);
-  const pageFetching = isFeedPageLoading(safeFeedPage);
-  // 当前页：API 按页缓存 + social 里的点赞态
+  const safeLoadedPages = Math.min(Math.max(1, feedLoadedPages), feedPages);
+  const firstPage = getCachedFeedPage(1);
+  const firstFetching = isFeedPageLoading(1);
+  // 累积 1..safeLoadedPages；点赞态跟 social
   const feed = useMemo(() => {
-    if (!cachedPage) return [];
-    const liked = social.activities();
+    type FeedRow = Activity & { likes: number; liked: boolean };
+    const liked = social.activities() as FeedRow[];
     const byId = new Map(liked.map((a) => [a.id, a]));
-    return cachedPage.map((a) => {
-      const local = byId.get(a.id);
-      return local
-        ? { ...a, likes: local.likes, liked: local.liked }
-        : { ...a, likes: (a as { likes?: number }).likes ?? 0, liked: false };
-    });
-  }, [cachedPage, tick, socialRev, cloudRev]);
-  // 本页还没拿到 API 结果时转圈
-  const feedPagePending = cachedPage === undefined && (pageFetching || bootLoading);
+    const out: FeedRow[] = [];
+    for (let p = 1; p <= safeLoadedPages; p++) {
+      const page = getCachedFeedPage(p);
+      if (!page) continue;
+      for (const a of page) {
+        const local = byId.get(a.id);
+        out.push(local
+          ? { ...a, likes: local.likes, liked: local.liked }
+          : { ...a, likes: (a as { likes?: number }).likes ?? 0, liked: false });
+      }
+    }
+    return out;
+  }, [safeLoadedPages, tick, socialRev, cloudRev]);
+  const feedInitialPending = firstPage === undefined && (firstFetching || bootLoading);
+  const nextFeedPage = safeLoadedPages + 1;
+  const feedLoadingMore = nextFeedPage <= feedPages && (
+    isFeedPageLoading(nextFeedPage)
+    || (getCachedFeedPage(safeLoadedPages) === undefined && isFeedPageLoading(safeLoadedPages))
+  );
+  const feedHasMore = feedTotal > 0 && safeLoadedPages < feedPages;
   // 热门 / 排行：优先读库缓存；找不到/已消失的宠直接丢掉
   const hot = useMemo(() => {
     const cloud = getCachedLeaderboard('heat');
@@ -97,7 +111,7 @@ export function Plaza() {
     });
   }, [tick, socialRev]);
   const top = ranks[0]?.score || 1;
-  const showFeedSkeleton = feedPagePending && safeFeedPage === 1 && !cachedPage;
+  const showFeedSkeleton = feedInitialPending && !firstPage;
   const showHotSkeleton = (bootLoading || boardLoading) && hot.length === 0;
   const showRankSkeleton = (bootLoading || boardLoading) && ranks.length === 0;
 
@@ -105,20 +119,42 @@ export function Plaza() {
     if (tab === 'hot' || tab === 'rank') void cloudSync.refreshLeaderboards();
   }, [tab, tick, socialRev]);
 
-  // 翻页：直接打后端 offset/limit
+  // 已打开的批次：按页打后端
   useEffect(() => {
     if (tab !== 'feed') return;
-    void cloudSync.loadFeedPage(safeFeedPage, FEED_PAGE);
-  }, [tab, safeFeedPage]);
+    for (let p = 1; p <= safeLoadedPages; p++) {
+      void cloudSync.loadFeedPage(p, FEED_PAGE);
+    }
+  }, [tab, safeLoadedPages]);
+
+  // 触底哨兵：滚动区固定约 10 行高，到底再拼下一批
+  useEffect(() => {
+    if (tab !== 'feed') return;
+    const root = feedScrollRef.current;
+    const sentinel = feedSentinelRef.current;
+    if (!root || !sentinel) return;
+    const io = new IntersectionObserver((entries) => {
+      if (!entries.some((e) => e.isIntersecting)) return;
+      setFeedLoadedPages((prev) => {
+        const capped = Math.min(Math.max(1, prev), feedPages);
+        if (capped >= feedPages) return capped;
+        if (getCachedFeedPage(capped) === undefined) return capped;
+        if (isFeedPageLoading(capped + 1)) return capped;
+        return capped + 1;
+      });
+    }, { root, rootMargin: '120px 0px', threshold: 0 });
+    io.observe(sentinel);
+    return () => io.disconnect();
+  }, [tab, feedPages, safeLoadedPages, feed.length, cloudRev]);
 
   // 侧栏邻居 /「更多邻居」混入其他玩家的链上芯喵
   useEffect(() => {
     void hydrateChainRivals({ exclude: account, limit: 48 });
   }, [account]);
 
-  useEffect(() => { setFeedPage(1); }, [tab]);
+  useEffect(() => { setFeedLoadedPages(1); }, [tab]);
   useEffect(() => {
-    setFeedPage((p) => Math.min(Math.max(1, p), feedPages));
+    setFeedLoadedPages((p) => Math.min(Math.max(1, p), feedPages));
   }, [feedPages]);
   // 切钱包后主人名可能变了；非编辑中时跟档
   useEffect(() => {
@@ -185,28 +221,19 @@ export function Plaza() {
 
           {tab === 'feed' && (
             <Panel className="mt-4" bodyClass="p-0">
-              {showFeedSkeleton || feedPagePending ? (
-                <>
-                  <DataLoading label={t('加载广场动态…', 'Loading plaza feed…')}>
-                    <FeedSkeleton rows={10} />
-                  </DataLoading>
-                  <PaginationBar
-                    page={safeFeedPage}
-                    pages={feedPages}
-                    onChange={setFeedPage}
-                    label={t('动态分页', 'Feed pagination')}
-                  />
-                </>
+              {showFeedSkeleton ? (
+                <DataLoading label={t('加载广场动态…', 'Loading plaza feed…')}>
+                  <FeedSkeleton rows={10} />
+                </DataLoading>
               ) : feedTotal === 0 ? (
                 <p className="p-10 text-center text-sm text-mute">{t('还没有动态，去孵化或摸摸邻居吧。', 'Nothing here yet. Hatch a kitty or go pat a neighbor.')}</p>
               ) : (
-                <>
+                <div
+                  ref={feedScrollRef}
+                  className={cn('chip-scroll overflow-y-auto overscroll-contain', FEED_VIEW_CLASS)}
+                >
                   <div className="divide-y divide-line/70">
-                    {feed.length === 0 ? (
-                      <p className="p-10 text-center text-sm text-mute">
-                        {t('这一页没有动态了。', 'No more feed items on this page.')}
-                      </p>
-                    ) : feed.map((a) => {
+                    {feed.map((a) => {
                       const I = ACT_ICON[a.kind] ?? Sparkles;
                       return (
                         <div key={a.id} className="flex min-h-[4.75rem] items-center gap-2 pr-4 transition hover:bg-panel-2/50">
@@ -229,13 +256,18 @@ export function Plaza() {
                       );
                     })}
                   </div>
-                  <PaginationBar
-                    page={safeFeedPage}
-                    pages={feedPages}
-                    onChange={setFeedPage}
-                    label={t('动态分页', 'Feed pagination')}
-                  />
-                </>
+                  <div ref={feedSentinelRef} className="h-px w-full" aria-hidden />
+                  {feedLoadingMore && (
+                    <p className="px-5 py-3 text-center text-xs text-mute">
+                      {t('加载更多动态…', 'Loading more…')}
+                    </p>
+                  )}
+                  {!feedHasMore && feed.length > 0 && !feedLoadingMore && (
+                    <p className="px-5 py-3 text-center text-xs text-faint">
+                      {t('已经到底了', 'You\'re all caught up')}
+                    </p>
+                  )}
+                </div>
               )}
             </Panel>
           )}
