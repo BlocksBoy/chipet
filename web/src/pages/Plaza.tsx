@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
-import { ArrowRight, Cable, CalendarCheck, Check, Fish, Flame, Hand, Loader2, Pencil, Sparkles, Swords, ThumbsUp, Trophy, Users } from 'lucide-react';
+import { ArrowRight, Cable, CalendarCheck, Check, Fish, Flame, Hand, Loader2, Pencil, RefreshCw, Sparkles, Swords, ThumbsUp, Trophy, Users } from 'lucide-react';
 import { fetchChipetFeed } from '../api.ts';
 import {
   DataLoading, FeedSkeleton, PetCardGridSkeleton, PlazaSidebarSkeleton, RankListSkeleton, StatBandSkeleton,
@@ -22,6 +22,8 @@ import { plural, txt, useLang, useT } from '../i18n.ts';
 
 /** 广场动态每批条数（与后端 offset/limit 对齐） */
 const FEED_PAGE = 20;
+/** 切回动态 Tab / 后台补新：距上次成功拉取不足此时长则不再打网络 */
+const FEED_HEAD_STALE_MS = 30_000;
 /** 可视区约 10 行高（与行 min-h-[4.75rem] 对齐） */
 const FEED_VIEW_CLASS = 'max-h-[47.5rem]';
 /** 自定义绿色拇指固定高度（px），故意比原生可视比拇指短 */
@@ -169,10 +171,13 @@ export function Plaza() {
     return request;
   }, []);
 
-  const loadFeedHead = useCallback(async () => {
+  /** replace：手动刷新整表对齐；默认 soft 合并，避免轮询裁掉已加载页 */
+  const loadFeedHead = useCallback(async (opts?: { replace?: boolean }) => {
     if (headPending.current || feedMoreLoadingRef.current) return;
     headPending.current = true;
     const hadItems = feedItemsRef.current.length > 0;
+    const replace = !!opts?.replace || !hadItems;
+    if (replace) setFeedHeadLoading(true);
     try {
       const r = await fetchChipetFeed({ limit: FEED_PAGE, offset: 0 });
       if (!r) return;
@@ -180,7 +185,7 @@ export function Plaza() {
       const likes = r.likes ?? {};
       const next = mergeLikeState(items, likes);
       setFeedTotal(Math.max(0, Number(r.total) || items.length));
-      if (hadItems) {
+      if (!replace && hadItems) {
         const existing = new Set(feedItemsRef.current.map(row => row.id));
         const added = next.filter(row => !existing.has(row.id)).length;
         if (added) {
@@ -195,17 +200,26 @@ export function Plaza() {
         if (prevTop > 0) feedScrollBoostRef.current = prevHeight;
       } else {
         nextOffset.current = next.length;
+        nextPage.current = null;
         setFeedItems(next);
+        lastScrollTop.current = 0;
+        if (feedScrollRef.current) feedScrollRef.current.scrollTop = 0;
       }
       if (items.length) social.applyCloudFeed(items, likes, false);
-      // 首屏回来立刻预取第 2 页，滚动时不卡在跨洋 RTT
+      // 首屏 / 整表刷新后立刻预取第 2 页，滚动时不卡在跨洋 RTT
       lastHeadAt.current = Date.now();
-      if (!hadItems && next.length < Number(r.total)) void requestPage(next.length);
+      if (replace && next.length < Number(r.total)) void requestPage(next.length);
     } finally {
       headPending.current = false;
       setFeedHeadLoading(false);
     }
   }, [requestPage]);
+
+  const refreshFeedManual = useCallback(() => {
+    // 手动刷新：打穿 30s 节流，整表重拉
+    lastHeadAt.current = 0;
+    void loadFeedHead({ replace: true });
+  }, [loadFeedHead]);
 
   /** 触底时复用同一页的预取请求 */
   const loadFeedMore = useCallback(async () => {
@@ -255,13 +269,13 @@ export function Plaza() {
     }
   }, [feedItems]);
 
-  // 返回动态时保留分页；过期后在后台补新帖
+  // 返回动态时保留分页；距上次拉取不足 30s 不重打网络
   useEffect(() => {
     if (tab !== 'feed') return;
-    if (Date.now() - lastHeadAt.current >= 8_000) void loadFeedHead();
+    if (Date.now() - lastHeadAt.current >= FEED_HEAD_STALE_MS) void loadFeedHead();
     const timer = window.setInterval(() => {
-      void loadFeedHead();
-    }, 8_000);
+      if (Date.now() - lastHeadAt.current >= FEED_HEAD_STALE_MS) void loadFeedHead();
+    }, FEED_HEAD_STALE_MS);
     return () => window.clearInterval(timer);
   }, [tab, loadFeedHead]);
 
@@ -382,7 +396,19 @@ export function Plaza() {
               ['rank', t('排行', 'Ranks'), Trophy],
             ]} />
             {tab === 'feed' && !showFeedSkeleton && feedTotal > 0 && (
-              <span className="ml-auto shrink-0 font-mono text-[11px] tabular-nums text-mute">
+              <span className="ml-auto inline-flex shrink-0 items-center gap-1.5 font-mono text-[11px] tabular-nums text-mute">
+                <button
+                  type="button"
+                  aria-label={t('刷新动态', 'Refresh feed')}
+                  disabled={feedHeadLoading || feedMoreLoading}
+                  onClick={refreshFeedManual}
+                  className={cn(
+                    'grid size-6 place-items-center rounded-lg text-faint transition',
+                    'hover:bg-panel-2 hover:text-copper-dim disabled:opacity-40',
+                  )}
+                >
+                  <RefreshCw className={cn('size-3.5', feedHeadLoading && 'animate-spin text-copper')} />
+                </button>
                 {t(`共 ${feedTotal} 条动态`, `${plural(feedTotal, 'post')} in total`)}
               </span>
             )}
