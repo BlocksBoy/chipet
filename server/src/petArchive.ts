@@ -7,6 +7,8 @@ export type ArchivedPet = {
   chainId: number;
   petId: number;
   owner: string;
+  /** chipet 档案昵称（有则优先展示，避免广场只显示 0x…） */
+  ownerName?: string;
   name: string;
   cpu: string;
   circuitId: string;
@@ -74,10 +76,12 @@ function ensureTable() {
 }
 
 function rowToPet(r: Record<string, unknown>): ArchivedPet {
+  const ownerName = r.owner_display_name != null ? String(r.owner_display_name).trim() : '';
   return {
     chainId: Number(r.chain_id),
     petId: Number(r.pet_id),
     owner: String(r.owner),
+    ownerName: ownerName || undefined,
     name: String(r.name),
     cpu: String(r.cpu),
     circuitId: String(r.circuit_id),
@@ -94,6 +98,29 @@ function rowToPet(r: Record<string, unknown>): ArchivedPet {
     firstSeen: Number(r.first_seen),
     updatedAt: Number(r.updated_at),
   };
+}
+
+/** 档案表可能尚未建；JOIN 用，缺表时忽略昵称 */
+function ensureWalletProfileTable() {
+  getAdminDb().exec(`
+    CREATE TABLE IF NOT EXISTS chipet_wallet_profiles (
+      address TEXT PRIMARY KEY,
+      display_name TEXT NOT NULL DEFAULT '',
+      name_customized INTEGER NOT NULL DEFAULT 0,
+      friend_code TEXT NOT NULL DEFAULT '',
+      checkin_day TEXT NOT NULL DEFAULT '',
+      streak INTEGER NOT NULL DEFAULT 0,
+      fish INTEGER NOT NULL DEFAULT 0,
+      quest_json TEXT NOT NULL DEFAULT '{}',
+      my_pats_today_json TEXT NOT NULL DEFAULT '{}',
+      gifts_today_json TEXT NOT NULL DEFAULT '{}',
+      wild_day_json TEXT NOT NULL DEFAULT '{}',
+      bonds_json TEXT NOT NULL DEFAULT '[]',
+      liked_json TEXT NOT NULL DEFAULT '{}',
+      bubbles_json TEXT NOT NULL DEFAULT '{}',
+      updated_at INTEGER NOT NULL
+    );
+  `);
 }
 
 export function upsertArchivedPet(input: PetArchiveInput): void {
@@ -247,15 +274,22 @@ export function listRivalPets(opts?: {
   limit?: number;
 }): ArchivedPet[] {
   ensureTable();
+  ensureWalletProfileTable();
   const limit = Math.min(48, Math.max(1, Number(opts?.limit ?? 24) || 24));
   const { sql, params } = buildPetWhere({
     chainId: opts?.chainId ?? null,
     excludeOwner: opts?.excludeOwner ?? null,
   });
+  // 附带主人档案昵称，供广场动态 actor 显示（不要只写 0x 缩写）
   const rows = getAdminDb().prepare(`
-    SELECT * FROM chipet_pets
+    SELECT p.*, (
+      SELECT w.display_name FROM chipet_wallet_profiles w
+      WHERE lower(w.address) = lower(p.owner) AND w.display_name != ''
+      LIMIT 1
+    ) AS owner_display_name
+    FROM chipet_pets p
     ${sql}
-    ORDER BY updated_at DESC, chain_id ASC, pet_id DESC
+    ORDER BY p.updated_at DESC, p.chain_id ASC, p.pet_id DESC
     LIMIT ?
   `).all(...params, limit) as Record<string, unknown>[];
   return rows.map(rowToPet);

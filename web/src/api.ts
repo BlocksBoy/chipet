@@ -110,6 +110,8 @@ export interface RivalPetDto {
   chainId: number;
   petId: number;
   owner: string;
+  /** 主人 Chipet 档案昵称（有则广场/回访动态用它，不用 0x 缩写） */
+  ownerName?: string;
   name: string;
   cpu: string;
   circuitId: string;

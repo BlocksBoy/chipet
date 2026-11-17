@@ -1,5 +1,4 @@
 import type { Address } from 'viem';
-import { short } from '../format.ts';
 import { both, tr, txt, type Text, type Txt } from '../i18n.ts';
 import { WILDS } from './battle.ts';
 import type { Rarity } from './phenotype.ts';
@@ -25,11 +24,29 @@ export function isOnchainPetKey(key: string): boolean {
   return key.startsWith('onchain:');
 }
 
+/** 像钱包地址 / 0x… 缩写 → 不当作昵称展示 */
+export function looksLikeWalletLabel(s: string): boolean {
+  const t = s.trim();
+  if (/^0x[a-fA-F0-9]{8,}$/i.test(t)) return true;
+  if (/^0x[a-fA-F0-9]+[…···.]+[a-fA-F0-9]+$/i.test(t)) return true;
+  return false;
+}
+
+/** 链上主人展示名：档案昵称优先，否则「芯友+末四位」，绝不直接写 0x 缩写 */
+export function ownerDisplayName(ownerAddr: string, ownerName?: string): string {
+  const nick = (ownerName || '').trim().slice(0, 16);
+  if (nick && !looksLikeWalletLabel(nick)) return nick;
+  const addr = (ownerAddr || '').trim();
+  const tail = /^0x[a-fA-F0-9]{8,}$/i.test(addr) ? addr.slice(-4) : '';
+  return tail ? tr(`芯友${tail}`, `Chip${tail}`) : tr('芯友', 'ChipFriend');
+}
+
 /** 把存档 DTO 转成切磋用的 PublicPet */
 export function rivalFromArchive(p: {
   chainId: number;
   petId: number;
   owner: string;
+  ownerName?: string;
   name: string;
   cpu: string;
   circuitId: string | number | bigint;
@@ -44,7 +61,8 @@ export function rivalFromArchive(p: {
     key: onchainPetKey(p.chainId, p.petId),
     id: onchainRouteId(p.chainId, p.petId),
     name: p.name || `Chipet #${p.petId}`,
-    owner: short(p.owner) || p.owner,
+    // 回访/动态 actor 用昵称，不用 short(wallet)
+    owner: ownerDisplayName(p.owner, p.ownerName),
     cpu: (p.cpu || MOCK_CPU) as Address,
     circuitId: BigInt(p.circuitId),
     rarity,
@@ -671,7 +689,11 @@ function namesOf(pet: PublicPet): Txt {
 }
 
 function ownerOf(pet: PublicPet): Text {
-  return findNpcNeighbor(pet.id)?.owner ?? pet.owner;
+  const raw = findNpcNeighbor(pet.id)?.owner ?? pet.owner;
+  const label = typeof raw === 'string' ? raw : txt(raw);
+  // 链上旧缓存可能仍是 0x 缩写：写动态前再洗一遍
+  if (looksLikeWalletLabel(label)) return ownerDisplayName(label);
+  return raw;
 }
 
 const pick = <T,>(xs: T[]) => xs[Math.floor(Math.random() * xs.length)]!;

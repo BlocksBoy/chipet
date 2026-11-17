@@ -17,8 +17,15 @@ import {
   leaderboardItemToPet, subscribeCloudSync, subscribeLeaderboard,
 } from '../chipet/cloudSync.ts';
 import { hydrateChainRivals } from '../chipet/rivals.ts';
-import { getSocialRev, maxBonds, social, subscribeSocial, type Activity } from '../chipet/social.ts';
+import { getSocialRev, looksLikeWalletLabel, maxBonds, social, subscribeSocial, type Activity } from '../chipet/social.ts';
 import { plural, txt, useLang, useT } from '../i18n.ts';
+
+/** 动态主人栏：地址缩写一律不当昵称展示 */
+function feedActorLabel(actor: Activity['actor'], t: (zh: string, en: string) => string): string {
+  const s = txt(actor);
+  if (!s || looksLikeWalletLabel(s)) return t('芯友', 'ChipFriend');
+  return s;
+}
 
 /** 广场动态每批条数（与后端 offset/limit 对齐） */
 const FEED_PAGE = 20;
@@ -442,7 +449,7 @@ export function Plaza() {
                                 </span>
                                 <span className="min-w-0 flex-1">
                                   <span className="block text-sm text-pretty text-ink">{txt(a.text)}</span>
-                                  <span className="mt-1 block text-xs text-faint">{txt(a.actor)} · {timeAgo(a.at)}</span>
+                                  <span className="mt-1 block text-xs text-faint">{feedActorLabel(a.actor, t)} · {timeAgo(a.at)}</span>
                                 </span>
                               </button>
                               <button type="button" onClick={() => like(a.id)} aria-pressed={a.liked} aria-label={t('击掌', 'High five')}
