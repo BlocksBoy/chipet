@@ -276,12 +276,14 @@ export function Plaza() {
     }
   }, [feedItems]);
 
-  // 返回动态时保留分页；距上次拉取不足 30s 不重打网络
+  // 切回动态：无数据立刻拉；有数据时距上次不足 30s 不重打
   useEffect(() => {
     if (tab !== 'feed') return;
-    if (Date.now() - lastHeadAt.current >= FEED_HEAD_STALE_MS) void loadFeedHead();
+    const shouldLoadHead = () =>
+      feedItemsRef.current.length === 0 || Date.now() - lastHeadAt.current >= FEED_HEAD_STALE_MS;
+    if (shouldLoadHead()) void loadFeedHead();
     const timer = window.setInterval(() => {
-      if (Date.now() - lastHeadAt.current >= FEED_HEAD_STALE_MS) void loadFeedHead();
+      if (shouldLoadHead()) void loadFeedHead();
     }, FEED_HEAD_STALE_MS);
     return () => window.clearInterval(timer);
   }, [tab, loadFeedHead]);
