@@ -11,7 +11,7 @@ import { FxOverlay, type ChipImpulse } from '../chipet/FxOverlay.tsx';
 import { SceneStage } from '../chipet/SceneStage.tsx';
 import { hatchChipet, nameAvailable, petsOfOwner } from '@tapearena/chain';
 import { localChipet } from '../chipet/store.ts';
-import { cattributes, phenotypeOf, SPECIES_COUNT, typeLabel } from '../chipet/phenotype.ts';
+import { cattributes, petSeed, phenotypeOf, SPECIES_COUNT, typeLabel } from '../chipet/phenotype.ts';
 import { heartOf } from '../chipet/heart.ts';
 import { ACT_ICON, actTone, PetCard, routeIdOf, timeAgo } from '../chipet/PetCard.tsx';
 import { getSocialRev, social, subscribeSocial, type QuestId } from '../chipet/social.ts';
@@ -76,7 +76,7 @@ export function Home() {
   const speciesSeen = useMemo(() => new Set(pets.map((p) => phenotypeOf(p.cpu, p.circuitId, p.rarity).speciesId)).size, [pets]);
   const totalWins = pets.reduce((n, p) => n + p.wins, 0);
   const ph = useMemo(
-    () => (hatched ? phenotypeOf(hatched.cpu, hatched.circuitId, hatched.rarity) : null),
+    () => (hatched ? phenotypeOf(hatched.cpu, hatched.circuitId, hatched.rarity, petSeed(hatched)) : null),
     [hatched],
   );
   const traits = useMemo(() => (ph ? cattributes(ph) : []), [ph, lang]);
@@ -353,6 +353,7 @@ export function Home() {
                       mood={Math.max(80, hatched.mood)}
                       size={250}
                       interactive
+                      seed={petSeed(hatched)}
                       onPat={() => pulse('pat')}
                     />
                   </motion.div>
@@ -531,7 +532,7 @@ export function Home() {
           ) : (
             <ul className="mt-5 grid grid-cols-2 gap-4 md:grid-cols-3">
               {(pets.length > 6 ? pets.slice(0, 5) : pets).map((p) => {
-                const petPh = phenotypeOf(p.cpu, p.circuitId, p.rarity);
+                const petPh = phenotypeOf(p.cpu, p.circuitId, p.rarity, petSeed(p));
                 const h = heartOf(p.circuitId, p.rarity);
                 return (
                   <li key={p.id}>

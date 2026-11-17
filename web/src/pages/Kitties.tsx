@@ -5,7 +5,7 @@ import { go } from '../router.tsx';
 import { PetCard } from '../chipet/PetCard.tsx';
 import { heartOf } from '../chipet/heart.ts';
 import { localChipet } from '../chipet/store.ts';
-import { phenotypeOf } from '../chipet/phenotype.ts';
+import { petSeed, phenotypeOf } from '../chipet/phenotype.ts';
 import { useT } from '../i18n.ts';
 
 /** 我持有的芯喵完整列表（家园「查看更多」入口）。 */
@@ -48,7 +48,7 @@ export function Kitties() {
       ) : (
         <ul className="mt-8 grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
           {pets.map((p) => {
-            const petPh = phenotypeOf(p.cpu, p.circuitId, p.rarity);
+            const petPh = phenotypeOf(p.cpu, p.circuitId, p.rarity, petSeed(p));
             const h = heartOf(p.circuitId, p.rarity);
             return (
               <li key={p.id}>

@@ -5,7 +5,7 @@ import { go } from '../router.tsx';
 import { PetCard, rarityTone } from '../chipet/PetCard.tsx';
 import { allHearts, heartOf } from '../chipet/heart.ts';
 import { localChipet } from '../chipet/store.ts';
-import { cattributes, phenotypeOf, rarityLabel, speciesList } from '../chipet/phenotype.ts';
+import { cattributes, petSeed, phenotypeOf, rarityLabel, speciesList } from '../chipet/phenotype.ts';
 import { useT } from '../i18n.ts';
 
 const DEMO_CPU = '0x000000000000000000000000000000000000c111';
@@ -80,7 +80,7 @@ export function Dex() {
             );
           }
           const p = hit.best;
-          const ph = phenotypeOf(p.cpu, p.circuitId, p.rarity);
+          const ph = phenotypeOf(p.cpu, p.circuitId, p.rarity, petSeed(p));
           return (
             <li key={sp.id}>
               <PetCard

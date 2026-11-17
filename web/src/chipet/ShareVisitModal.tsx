@@ -4,7 +4,7 @@ import { Check, Copy, Download, Loader2, X } from 'lucide-react';
 import { Button, Tag, Trait, cn } from '../components/ui.tsx';
 import { useT } from '../i18n.ts';
 import { PetAvatar } from './PetAvatar.tsx';
-import { cattributes, phenotypeOf, typeLabel } from './phenotype.ts';
+import { cattributes, petSeed, phenotypeOf, typeLabel } from './phenotype.ts';
 import { rarityTone } from './PetCard.tsx';
 import type { PublicPet } from './social.ts';
 
@@ -49,7 +49,7 @@ export function ShareVisitModal({
   const [saved, setSaved] = useState(false);
   const fetchedUrl = useRef('');
 
-  const ph = phenotypeOf(pet.cpu, pet.circuitId, pet.rarity);
+  const ph = phenotypeOf(pet.cpu, pet.circuitId, pet.rarity, petSeed(pet));
   const traits = cattributes(ph);
   const fileName = `chipet-${pet.name.replace(/[^\w\u4e00-\u9fff-]+/g, '').slice(0, 20) || 'share'}.png`;
 
@@ -165,6 +165,7 @@ export function ShareVisitModal({
                     rarity={pet.rarity}
                     mood={pet.mood}
                     size={108}
+                    seed={petSeed(pet)}
                     lively={false}
                   />
                 </div>

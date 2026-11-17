@@ -16,7 +16,7 @@ import { fuse, heartOf } from '../chipet/heart.ts';
 import { maxHpOf, MOOD_HP, MOVES, favOf } from '../chipet/battle.ts';
 import { feedChipet, playChipet, readPet } from '@tapearena/chain';
 import { isChainPet, localChipet, xpNeed } from '../chipet/store.ts';
-import { cattributes, geneStory, phenotypeOf, typeLabel } from '../chipet/phenotype.ts';
+import { cattributes, geneStory, petSeed, phenotypeOf, typeLabel } from '../chipet/phenotype.ts';
 import { maxBonds, social } from '../chipet/social.ts';
 import { ShareVisitModal } from '../chipet/ShareVisitModal.tsx';
 import { BEM_SKUS, bem } from '../chipet/bem.ts';
@@ -90,7 +90,7 @@ export function PetPage({ id, share: shareToken }: { id?: number; share?: string
     );
   }
 
-  const ph = phenotypeOf(pet.cpu, pet.circuitId, pet.rarity);
+  const ph = phenotypeOf(pet.cpu, pet.circuitId, pet.rarity, petSeed(pet));
   const heart = heartOf(pet.circuitId, pet.rarity);
   const traits = cattributes(ph);
   const feedLeft = local ? localChipet.feedCdLeft(local) : 0;
@@ -336,7 +336,7 @@ export function PetPage({ id, share: shareToken }: { id?: number; share?: string
               }
               transition={{ duration: 0.55, ease: 'easeOut' }}
             >
-              <PetAvatar cpu={pet.cpu} circuitId={pet.circuitId} rarity={pet.rarity} mood={mood} size={wide ? 320 : 240} interactive onPat={doPat} />
+              <PetAvatar cpu={pet.cpu} circuitId={pet.circuitId} rarity={pet.rarity} mood={mood} size={wide ? 320 : 240} interactive seed={petSeed(pet)} onPat={doPat} />
             </motion.div>
             <FxOverlay impulse={impulse} />
             <p className="pointer-events-none absolute inset-x-0 bottom-4 text-center text-[11px] text-ink/45">{t('点一点它 · 摸头会轻轻弹一弹', 'Tap it · a pat makes it bounce')}</p>
@@ -601,7 +601,7 @@ export function PetPage({ id, share: shareToken }: { id?: number; share?: string
                       <li key={b.key}>
                         <button type="button" onClick={() => go(`/pet/${b.id}`)}
                           className="flex w-full items-center gap-3 rounded-2xl px-2 py-1.5 text-left transition hover:bg-panel-2/70">
-                          <PetAvatar cpu={b.cpu} circuitId={b.circuitId} rarity={b.rarity} mood={b.mood} size={40} lively={false} />
+                          <PetAvatar cpu={b.cpu} circuitId={b.circuitId} rarity={b.rarity} mood={b.mood} size={40} lively={false} seed={petSeed(b)} />
                           <span className="min-w-0 flex-1">
                             <span className="block truncate text-sm font-semibold text-ink">{b.name}</span>
                             <span className="block truncate font-mono text-[11px] text-mute">{bh.name} · {t(`合体 ${fuse(heart, bh).gates} 门`, `fusion: ${fuse(heart, bh).gates} gates`)}</span>

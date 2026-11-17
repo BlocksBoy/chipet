@@ -3,7 +3,7 @@ import { Cable, Fish, Hand, MessageCircleHeart, Sparkles, Swords, Zap, type Luci
 import { Tag, cn } from '../components/ui.tsx';
 import { tr } from '../i18n.ts';
 import { PetAvatar } from './PetAvatar.tsx';
-import { phenotypeOf, rarityLabel, type Rarity } from './phenotype.ts';
+import { petSeed, phenotypeOf, rarityLabel, type Rarity } from './phenotype.ts';
 import type { Activity } from './social.ts';
 
 export const rarityTone = (r: Rarity) => (r === 2 ? 'gold' : r === 1 ? 'si' : 'faint') as 'gold' | 'si' | 'faint';
@@ -12,7 +12,7 @@ export const rarityTone = (r: Rarity) => (r === 2 ? 'gold' : r === 1 ? 'si' : 'f
 export function PetCard({
   pet, name, sub, badge, corner, tags, footer, onClick, size = 128, mood, locked, className,
 }: {
-  pet: { cpu: string; circuitId: bigint; rarity: Rarity; mood?: number; level?: number };
+  pet: { cpu: string; circuitId: bigint; rarity: Rarity; mood?: number; level?: number; id?: number; name?: string; hatchedAt?: number; key?: string; owner?: string };
   name: ReactNode;
   /** 名字下面的一行说明 */
   sub?: ReactNode;
@@ -31,14 +31,15 @@ export function PetCard({
   locked?: boolean;
   className?: string;
 }) {
-  const ph = phenotypeOf(pet.cpu, pet.circuitId, pet.rarity);
+  const seed = petSeed(pet);
+  const ph = phenotypeOf(pet.cpu, pet.circuitId, pet.rarity, seed);
   const body = (
     <>
       <div className="relative grid w-full place-items-center px-3 pt-6 pb-3" style={{ backgroundColor: locked ? undefined : ph.bg }}>
         {badge && <span className="absolute top-2.5 left-3 font-mono text-[11px] font-medium text-ink/55">{badge}</span>}
         {corner && <span className="absolute top-2.5 right-3 font-mono text-[11px] text-ink/55">{corner}</span>}
         <div className={cn('transition-transform duration-200 group-hover:scale-105', locked && 'opacity-25 brightness-0')}>
-          <PetAvatar cpu={pet.cpu} circuitId={pet.circuitId} rarity={pet.rarity} mood={mood ?? pet.mood ?? 80} size={size} lively={!locked} />
+          <PetAvatar cpu={pet.cpu} circuitId={pet.circuitId} rarity={pet.rarity} mood={mood ?? pet.mood ?? 80} size={size} lively={!locked} seed={seed} />
         </div>
       </div>
       <div className="w-full px-4 pt-3 pb-3.5">

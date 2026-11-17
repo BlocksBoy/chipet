@@ -18,7 +18,7 @@ import {
   aiPick, clash, favOf, fusionClash, maxHpOf, MOOD_HP, MOVES, roll, rollAll, wildHpOf, WILDS, xpFor,
   type Clash, type Move, type Roll, type Wild,
 } from '../chipet/battle.ts';
-import { phenotypeOf } from '../chipet/phenotype.ts';
+import { petSeed, phenotypeOf } from '../chipet/phenotype.ts';
 import { BATTLE_ENERGY, isChainPet, localChipet, xpNeed, type LocalPet } from '../chipet/store.ts';
 import { isOnchainPetKey, rivalFromArchive, social, type PublicPet } from '../chipet/social.ts';
 import { both, plural, tr, txt, useLang, useT, type Txt } from '../i18n.ts';
@@ -439,7 +439,7 @@ function wildOpp(w: Wild): Opp {
 }
 
 function npcOpp(p: PublicPet): Opp {
-  const ph = phenotypeOf(p.cpu, p.circuitId, p.rarity);
+  const ph = phenotypeOf(p.cpu, p.circuitId, p.rarity, petSeed(p));
   return { kind: 'npc', key: p.key, get name() { return p.name; }, level: p.level, heart: heartOf(p.circuitId, p.rarity), fav: favOf(ph.speciesId), maxHp: maxHpOf(p.level, p.rarity, p.mood), bg: ph.bg, pet: p };
 }
 
@@ -956,7 +956,7 @@ export function Train() {
     const { opp, reveal, end } = fight;
     const size = wide ? 190 : 130;
     const myPet = pets.find((p) => p.id === fight.petId) ?? me;
-    const myPh = phenotypeOf(myPet.cpu, myPet.circuitId, myPet.rarity);
+    const myPh = phenotypeOf(myPet.cpu, myPet.circuitId, myPet.rarity, petSeed(myPet));
     const verdict = !reveal ? ''
       : reveal.myMove === FUSION ? t('合体技无视克制！', 'The fusion move ignores the triangle!')
         : reveal.c.edge === 1 ? t(`${MOVES[reveal.myMove]!.name}克${MOVES[reveal.opMove]!.name}，伤害翻倍！`, `${MOVES[reveal.myMove]!.name} beats ${MOVES[reveal.opMove]!.name}: double damage!`)
@@ -1006,7 +1006,7 @@ export function Train() {
                 power={reveal?.myRoll.power} edge={reveal ? reveal.myMove === FUSION || reveal.c.edge === 1 : false}
                 down={!!end && end.result === 'lose'} glow={!!end && end.result === 'win'}
               >
-                <PetAvatar cpu={myPet.cpu} circuitId={myPet.circuitId} rarity={myPet.rarity} mood={end?.result === 'lose' ? 20 : 90} size={size} />
+                <PetAvatar cpu={myPet.cpu} circuitId={myPet.circuitId} rarity={myPet.rarity} mood={end?.result === 'lose' ? 20 : 90} size={size} seed={petSeed(myPet)} />
               </FighterCard>
               <FighterCard
                 side="op" name={opp.name} level={opp.level} hp={fight.opHp} max={opp.maxHp} bg={opp.bg}
@@ -1017,7 +1017,7 @@ export function Train() {
               >
                 {opp.wild
                   ? <BugMon color={opp.wild.color} dark={opp.wild.dark} size={size} boss={opp.wild.id === 'boss'} />
-                  : <PetAvatar cpu={opp.pet!.cpu} circuitId={opp.pet!.circuitId} rarity={opp.pet!.rarity} mood={end?.result === 'win' ? 20 : 90} size={size} />}
+                  : <PetAvatar cpu={opp.pet!.cpu} circuitId={opp.pet!.circuitId} rarity={opp.pet!.rarity} mood={end?.result === 'win' ? 20 : 90} size={size} seed={petSeed(opp.pet!)} />}
               </FighterCard>
               <VsBadge busy={fight.busy} />
             </div>
@@ -1234,7 +1234,7 @@ export function Train() {
                   aria-pressed={on}
                   className={cn('flex items-center gap-2 rounded-2xl py-1.5 pr-4 pl-1.5 text-left transition', on ? 'bg-si/10 ring-2 ring-si' : 'bg-panel-2/60 ring-1 ring-line hover:ring-si/50')}
                 >
-                  <PetAvatar cpu={p.cpu} circuitId={p.circuitId} rarity={p.rarity} mood={p.mood} size={52} lively={false} />
+                  <PetAvatar cpu={p.cpu} circuitId={p.circuitId} rarity={p.rarity} mood={p.mood} size={52} lively={false} seed={petSeed(p)} />
                   <span>
                     <span className="block text-sm font-semibold text-ink">{p.name} <span className="font-mono text-[11px] font-normal text-mute">Lv.{p.level}</span></span>
                     <span className="block font-mono text-[11px] text-mute">{t(`能量 ${p.energy} · ${p.wins} 胜`, `Energy ${p.energy} · ${plural(p.wins, 'win')}`)}</span>
@@ -1267,7 +1267,7 @@ export function Train() {
               aria-pressed={partner?.key === b.key}
               className={cn('flex items-center gap-1.5 rounded-full py-0.5 pr-3 pl-0.5 transition', partner?.key === b.key ? 'bg-gold/15 text-gold-dim ring-2 ring-gold/60' : 'bg-panel-2/60 ring-1 ring-line hover:ring-gold/50')}
             >
-              <PetAvatar cpu={b.cpu} circuitId={b.circuitId} rarity={b.rarity} mood={b.mood} size={28} lively={false} />
+              <PetAvatar cpu={b.cpu} circuitId={b.circuitId} rarity={b.rarity} mood={b.mood} size={28} lively={false} seed={petSeed(b)} />
               {b.name}
             </button>
           ))}
@@ -1282,7 +1282,7 @@ export function Train() {
       {challenge && (
         <div className="mt-6 flex flex-wrap items-center gap-4 rounded-3xl border border-copper/40 bg-copper/5 px-5 py-4">
           <div className="grid size-16 shrink-0 place-items-center rounded-2xl" style={{ backgroundColor: challenge.bg }}>
-            <PetAvatar cpu={challenge.pet!.cpu} circuitId={challenge.pet!.circuitId} rarity={challenge.pet!.rarity} mood={challenge.pet!.mood} size={60} />
+            <PetAvatar cpu={challenge.pet!.cpu} circuitId={challenge.pet!.circuitId} rarity={challenge.pet!.rarity} mood={challenge.pet!.mood} size={60} seed={petSeed(challenge.pet!)} />
           </div>
           <div className="min-w-0 flex-1">
             <div className="font-display text-lg font-bold text-ink">{t('挑战书', 'Challenge')} · {challenge.name} <span className="font-mono text-xs font-normal text-mute">Lv.{challenge.level} · {challenge.pet!.owner}</span></div>
@@ -1325,7 +1325,7 @@ export function Train() {
         <ul className="grid grid-cols-2 gap-3 px-4 pb-4 md:grid-cols-3">
           {rivalsPage.map((p) => {
             const o = npcOpp(p);
-            const ph = phenotypeOf(p.cpu, p.circuitId, p.rarity);
+            const ph = phenotypeOf(p.cpu, p.circuitId, p.rarity, petSeed(p));
             const onchain = isOnchainPetKey(p.key);
             const visitor = !p.mine && !onchain && p.id <= -101;
             return (
@@ -1335,7 +1335,7 @@ export function Train() {
                   <span className="absolute top-2 right-3 font-mono text-[11px] text-mute">{t(`${p.wins} 胜`, plural(p.wins, 'win'))}</span>
                   {onchain && <Tag tone="si" className="absolute bottom-2 left-2">{t('链上', 'On-chain')}</Tag>}
                   {visitor && <Tag className="absolute bottom-2 left-2">{t('今日路过', 'Passing')}</Tag>}
-                  <PetAvatar cpu={p.cpu} circuitId={p.circuitId} rarity={p.rarity} mood={p.mood} size={104} />
+                  <PetAvatar cpu={p.cpu} circuitId={p.circuitId} rarity={p.rarity} mood={p.mood} size={104} seed={petSeed(p)} />
                 </div>
                 <div className="flex flex-1 flex-col bg-panel px-3 py-3">
                   <div className="truncate font-semibold text-ink">{p.name} <span className="text-[11px] font-normal text-mute">{p.owner}</span></div>

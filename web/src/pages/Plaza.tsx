@@ -7,6 +7,7 @@ import { useApp } from '../state.tsx';
 import { PetAvatar } from '../chipet/PetAvatar.tsx';
 import { ACT_ICON, actTone, PetCard, routeIdOf, timeAgo } from '../chipet/PetCard.tsx';
 import { heartOf } from '../chipet/heart.ts';
+import { petSeed } from '../chipet/phenotype.ts';
 import { getSocialRev, maxBonds, social, subscribeSocial } from '../chipet/social.ts';
 import { plural, txt, useLang, useT } from '../i18n.ts';
 
@@ -192,7 +193,7 @@ export function Plaza() {
                     <button type="button" onClick={() => go(`/pet/${pet.id}`)}
                       className={cn('flex w-full items-center gap-3 rounded-2xl px-3 py-2 text-left transition hover:bg-panel-2/70', pet.mine && 'bg-si/5 ring-1 ring-si/30')}>
                       <span className={cn('grid size-7 shrink-0 place-items-center rounded-full font-display text-sm font-bold', i === 0 ? 'bg-gold/20 text-gold-dim' : i < 3 ? 'bg-copper/10 text-copper-dim' : 'text-faint')}>{i + 1}</span>
-                      <PetAvatar cpu={pet.cpu} circuitId={pet.circuitId} rarity={pet.rarity} mood={pet.mood} size={40} lively={false} />
+                      <PetAvatar cpu={pet.cpu} circuitId={pet.circuitId} rarity={pet.rarity} mood={pet.mood} size={40} lively={false} seed={petSeed(pet)} />
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-sm font-semibold text-ink">{pet.name}{pet.mine && <span className="ml-1.5 text-[11px] font-normal text-si-dim">{t('我的', 'mine')}</span>}</span>
                         <span className="block truncate text-[11px] text-mute">{pet.owner} · Lv.{pet.level}</span>
@@ -251,7 +252,7 @@ export function Plaza() {
                   <li key={b.key}>
                     <button type="button" onClick={() => go(`/pet/${b.id}`)}
                       className="flex w-full items-center gap-3 rounded-2xl px-2 py-1.5 text-left transition hover:bg-panel-2/70">
-                      <PetAvatar cpu={b.cpu} circuitId={b.circuitId} rarity={b.rarity} mood={b.mood} size={40} lively={false} />
+                      <PetAvatar cpu={b.cpu} circuitId={b.circuitId} rarity={b.rarity} mood={b.mood} size={40} lively={false} seed={petSeed(b)} />
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-sm font-semibold text-ink">{b.name}</span>
                         <span className="block truncate font-mono text-[11px] text-mute">{b.owner} · {heartOf(b.circuitId, b.rarity).name}</span>
@@ -270,7 +271,7 @@ export function Plaza() {
                 <li key={p.key}>
                   <button type="button" onClick={() => go(`/pet/${p.id}`)}
                     className="flex w-full items-center gap-3 rounded-2xl px-2 py-1.5 text-left transition hover:bg-panel-2/70">
-                    <PetAvatar cpu={p.cpu} circuitId={p.circuitId} rarity={p.rarity} mood={p.mood} size={40} lively={false} />
+                    <PetAvatar cpu={p.cpu} circuitId={p.circuitId} rarity={p.rarity} mood={p.mood} size={40} lively={false} seed={petSeed(p)} />
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-sm font-semibold text-ink">{p.name}</span>
                       <span className="block truncate text-[11px] text-mute">{p.owner} · Lv.{p.level}</span>
