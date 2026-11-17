@@ -63,7 +63,7 @@ export function Plaza() {
   const { account, notify } = useApp();
   const [tab, setTab] = useState<'feed' | 'hot' | 'rank'>('feed');
   const [rankKind, setRankKind] = useState<'pats' | 'wins' | 'intimacy' | 'level'>('pats');
-  const [name, setName] = useState(social.profile().displayName);
+  const [name, setName] = useState(() => social.profile().displayName);
   const [editing, setEditing] = useState(false);
   const [tick, setTick] = useState(0);
   /** 广场列表：组件内直打 API，不走本地页缓存 */
@@ -71,24 +71,23 @@ export function Plaza() {
   const [feedTotal, setFeedTotal] = useState(0);
   const [feedHeadLoading, setFeedHeadLoading] = useState(true);
   const [feedMoreLoading, setFeedMoreLoading] = useState(false);
-  const feedReqEpoch = useRef(0);
   const feedItemsRef = useRef<FeedRow[]>([]);
   const feedTotalRef = useRef(0);
   const feedMoreLoadingRef = useRef(false);
   const feedHeadLoadingRef = useRef(true);
   /** DOM 提交后再钉住/补偿 scrollTop，避免加载时视口跳动 */
-  const feedScrollPinRef = useRef<number | null>(null);
   const feedScrollBoostRef = useRef<number | null>(null);
-  /** 预取下一页：外网 RTT~1s，触底时优先吃缓存，避免干等一整轮网络 */
-  const feedPrefetchRef = useRef<{ offset: number; items: FeedRow[]; total: number } | null>(null);
-  const feedPrefetchingRef = useRef(false);
+  const lastScrollTop = useRef(0);
+  const nextOffset = useRef(0);
+  const headPending = useRef(false);
+  const lastHeadAt = useRef(0);
+  const nextPage = useRef<{ offset: number; request: ReturnType<typeof fetchChipetFeed> } | null>(null);
   const feedScrollRef = useRef<HTMLDivElement>(null);
   const feedSentinelRef = useRef<HTMLDivElement>(null);
-  const [feedThumbTop, setFeedThumbTop] = useState(0);
-  const [feedThumbShow, setFeedThumbShow] = useState(false);
+  const thumbRef = useRef<HTMLDivElement>(null);
   const socialRev = useSyncExternalStore(subscribeSocial, getSocialRev, getSocialRev);
   const boardRev = useSyncExternalStore(subscribeLeaderboard, getLeaderboardRev, getLeaderboardRev);
-  const cloudRev = useSyncExternalStore(subscribeCloudSync, getCloudSyncRev, getCloudSyncRev);
+  useSyncExternalStore(subscribeCloudSync, getCloudSyncRev, getCloudSyncRev);
   const bootLoading = isPublicLoading();
   const boardLoading = isLeaderboardLoading();
   const profile = useMemo(() => social.profile(), [tick, lang, socialRev]);
@@ -107,7 +106,7 @@ export function Plaza() {
         : a;
     });
   }, [feedItems, tick, socialRev]);
-  const feedHasMore = feed.length < feedTotal;
+  const feedHasMore = nextOffset.current < feedTotal;
   const feedLoadingMore = feedMoreLoading;
   const feedInitialPending = feedHeadLoading && feedItems.length === 0;
   // 热门 / 排行：优先读库缓存；找不到/已消失的宠直接丢掉
@@ -151,57 +150,43 @@ export function Plaza() {
   const showHotSkeleton = (bootLoading || boardLoading) && hot.length === 0;
   const showRankSkeleton = (bootLoading || boardLoading) && ranks.length === 0;
 
+  const boardRequests = useRef(new Map<string, number>());
   useEffect(() => {
-    if (tab === 'hot' || tab === 'rank') void cloudSync.refreshLeaderboards();
-  }, [tab, tick, socialRev]);
+    if (tab === 'feed') return;
+    const kind = tab === 'hot' ? 'heat' : rankKind;
+    if (Date.now() - (boardRequests.current.get(kind) ?? 0) < 15_000) return;
+    boardRequests.current.set(kind, Date.now());
+    void cloudSync.refreshLeaderboard(kind);
+  }, [tab, rankKind]);
 
-  const prefetchFeedNext = useCallback(async (fromOffset?: number) => {
-    const offset = fromOffset ?? feedItemsRef.current.length;
-    const total = feedTotalRef.current;
-    if (offset >= total && total > 0) return;
-    if (feedPrefetchRef.current?.offset === offset) return;
-    if (feedPrefetchingRef.current || feedMoreLoadingRef.current) return;
-    const epoch = feedReqEpoch.current;
-    feedPrefetchingRef.current = true;
-    try {
-      const r = await fetchChipetFeed({ limit: FEED_PAGE, offset });
-      if (epoch !== feedReqEpoch.current) return;
-      if (!r) return;
-      // 显式 offset：列表已滚过该页则作废；否则要求与当前长度一致
-      if (fromOffset != null) {
-        if (feedItemsRef.current.length > fromOffset) return;
-      } else if (feedItemsRef.current.length !== offset) {
-        return;
-      }
-      const items = (r.items ?? []) as Activity[];
-      const likes = r.likes ?? {};
-      if (r.total != null) setFeedTotal(Math.max(0, Number(r.total) || 0));
-      feedPrefetchRef.current = {
-        offset,
-        items: mergeLikeState(items, likes),
-        total: Math.max(0, Number(r.total) || items.length),
-      };
-      if (items.length) social.applyCloudFeed(items, likes, false);
-    } finally {
-      feedPrefetchingRef.current = false;
-    }
+  const requestPage = useCallback((offset: number) => {
+    if (nextPage.current?.offset === offset) return nextPage.current.request;
+    const request = fetchChipetFeed({ limit: FEED_PAGE, offset });
+    nextPage.current = { offset, request };
+    void request.then(result => {
+      if (!result && nextPage.current?.request === request) nextPage.current = null;
+    });
+    return request;
   }, []);
 
-  /** replace：进 Tab / 发动态后整表对齐；soft：轮询只补新帖，不裁掉已加载页，避免滚动跳动 */
-  const loadFeedHead = useCallback(async (mode: 'replace' | 'soft' = 'replace') => {
+  const loadFeedHead = useCallback(async () => {
+    if (headPending.current || feedMoreLoadingRef.current) return;
+    headPending.current = true;
     const hadItems = feedItemsRef.current.length > 0;
-    const epoch = mode === 'replace' ? ++feedReqEpoch.current : feedReqEpoch.current;
-    if (mode === 'replace') feedPrefetchRef.current = null;
-    if (mode === 'replace' && !hadItems) setFeedHeadLoading(true);
     try {
       const r = await fetchChipetFeed({ limit: FEED_PAGE, offset: 0 });
-      if (mode === 'replace' && epoch !== feedReqEpoch.current) return;
       if (!r) return;
       const items = (r.items ?? []) as Activity[];
       const likes = r.likes ?? {};
       const next = mergeLikeState(items, likes);
       setFeedTotal(Math.max(0, Number(r.total) || items.length));
-      if (mode === 'soft' && hadItems) {
+      if (hadItems) {
+        const existing = new Set(feedItemsRef.current.map(row => row.id));
+        const added = next.filter(row => !existing.has(row.id)).length;
+        if (added) {
+          nextOffset.current += added;
+          nextPage.current = null;
+        }
         const scroller = feedScrollRef.current;
         const prevTop = scroller?.scrollTop ?? 0;
         const prevHeight = scroller?.scrollHeight ?? 0;
@@ -209,73 +194,59 @@ export function Plaza() {
         // 顶部插入新帖：记下高度差，layout 后再补偿
         if (prevTop > 0) feedScrollBoostRef.current = prevHeight;
       } else {
+        nextOffset.current = next.length;
         setFeedItems(next);
       }
       if (items.length) social.applyCloudFeed(items, likes, false);
       // 首屏回来立刻预取第 2 页，滚动时不卡在跨洋 RTT
-      if (mode === 'replace') void prefetchFeedNext(next.length);
+      lastHeadAt.current = Date.now();
+      if (!hadItems && next.length < Number(r.total)) void requestPage(next.length);
     } finally {
-      if (mode === 'replace' && epoch === feedReqEpoch.current) setFeedHeadLoading(false);
+      headPending.current = false;
+      setFeedHeadLoading(false);
     }
-  }, [prefetchFeedNext]);
+  }, [requestPage]);
 
-  /** 触底：优先吃预取；锁 scrollTop，底栏高度固定，减少抖动 */
+  /** 触底时复用同一页的预取请求 */
   const loadFeedMore = useCallback(async () => {
     if (feedMoreLoadingRef.current || feedHeadLoadingRef.current) return;
-    const offset = feedItemsRef.current.length;
+    const offset = nextOffset.current;
     const total = feedTotalRef.current;
     if (offset >= total && total > 0) return;
-    const epoch = feedReqEpoch.current;
     feedMoreLoadingRef.current = true;
     setFeedMoreLoading(true);
-    const scroller = feedScrollRef.current;
-    const pinnedTop = scroller?.scrollTop ?? 0;
     let nextPrefetchAt: number | null = null;
     try {
-      const cached = feedPrefetchRef.current;
-      let pageItems: FeedRow[] = [];
-      let pageTotal = total;
-      if (cached && cached.offset === offset) {
-        feedPrefetchRef.current = null;
-        pageItems = cached.items;
-        pageTotal = cached.total;
-        setFeedTotal(pageTotal);
-      } else {
-        const r = await fetchChipetFeed({ limit: FEED_PAGE, offset });
-        if (epoch !== feedReqEpoch.current) return;
-        if (!r) return;
-        const items = (r.items ?? []) as Activity[];
-        const likes = r.likes ?? {};
-        pageTotal = r.total != null ? Math.max(0, Number(r.total) || 0) : total;
-        setFeedTotal(pageTotal);
-        pageItems = mergeLikeState(items, likes);
-        if (items.length) social.applyCloudFeed(items, likes, false);
-      }
+      const r = await requestPage(offset);
+      if (!r || offset !== nextOffset.current) return;
+      const items = (r.items ?? []) as Activity[];
+      const likes = r.likes ?? {};
+      const pageItems = mergeLikeState(items, likes);
+      const pageTotal = r.total ?? total;
+      setFeedTotal(pageTotal);
+      if (items.length) social.applyCloudFeed(items, likes, false);
       if (!pageItems.length) {
         setFeedTotal((prev) => Math.min(prev, offset));
         return;
       }
-      feedScrollPinRef.current = pinnedTop;
+
+      nextOffset.current = offset + pageItems.length;
       setFeedItems((prev) => {
         const seen = new Set(prev.map((a) => a.id));
         return [...prev, ...pageItems.filter((a) => !seen.has(a.id))];
       });
-      nextPrefetchAt = offset + pageItems.length;
+      if (offset + pageItems.length < pageTotal) nextPrefetchAt = offset + pageItems.length;
     } finally {
       feedMoreLoadingRef.current = false;
       setFeedMoreLoading(false);
     }
     // finally 清掉 loading 后再预取，避免被 moreLoading 挡掉
-    if (nextPrefetchAt != null) void prefetchFeedNext(nextPrefetchAt);
-  }, [prefetchFeedNext]);
+    if (nextPrefetchAt != null) void requestPage(nextPrefetchAt);
+  }, [requestPage]);
 
   useLayoutEffect(() => {
     const el = feedScrollRef.current;
     if (!el) return;
-    if (feedScrollPinRef.current != null) {
-      el.scrollTop = feedScrollPinRef.current;
-      feedScrollPinRef.current = null;
-    }
     if (feedScrollBoostRef.current != null) {
       const prevHeight = feedScrollBoostRef.current;
       feedScrollBoostRef.current = null;
@@ -284,30 +255,37 @@ export function Plaza() {
     }
   }, [feedItems]);
 
-  // 进动态 Tab / 发动态成功：整表重拉；停留时 soft 轮询补新帖
+  // 返回动态时保留分页；过期后在后台补新帖
   useEffect(() => {
     if (tab !== 'feed') return;
-    void loadFeedHead('replace');
+    if (Date.now() - lastHeadAt.current >= 8_000) void loadFeedHead();
     const timer = window.setInterval(() => {
-      void loadFeedHead('soft');
+      void loadFeedHead();
     }, 8_000);
     return () => window.clearInterval(timer);
-  }, [tab, cloudRev, loadFeedHead]);
+  }, [tab, loadFeedHead]);
 
   const syncFeedThumb = useCallback(() => {
     const el = feedScrollRef.current;
     if (!el) return;
     const { scrollTop, scrollHeight, clientHeight } = el;
+    const thumb = thumbRef.current;
+    if (!thumb) return;
+    lastScrollTop.current = scrollTop;
     const track = Math.max(0, clientHeight - 16);
     if (scrollHeight <= clientHeight + 1 || track <= FEED_THUMB_PX) {
-      setFeedThumbShow(false);
+      thumb.style.visibility = 'hidden';
       return;
     }
     const maxTop = track - FEED_THUMB_PX;
     const ratio = scrollTop / Math.max(1, scrollHeight - clientHeight);
-    setFeedThumbTop(ratio * maxTop);
-    setFeedThumbShow(true);
+    thumb.style.transform = `translateY(${ratio * maxTop}px)`;
+    thumb.style.visibility = 'visible';
   }, []);
+
+  useLayoutEffect(() => {
+    if (tab === 'feed' && feedScrollRef.current) feedScrollRef.current.scrollTop = lastScrollTop.current;
+  }, [tab]);
 
   useEffect(() => {
     if (tab !== 'feed') return;
@@ -328,12 +306,12 @@ export function Plaza() {
     const io = new IntersectionObserver((entries) => {
       if (!entries.some((e) => e.isIntersecting)) return;
       if (feedMoreLoadingRef.current || feedHeadLoadingRef.current) return;
-      if (feedItemsRef.current.length >= feedTotalRef.current && feedTotalRef.current > 0) return;
+      if (nextOffset.current >= feedTotalRef.current && feedTotalRef.current > 0) return;
       void loadFeedMore();
     }, { root, rootMargin: '120px 0px', threshold: 0 });
     io.observe(sentinel);
     return () => io.disconnect();
-  }, [tab, showFeedSkeleton, loadFeedMore]);
+  }, [tab, showFeedSkeleton, feedTotal > 0, loadFeedMore]);
 
   // 侧栏邻居 /「更多邻居」混入其他玩家的链上芯喵
   useEffect(() => {
@@ -470,10 +448,10 @@ export function Plaza() {
                       </div>
                     </div>
                     <div
-                      className={cn('chip-scroll-feed-track', !feedThumbShow && 'invisible')}
+                      className="chip-scroll-feed-track"
                       aria-hidden
                     >
-                      <div className="chip-scroll-feed-thumb" style={{ top: feedThumbTop }} />
+                      <div className="chip-scroll-feed-thumb" ref={thumbRef} />
                     </div>
                   </div>
                 )}
