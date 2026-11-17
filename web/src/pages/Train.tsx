@@ -5,7 +5,7 @@ import {
 } from 'lucide-react';
 import { useAccount } from 'wagmi';
 import { DataLoading, PetCardGridSkeleton } from '../components/Skeleton.tsx';
-import { Button, Empty, ErrBar, PAGE, PageHeader, Panel, Tag, cn } from '../components/ui.tsx';
+import { Button, ErrBar, PAGE, PageHeader, Panel, Tag, cn } from '../components/ui.tsx';
 import { Link, go, useRoute } from '../router.tsx';
 import { PetAvatar } from '../chipet/PetAvatar.tsx';
 import { BugMon } from '../chipet/BugMon.tsx';
@@ -810,7 +810,11 @@ export function Train() {
   const later = (fn: () => void, ms: number) => { timers.current.push(window.setTimeout(fn, ms)); };
 
   const start = (opp: Opp) => {
-    if (!me || !myHeart) return;
+    if (!me || !myHeart) {
+      setErr(t('先孵一只芯喵再来对战。回家园敲开一枚蛋吧。', 'Hatch a kitty before battling. Head home and crack an egg first.'));
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
     try {
       localChipet.startBattle(me.id);
     } catch (e) {
@@ -937,18 +941,6 @@ export function Train() {
     setFight(next);
     later(() => advanceAfterReveal(next), REVEAL_MS);
   };
-
-  if (pets.length === 0) {
-    return (
-      <div className={cn(PAGE, 'max-w-[720px] py-16')}>
-        <Panel>
-          <Empty icon={Egg} title={t('先孵一只芯喵', 'Hatch a kitty first')} action={<Button onClick={() => go('/')}>{t('去敲蛋', 'Crack an egg')}</Button>}>
-            {t('训练场里是电路对战：每只芯喵用自己的心脏电路出招。先回家园敲开一枚蛋吧。', 'The training ground is all circuit battles: every kitty fights with its own heart circuit. Head home and crack an egg first.')}
-          </Empty>
-        </Panel>
-      </div>
-    );
-  }
 
   // ── 对战中 ─────────────────────────────────────────
   if (fight && me) {
@@ -1190,8 +1182,8 @@ export function Train() {
     );
   }
 
-  // ── 选对手 ─────────────────────────────────────────
-  const tired = me ? !localChipet.canBattle(me) : true;
+  // ── 选对手（无宠也能先逛野怪 / 切磋列表；点对战再提示去敲蛋） ──
+  const tired = !!me && !localChipet.canBattle(me);
   return (
     <div className={cn(PAGE, 'py-8 sm:py-10')}>
       <PageHeader
@@ -1219,9 +1211,31 @@ export function Train() {
         ))}
       </ol>
 
-      {err && <div className="mt-4 overflow-hidden rounded-2xl"><ErrBar>{err}</ErrBar></div>}
+      {err && (
+        <div className="mt-4 overflow-hidden rounded-2xl">
+          <ErrBar>
+            <span className="flex flex-wrap items-center gap-x-3 gap-y-2">
+              <span>{err}</span>
+              {!me && (
+                <button type="button" onClick={() => go('/')} className="inline-flex items-center gap-1 font-semibold underline decoration-copper/50 underline-offset-2">
+                  <Egg className="size-3.5" />
+                  {t('去敲蛋', 'Crack an egg')}
+                </button>
+              )}
+            </span>
+          </ErrBar>
+        </div>
+      )}
 
       <Panel title={t('出战芯喵', 'Your fighter')} icon={Swords} className="mt-6" bodyClass="p-4">
+        {pets.length === 0 ? (
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-panel-2/60 px-4 py-3">
+            <p className="text-sm text-pretty text-mute">
+              {t('还没有出战芯喵。可以先看看下面的野怪和切磋对手；开打时再去敲蛋。', 'No fighter yet. Browse the wild bugs and spar rivals below; hatch one when you are ready to fight.')}
+            </p>
+            <Button size="sm" icon={Egg} onClick={() => go('/')}>{t('去敲蛋', 'Crack an egg')}</Button>
+          </div>
+        ) : (
         <ul className="flex flex-wrap gap-2">
           {pets.map((p) => {
             const on = me?.id === p.id;
@@ -1243,6 +1257,7 @@ export function Train() {
             );
           })}
         </ul>
+        )}
         {me && myHeart && (
           <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-2xl bg-panel-2/60 px-4 py-3 text-xs text-mute">
             <HeartLine heart={myHeart} />
