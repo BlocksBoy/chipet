@@ -45,16 +45,8 @@ let leaderboardLoading = false;
 
 const cloudSubs = new Set<() => void>();
 let cloudRev = 0;
-/** 广场动态服务端总数（分页） */
+/** 广场动态服务端总数（仅作旁路提示；广场列表由 Plaza 直打 API） */
 let feedTotal = 0;
-/** 按页缓存：key=页码(从1起)；展示以 API 为准，可被 force 整页替换 */
-const feedPageCache = new Map<number, Parameters<typeof social.applyCloudFeed>[0]>();
-let feedPageSizeCached = 0;
-const feedLoadingPages = new Set<number>();
-const feedPagePromises = new Map<number, Promise<void>>();
-/** 防止并发 force/非 force 旧请求回写覆盖新结果 */
-const feedPageEpoch = new Map<number, number>();
-let feedPageLoading = false;
 
 function notifyCloud() {
   cloudRev += 1;
@@ -91,17 +83,6 @@ export function getFeedTotal() {
   return feedTotal;
 }
 
-export function isFeedPageLoading(page?: number) {
-  if (page != null) return feedLoadingPages.has(Math.max(1, page));
-  return feedPageLoading || feedLoadingPages.size > 0;
-}
-
-/** 已拉过的广场动态页；未拉过返回 undefined（区分「空页」与「还没请求」） */
-export function getCachedFeedPage(page: number) {
-  const p = Math.max(1, page);
-  return feedPageCache.has(p) ? feedPageCache.get(p)! : undefined;
-}
-
 export function subscribeLeaderboard(fn: () => void) {
   leaderboardSubs.add(fn);
   return () => { leaderboardSubs.delete(fn); };
@@ -135,21 +116,14 @@ export const cloudSync = {
       await this.bootstrapLocalPublic();
 
       const [feed, aggs] = await Promise.all([
-        // 首屏多拉一些；广场分页按页直拉，不依赖本地累计条数
-        fetchChipetFeed({ limit: 100, offset: 0 }),
+        // 家园预览只拉首屏 10 条；广场列表由 Plaza 按页直打，不走本地页缓存
+        fetchChipetFeed({ limit: 10, offset: 0 }),
         fetchChipetPetAggAll(),
       ]);
       if (feed) {
         feedTotal = Math.max(0, Number(feed.total) || feed.items?.length || 0);
         const items = (feed.items ?? []) as Parameters<typeof social.applyCloudFeed>[0];
         social.applyCloudFeed(items, feed.likes ?? {}, true);
-        // 预填前几页缓存（与广场 FEED_PAGE=10 对齐）
-        const ps = 10;
-        feedPageSizeCached = ps;
-        feedPageCache.clear();
-        for (let i = 0; i * ps < items.length; i++) {
-          feedPageCache.set(i + 1, items.slice(i * ps, (i + 1) * ps));
-        }
       }
       if (aggs?.length) {
         const pats: Record<string, number> = {};
@@ -166,75 +140,6 @@ export const cloudSync = {
       publicLoading = false;
       notifyCloud();
     }
-  },
-
-  /**
-   * 按页直打后端 /api/chipet/feed?offset&limit。
-   * page 从 1 起；广场列表以本次 API 结果为准（force 可打穿缓存）。
-   */
-  async loadFeedPage(page: number, pageSize: number, opts?: { force?: boolean }): Promise<void> {
-    const size = Math.max(1, pageSize);
-    const p = Math.max(1, page);
-    const force = !!opts?.force;
-    if (feedPageSizeCached && feedPageSizeCached !== size) {
-      feedPageCache.clear();
-    }
-    feedPageSizeCached = size;
-    if (!force && feedPageCache.has(p)) return;
-    if (!force) {
-      const existing = feedPagePromises.get(p);
-      if (existing) return existing;
-    }
-    if (force && p === 1) {
-      // 只清分页缓存；请求失败时不留下空首页
-      feedPageCache.clear();
-    }
-
-    const epoch = (feedPageEpoch.get(p) ?? 0) + 1;
-    feedPageEpoch.set(p, epoch);
-
-    feedLoadingPages.add(p);
-    feedPageLoading = true;
-    notifyCloud();
-    const job = (async () => {
-      try {
-        const offset = (p - 1) * size;
-        const r = await fetchChipetFeed({ limit: size, offset });
-        // 旧请求作废：不写缓存
-        if (feedPageEpoch.get(p) !== epoch) return;
-        if (!r) {
-          // 失败保留旧缓存，避免把列表刷空
-          return;
-        }
-        if (r.total != null) feedTotal = Math.max(0, Number(r.total) || 0);
-        const items = (r.items ?? []) as Parameters<typeof social.applyCloudFeed>[0];
-        feedPageCache.set(p, items);
-        if (items.length) {
-          social.applyCloudFeed(items, r.likes ?? {}, false);
-        } else if (offset >= feedTotal) {
-          feedTotal = Math.min(feedTotal, offset);
-        }
-      } finally {
-        if (feedPageEpoch.get(p) === epoch) {
-          feedLoadingPages.delete(p);
-          feedPagePromises.delete(p);
-        }
-        feedPageLoading = feedLoadingPages.size > 0;
-        notifyCloud();
-      }
-    })();
-    feedPagePromises.set(p, job);
-    return job;
-  },
-
-  /** 重拉广场动态首页（打穿缓存）；切 Tab / 轮询 / 发动态后调用 */
-  async refreshFeedHead(pageSize: number): Promise<void> {
-    return this.loadFeedPage(1, pageSize, { force: true });
-  },
-
-  /** @deprecated 改用 loadFeedPage；保留别名以免旧调用炸掉 */
-  async ensureFeedThrough(page: number, pageSize: number): Promise<void> {
-    return this.loadFeedPage(page, pageSize);
   },
 
   /** 本机 localStorage → 库；每浏览器只跑一次（成功或空载荷也打标）。 */
@@ -440,14 +345,6 @@ export const cloudSync = {
     text: ChipetText;
   }) {
     const addr = wallet();
-    // 先插进首页缓存，广场立刻能看见自己刚发的；再打 API，成功后 force 对齐服务端
-    const size = feedPageSizeCached || 10;
-    const head = feedPageCache.get(1) ?? [];
-    if (!head.some((a) => a.id === act.id)) {
-      feedPageCache.set(1, [act as Parameters<typeof social.applyCloudFeed>[0][number], ...head].slice(0, size));
-      feedTotal = Math.max(feedTotal + 1, feedPageCache.get(1)?.length ?? 0);
-      notifyCloud();
-    }
     const body = {
       address: addr || undefined,
       id: act.id,
@@ -461,7 +358,9 @@ export const cloudSync = {
     const tryPost = async (attempt: number): Promise<void> => {
       const item = await postChipetActivity(body);
       if (item) {
-        void this.refreshFeedHead(size);
+        feedTotal = Math.max(feedTotal + 1, feedTotal);
+        // 通知广场等订阅方去 API 重拉；不写本地页缓存
+        notifyCloud();
         return;
       }
       if (attempt >= 3) {

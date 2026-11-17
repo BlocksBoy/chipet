@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { ArrowRight, Cable, CalendarCheck, Check, Fish, Flame, Hand, Pencil, Sparkles, Swords, ThumbsUp, Trophy, Users } from 'lucide-react';
+import { fetchChipetFeed } from '../api.ts';
 import {
   DataLoading, FeedSkeleton, PetCardGridSkeleton, PlazaSidebarSkeleton, RankListSkeleton, StatBandSkeleton,
 } from '../components/Skeleton.tsx';
@@ -11,8 +12,8 @@ import { ACT_ICON, actTone, PetCard, routeIdOf, timeAgo } from '../chipet/PetCar
 import { heartOf } from '../chipet/heart.ts';
 import { petSeed } from '../chipet/phenotype.ts';
 import {
-  cloudSync, getCachedFeedPage, getCachedLeaderboard, getCloudSyncRev, getFeedTotal, getLeaderboardRev,
-  isFeedPageLoading, isLeaderboardLoading, isPublicLoading,
+  cloudSync, getCachedLeaderboard, getCloudSyncRev, getLeaderboardRev,
+  isLeaderboardLoading, isPublicLoading,
   leaderboardItemToPet, subscribeCloudSync, subscribeLeaderboard,
 } from '../chipet/cloudSync.ts';
 import { hydrateChainRivals } from '../chipet/rivals.ts';
@@ -26,6 +27,21 @@ const FEED_VIEW_CLASS = 'max-h-[47.5rem]';
 /** 自定义绿色拇指固定高度（px），故意比原生可视比拇指短 */
 const FEED_THUMB_PX = 48;
 
+type FeedRow = Activity & { likes: number; liked: boolean };
+
+function mergeLikeState(items: Activity[], likesMap: Record<string, number>): FeedRow[] {
+  const local = social.activities();
+  const byId = new Map(local.map((a) => [a.id, a]));
+  return items.map((a) => {
+    const hit = byId.get(a.id);
+    return {
+      ...a,
+      likes: hit?.likes ?? likesMap[a.id] ?? (a as { likes?: number }).likes ?? 0,
+      liked: hit?.liked ?? false,
+    };
+  });
+}
+
 export function Plaza() {
   const t = useT();
   const lang = useLang();
@@ -35,8 +51,12 @@ export function Plaza() {
   const [name, setName] = useState(social.profile().displayName);
   const [editing, setEditing] = useState(false);
   const [tick, setTick] = useState(0);
-  /** 已拼进列表的批次数（滚动触底 +1） */
-  const [feedLoadedPages, setFeedLoadedPages] = useState(1);
+  /** 广场列表：组件内直打 API，不走本地页缓存 */
+  const [feedItems, setFeedItems] = useState<FeedRow[]>([]);
+  const [feedTotal, setFeedTotal] = useState(0);
+  const [feedHeadLoading, setFeedHeadLoading] = useState(true);
+  const [feedMoreLoading, setFeedMoreLoading] = useState(false);
+  const feedReqEpoch = useRef(0);
   const feedScrollRef = useRef<HTMLDivElement>(null);
   const feedSentinelRef = useRef<HTMLDivElement>(null);
   const [feedThumbTop, setFeedThumbTop] = useState(0);
@@ -46,38 +66,21 @@ export function Plaza() {
   const cloudRev = useSyncExternalStore(subscribeCloudSync, getCloudSyncRev, getCloudSyncRev);
   const bootLoading = isPublicLoading();
   const boardLoading = isLeaderboardLoading();
-  const feedTotal = getFeedTotal();
-  void cloudRev;
   const profile = useMemo(() => social.profile(), [tick, lang, socialRev]);
-  const feedPages = Math.max(1, Math.ceil(Math.max(0, feedTotal) / FEED_PAGE));
-  const safeLoadedPages = Math.min(Math.max(1, feedLoadedPages), feedPages);
-  const firstPage = getCachedFeedPage(1);
-  const firstFetching = isFeedPageLoading(1);
-  // 累积 1..safeLoadedPages；点赞态跟 social
+  // 点赞态跟 social 刷新
   const feed = useMemo(() => {
-    type FeedRow = Activity & { likes: number; liked: boolean };
-    const liked = social.activities() as FeedRow[];
-    const byId = new Map(liked.map((a) => [a.id, a]));
-    const out: FeedRow[] = [];
-    for (let p = 1; p <= safeLoadedPages; p++) {
-      const page = getCachedFeedPage(p);
-      if (!page) continue;
-      for (const a of page) {
-        const local = byId.get(a.id);
-        out.push(local
-          ? { ...a, likes: local.likes, liked: local.liked }
-          : { ...a, likes: (a as { likes?: number }).likes ?? 0, liked: false });
-      }
-    }
-    return out;
-  }, [safeLoadedPages, tick, socialRev, cloudRev]);
-  const feedInitialPending = firstPage === undefined && (firstFetching || bootLoading);
-  const nextFeedPage = safeLoadedPages + 1;
-  const feedLoadingMore = nextFeedPage <= feedPages && (
-    isFeedPageLoading(nextFeedPage)
-    || (getCachedFeedPage(safeLoadedPages) === undefined && isFeedPageLoading(safeLoadedPages))
-  );
-  const feedHasMore = feedTotal > 0 && safeLoadedPages < feedPages;
+    const local = social.activities();
+    const byId = new Map(local.map((a) => [a.id, a]));
+    return feedItems.map((a) => {
+      const hit = byId.get(a.id);
+      return hit
+        ? { ...a, likes: hit.likes, liked: hit.liked }
+        : a;
+    });
+  }, [feedItems, tick, socialRev]);
+  const feedHasMore = feed.length < feedTotal;
+  const feedLoadingMore = feedMoreLoading;
+  const feedInitialPending = feedHeadLoading && feedItems.length === 0;
   // 热门 / 排行：优先读库缓存；找不到/已消失的宠直接丢掉
   const hot = useMemo(() => {
     const cloud = getCachedLeaderboard('heat');
@@ -115,7 +118,7 @@ export function Plaza() {
     });
   }, [tick, socialRev]);
   const top = ranks[0]?.score || 1;
-  const showFeedSkeleton = feedInitialPending && !firstPage;
+  const showFeedSkeleton = feedInitialPending;
   const showHotSkeleton = (bootLoading || boardLoading) && hot.length === 0;
   const showRankSkeleton = (bootLoading || boardLoading) && ranks.length === 0;
 
@@ -123,25 +126,63 @@ export function Plaza() {
     if (tab === 'hot' || tab === 'rank') void cloudSync.refreshLeaderboards();
   }, [tab, tick, socialRev]);
 
-  // 进动态 Tab：强制打 API 重拉首页；停留时每 8s 再刷（不以本地旧缓存当真理）
+  /** 首屏 / 轮询：只拉最新 10 条，不保留旧页 */
+  const loadFeedHead = useCallback(async () => {
+    const epoch = ++feedReqEpoch.current;
+    setFeedHeadLoading(true);
+    try {
+      const r = await fetchChipetFeed({ limit: FEED_PAGE, offset: 0 });
+      if (epoch !== feedReqEpoch.current) return;
+      if (!r) return;
+      const items = (r.items ?? []) as Activity[];
+      const likes = r.likes ?? {};
+      setFeedTotal(Math.max(0, Number(r.total) || items.length));
+      setFeedItems(mergeLikeState(items, likes));
+      // 顺带刷新 social 点赞态，不把整库塞进本地页缓存
+      if (items.length) social.applyCloudFeed(items, likes, false);
+    } finally {
+      if (epoch === feedReqEpoch.current) setFeedHeadLoading(false);
+    }
+  }, []);
+
+  /** 触底：再拉后面 10 条并追加 */
+  const loadFeedMore = useCallback(async () => {
+    if (feedMoreLoading || feedHeadLoading) return;
+    const offset = feedItems.length;
+    if (offset >= feedTotal && feedTotal > 0) return;
+    const epoch = feedReqEpoch.current;
+    setFeedMoreLoading(true);
+    try {
+      const r = await fetchChipetFeed({ limit: FEED_PAGE, offset });
+      if (epoch !== feedReqEpoch.current) return;
+      if (!r) return;
+      const items = (r.items ?? []) as Activity[];
+      const likes = r.likes ?? {};
+      if (r.total != null) setFeedTotal(Math.max(0, Number(r.total) || 0));
+      if (!items.length) {
+        setFeedTotal((prev) => Math.min(prev, offset));
+        return;
+      }
+      setFeedItems((prev) => {
+        const seen = new Set(prev.map((a) => a.id));
+        const next = mergeLikeState(items, likes).filter((a) => !seen.has(a.id));
+        return [...prev, ...next];
+      });
+      social.applyCloudFeed(items, likes, false);
+    } finally {
+      setFeedMoreLoading(false);
+    }
+  }, [feedItems.length, feedTotal, feedMoreLoading, feedHeadLoading]);
+
+  // 进动态 Tab / 发动态成功(cloudRev)：重拉首页；停留时每 8s 再刷
   useEffect(() => {
     if (tab !== 'feed') return;
-    setFeedLoadedPages(1);
-    void cloudSync.refreshFeedHead(FEED_PAGE);
+    void loadFeedHead();
     const timer = window.setInterval(() => {
-      setFeedLoadedPages(1);
-      void cloudSync.refreshFeedHead(FEED_PAGE);
+      void loadFeedHead();
     }, 8_000);
     return () => window.clearInterval(timer);
-  }, [tab]);
-
-  // 已打开的后续批次：按页打后端（首页由 refreshFeedHead 负责）
-  useEffect(() => {
-    if (tab !== 'feed') return;
-    for (let p = 2; p <= safeLoadedPages; p++) {
-      void cloudSync.loadFeedPage(p, FEED_PAGE);
-    }
-  }, [tab, safeLoadedPages]);
+  }, [tab, cloudRev, loadFeedHead]);
 
   const syncFeedThumb = useCallback(() => {
     const el = feedScrollRef.current;
@@ -166,9 +207,9 @@ export function Plaza() {
     const ro = new ResizeObserver(() => syncFeedThumb());
     ro.observe(el);
     return () => ro.disconnect();
-  }, [tab, feed.length, feedLoadingMore, syncFeedThumb, cloudRev]);
+  }, [tab, feed.length, feedLoadingMore, syncFeedThumb]);
 
-  // 触底哨兵：滚动区固定约 10 行高，到底再拼下一批
+  // 触底哨兵：再抓后面 10 条
   useEffect(() => {
     if (tab !== 'feed') return;
     const root = feedScrollRef.current;
@@ -176,26 +217,18 @@ export function Plaza() {
     if (!root || !sentinel) return;
     const io = new IntersectionObserver((entries) => {
       if (!entries.some((e) => e.isIntersecting)) return;
-      setFeedLoadedPages((prev) => {
-        const capped = Math.min(Math.max(1, prev), feedPages);
-        if (capped >= feedPages) return capped;
-        if (getCachedFeedPage(capped) === undefined) return capped;
-        if (isFeedPageLoading(capped + 1)) return capped;
-        return capped + 1;
-      });
+      if (!feedHasMore || feedMoreLoading || feedHeadLoading) return;
+      void loadFeedMore();
     }, { root, rootMargin: '120px 0px', threshold: 0 });
     io.observe(sentinel);
     return () => io.disconnect();
-  }, [tab, feedPages, safeLoadedPages, feed.length, cloudRev]);
+  }, [tab, feedHasMore, feedMoreLoading, feedHeadLoading, feed.length, loadFeedMore]);
 
   // 侧栏邻居 /「更多邻居」混入其他玩家的链上芯喵
   useEffect(() => {
     void hydrateChainRivals({ exclude: account, limit: 48 });
   }, [account]);
 
-  useEffect(() => {
-    setFeedLoadedPages((p) => Math.min(Math.max(1, p), feedPages));
-  }, [feedPages]);
   // 切钱包后主人名可能变了；非编辑中时跟档
   useEffect(() => {
     if (!editing) setName(profile.displayName);

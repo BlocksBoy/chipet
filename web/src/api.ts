@@ -217,10 +217,10 @@ function apiReady(): boolean {
   return !(DEWEB && !BASE);
 }
 
-async function apiGet<T>(path: string): Promise<T | null> {
+async function apiGet<T>(path: string, opts?: { cache?: RequestCache }): Promise<T | null> {
   if (!apiReady()) return null;
   try {
-    const r = await fetch(`${BASE}${path}`);
+    const r = await fetch(`${BASE}${path}`, { cache: opts?.cache });
     if (!r.ok) return null;
     return await r.json() as T;
   } catch {
@@ -252,8 +252,10 @@ export async function fetchChipetFeed(opts?: { limit?: number; before?: number; 
   if (opts?.limit != null) q.set('limit', String(opts.limit));
   if (opts?.before != null) q.set('before', String(opts.before));
   if (opts?.offset != null) q.set('offset', String(opts.offset));
+  // 防浏览器/中间层把 feed 缓存成旧页
+  q.set('_', String(Date.now()));
   const qs = q.toString();
-  return apiGet(`/api/chipet/feed${qs ? `?${qs}` : ''}`);
+  return apiGet(`/api/chipet/feed?${qs}`, { cache: 'no-store' });
 }
 
 /** 本地广场数据一次性灌库。 */
