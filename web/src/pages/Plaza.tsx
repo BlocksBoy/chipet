@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
-import { ArrowRight, Cable, CalendarCheck, Check, Fish, Flame, Hand, Pencil, Sparkles, Swords, ThumbsUp, Trophy, Users } from 'lucide-react';
+import { ArrowRight, Cable, CalendarCheck, Check, Fish, Flame, Hand, Loader2, Pencil, Sparkles, Swords, ThumbsUp, Trophy, Users } from 'lucide-react';
 import { fetchChipetFeed } from '../api.ts';
 import {
   DataLoading, FeedSkeleton, PetCardGridSkeleton, PlazaSidebarSkeleton, RankListSkeleton, StatBandSkeleton,
@@ -394,12 +394,17 @@ export function Plaza() {
                       {/* 固定底栏高度：加载中 / 到底文案切换不撑缩 */}
                       <div className={cn(FEED_FOOTER_H, 'flex items-center justify-center px-5')}>
                         {feedLoadingMore ? (
-                          <p className="text-center text-xs text-mute">
-                            {t('加载更多动态…', 'Loading more…')}
+                          <p className="flex items-center justify-center gap-2 text-[12px] leading-relaxed text-mute" role="status" aria-live="polite">
+                            <span className="h-px w-8 bg-line/80" aria-hidden />
+                            <Loader2 className="size-3.5 shrink-0 animate-spin text-copper" aria-hidden />
+                            <span className="animate-pulse">{t('加载更多动态…', 'Loading more…')}</span>
+                            <span className="h-px w-8 bg-line/80" aria-hidden />
                           </p>
                         ) : !feedHasMore && feed.length > 0 ? (
-                          <p className="text-center text-xs text-faint">
-                            {t('已经到底了', 'You\'re all caught up')}
+                          <p className="flex items-center justify-center gap-2 text-[12px] leading-relaxed text-faint">
+                            <span className="h-px w-8 bg-line/80" aria-hidden />
+                            <span>{t('已经到底了', 'You\'re all caught up')}</span>
+                            <span className="h-px w-8 bg-line/80" aria-hidden />
                           </p>
                         ) : null}
                       </div>
