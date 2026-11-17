@@ -29,8 +29,8 @@ function feedActorLabel(actor: Activity['actor'], t: (zh: string, en: string) =>
 
 /** 广场动态每批条数（与后端 offset/limit 对齐） */
 const FEED_PAGE = 20;
-/** 切回动态 Tab / 后台补新：距上次成功拉取不足此时长则不再打网络 */
-const FEED_HEAD_STALE_MS = 30_000;
+/** 停留在动态 Tab 时，后台软合并补新的间隔 */
+const FEED_SOFT_POLL_MS = 30_000;
 /** 可视区约 10 行高（与行 min-h-[4.75rem] 对齐） */
 const FEED_VIEW_CLASS = 'max-h-[47.5rem]';
 /** 自定义绿色拇指固定高度（px），故意比原生可视比拇指短 */
@@ -89,7 +89,6 @@ export function Plaza() {
   const lastScrollTop = useRef(0);
   const nextOffset = useRef(0);
   const headPending = useRef(false);
-  const lastHeadAt = useRef(0);
   const nextPage = useRef<{ offset: number; request: ReturnType<typeof fetchChipetFeed> } | null>(null);
   const feedScrollRef = useRef<HTMLDivElement>(null);
   const feedSentinelRef = useRef<HTMLDivElement>(null);
@@ -214,7 +213,6 @@ export function Plaza() {
       }
       if (items.length) social.applyCloudFeed(items, likes, false);
       // 首屏 / 整表刷新后立刻预取第 2 页，滚动时不卡在跨洋 RTT
-      lastHeadAt.current = Date.now();
       if (replace && next.length < Number(r.total)) void requestPage(next.length);
     } finally {
       headPending.current = false;
@@ -223,8 +221,6 @@ export function Plaza() {
   }, [requestPage]);
 
   const refreshFeedManual = useCallback(() => {
-    // 手动刷新：打穿 30s 节流，整表重拉
-    lastHeadAt.current = 0;
     void loadFeedHead({ replace: true });
   }, [loadFeedHead]);
 
@@ -276,15 +272,13 @@ export function Plaza() {
     }
   }, [feedItems]);
 
-  // 切回动态：无数据立刻拉；有数据时距上次不足 30s 不重打
+  // 切回动态立刻拉；停留期间按间隔软合并补新
   useEffect(() => {
     if (tab !== 'feed') return;
-    const shouldLoadHead = () =>
-      feedItemsRef.current.length === 0 || Date.now() - lastHeadAt.current >= FEED_HEAD_STALE_MS;
-    if (shouldLoadHead()) void loadFeedHead();
+    void loadFeedHead();
     const timer = window.setInterval(() => {
-      if (shouldLoadHead()) void loadFeedHead();
-    }, FEED_HEAD_STALE_MS);
+      void loadFeedHead();
+    }, FEED_SOFT_POLL_MS);
     return () => window.clearInterval(timer);
   }, [tab, loadFeedHead]);
 
