@@ -948,6 +948,14 @@ export const social = {
     const s = load();
     return s.activities.map((a) => ({ ...a, likes: s.likes[a.id] ?? 0, liked: !!s.liked[a.id] }));
   },
+  /** 单条击掌态（广场列表本地分页用；不要求该条已在 activities 缓存里） */
+  activityLike(id: string): { likes: number | undefined; liked: boolean } {
+    const s = load();
+    return {
+      likes: Object.prototype.hasOwnProperty.call(s.likes, id) ? Number(s.likes[id]) || 0 : undefined,
+      liked: !!s.liked[id],
+    };
+  },
   /** 给一条动态击掌 / 取消击掌。 */
   like(id: string) {
     const s = load();

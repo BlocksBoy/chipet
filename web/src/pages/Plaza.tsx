@@ -50,14 +50,13 @@ type FeedHeadCachePayload = {
 };
 
 function mergeLikeState(items: Activity[], likesMap: Record<string, number>): FeedRow[] {
-  const local = social.activities();
-  const byId = new Map(local.map((a) => [a.id, a]));
+  // 只读击掌态，不把分页结果写进 social.activities，避免牵动家园预览等其它数据
   return items.map((a) => {
-    const hit = byId.get(a.id);
+    const meta = social.activityLike(a.id);
     return {
       ...a,
-      likes: hit?.likes ?? likesMap[a.id] ?? (a as { likes?: number }).likes ?? 0,
-      liked: hit?.liked ?? false,
+      likes: meta.likes ?? likesMap[a.id] ?? (a as { likes?: number }).likes ?? 0,
+      liked: meta.liked,
     };
   });
 }
@@ -110,12 +109,12 @@ function hydrateFeedFromCache(
 ): boolean {
   const cached = readFeedHeadCache();
   if (!cached?.rows.length) return false;
-  itemsRef.current = cached.rows;
+  const rows = mergeLikeState(cached.items, cached.likes);
+  itemsRef.current = rows;
   totalRef.current = cached.total;
-  setItems(cached.rows);
+  setItems(rows);
   setTotal(cached.total);
-  if (nextOffsetRef.current <= 0) nextOffsetRef.current = cached.rows.length;
-  social.applyCloudFeed(cached.items, cached.likes, false);
+  if (nextOffsetRef.current <= 0) nextOffsetRef.current = rows.length;
   return true;
 }
 
@@ -147,6 +146,8 @@ export function Plaza() {
   // 有缓存则不当成「首屏加载中」，避免切回菜单闪 skeleton / 转圈
   const [feedHeadLoading, setFeedHeadLoading] = useState(() => !(bootFeedHead()?.rows.length));
   const [feedMoreLoading, setFeedMoreLoading] = useState(false);
+  /** 邻居链上池先就绪，再允许动态列表打网络 */
+  const [rivalsReady, setRivalsReady] = useState(false);
   const feedItemsRef = useRef<FeedRow[]>([]);
   const feedTotalRef = useRef(0);
   const feedMoreLoadingRef = useRef(false);
@@ -171,15 +172,15 @@ export function Plaza() {
   feedTotalRef.current = feedTotal;
   feedMoreLoadingRef.current = feedMoreLoading;
   feedHeadLoadingRef.current = feedHeadLoading;
-  // 点赞态跟 social 刷新
+  // 击掌态跟 social 刷新；列表本体仍以 feedItems 为准，不灌 activities
   const feed = useMemo(() => {
-    const local = social.activities();
-    const byId = new Map(local.map((a) => [a.id, a]));
     return feedItems.map((a) => {
-      const hit = byId.get(a.id);
-      return hit
-        ? { ...a, likes: hit.likes, liked: hit.liked }
-        : a;
+      const meta = social.activityLike(a.id);
+      return {
+        ...a,
+        liked: meta.liked,
+        likes: meta.likes ?? a.likes,
+      };
     });
   }, [feedItems, tick, socialRev]);
   const feedHasMore = nextOffset.current < feedTotal;
@@ -293,7 +294,6 @@ export function Plaza() {
           if (feedScrollRef.current) feedScrollRef.current.scrollTop = 0;
         }
       }
-      if (items.length) social.applyCloudFeed(items, likes, false);
       // 首屏 / 整表刷新后立刻预取第 2 页，滚动时不卡在跨洋 RTT
       if (replace && next.length < total) void requestPage(next.length);
     } finally {
@@ -323,7 +323,6 @@ export function Plaza() {
       const pageItems = mergeLikeState(items, likes);
       const pageTotal = r.total ?? total;
       setFeedTotal(pageTotal);
-      if (items.length) social.applyCloudFeed(items, likes, false);
       if (!pageItems.length) {
         setFeedTotal((prev) => Math.min(prev, offset));
         return;
@@ -354,18 +353,29 @@ export function Plaza() {
     }
   }, [feedItems]);
 
-  // 切回动态：先展示本地首屏，再拉网络替换；停留期间软合并补新
+  // ① 先拉邻居链上池并钉住数量
+  useEffect(() => {
+    let alive = true;
+    setRivalsReady(false);
+    void hydrateChainRivals({ exclude: account, limit: 48 }).finally(() => {
+      if (alive) setRivalsReady(true);
+    });
+    return () => { alive = false; };
+  }, [account]);
+
+  // ② 邻居就绪后再打动态网络（本地首屏可先画）
   useEffect(() => {
     if (tab !== 'feed') return;
     if (feedItemsRef.current.length === 0) {
       hydrateFeedFromCache(setFeedItems, setFeedTotal, feedItemsRef, feedTotalRef, nextOffset);
     }
+    if (!rivalsReady) return;
     void loadFeedHead();
     const timer = window.setInterval(() => {
       void loadFeedHead();
     }, FEED_SOFT_POLL_MS);
     return () => window.clearInterval(timer);
-  }, [tab, loadFeedHead]);
+  }, [tab, loadFeedHead, rivalsReady]);
 
   const syncFeedThumb = useCallback(() => {
     const el = feedScrollRef.current;
@@ -415,11 +425,6 @@ export function Plaza() {
     return () => io.disconnect();
   }, [tab, showFeedSkeleton, feedTotal > 0, loadFeedMore]);
 
-  // 侧栏邻居 /「更多邻居」混入其他玩家的链上芯喵
-  useEffect(() => {
-    void hydrateChainRivals({ exclude: account, limit: 48 });
-  }, [account]);
-
   // 切钱包后主人名可能变了；非编辑中时跟档
   useEffect(() => {
     if (!editing) setName(profile.displayName);
@@ -442,7 +447,10 @@ export function Plaza() {
   };
 
   const like = (id: string) => {
-    social.like(id);
+    const on = social.like(id);
+    setFeedItems((prev) => prev.map((a) => (
+      a.id === id ? { ...a, liked: on, likes: Math.max(0, a.likes + (on ? 1 : -1)) } : a
+    )));
     setTick((t) => t + 1);
   };
 
