@@ -116,8 +116,8 @@ export const cloudSync = {
       await this.bootstrapLocalPublic();
 
       const [feed, aggs] = await Promise.all([
-        // 家园预览只拉首屏 10 条；广场列表由 Plaza 按页直打，不走本地页缓存
-        fetchChipetFeed({ limit: 10, offset: 0 }),
+        // 家园预览只拉首屏；广场列表由 Plaza 按页直打，不走本地页缓存
+        fetchChipetFeed({ limit: 20, offset: 0 }),
         fetchChipetPetAggAll(),
       ]);
       if (feed) {

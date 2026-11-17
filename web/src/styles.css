@@ -130,6 +130,7 @@
 .chip-scroll-feed {
   scrollbar-width: none;
   -ms-overflow-style: none;
+  overflow-anchor: none; /* 追加条目时禁止浏览器滚动锚定，避免下拉加载跳动 */
 }
 .chip-scroll-feed::-webkit-scrollbar {
   display: none;

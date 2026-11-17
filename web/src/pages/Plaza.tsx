@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { ArrowRight, Cable, CalendarCheck, Check, Fish, Flame, Hand, Pencil, Sparkles, Swords, ThumbsUp, Trophy, Users } from 'lucide-react';
 import { fetchChipetFeed } from '../api.ts';
 import {
@@ -21,11 +21,13 @@ import { getSocialRev, maxBonds, social, subscribeSocial, type Activity } from '
 import { plural, txt, useLang, useT } from '../i18n.ts';
 
 /** 广场动态每批条数（与后端 offset/limit 对齐） */
-const FEED_PAGE = 10;
+const FEED_PAGE = 20;
 /** 可视区约 10 行高（与行 min-h-[4.75rem] 对齐） */
 const FEED_VIEW_CLASS = 'max-h-[47.5rem]';
 /** 自定义绿色拇指固定高度（px），故意比原生可视比拇指短 */
 const FEED_THUMB_PX = 48;
+/** 列表底栏固定高度，避免「加载中 / 到底」切换时撑缩抖动 */
+const FEED_FOOTER_H = 'h-10';
 
 type FeedRow = Activity & { likes: number; liked: boolean };
 
@@ -40,6 +42,19 @@ function mergeLikeState(items: Activity[], likesMap: Record<string, number>): Fe
       liked: hit?.liked ?? false,
     };
   });
+}
+
+/** 软合并：新帖插到顶部，已加载的旧页保留，避免轮询把列表裁回首屏导致跳动 */
+function softMergeFeedHead(prev: FeedRow[], incoming: FeedRow[]): FeedRow[] {
+  if (!prev.length) return incoming;
+  const prevById = new Map(prev.map((a) => [a.id, a]));
+  const freshById = new Map(incoming.map((a) => [a.id, a]));
+  const brandNew = incoming.filter((a) => !prevById.has(a.id));
+  const rest = prev.map((a) => {
+    const f = freshById.get(a.id);
+    return f ? { ...a, likes: f.likes, liked: f.liked || a.liked } : a;
+  });
+  return brandNew.length ? [...brandNew, ...rest] : rest;
 }
 
 export function Plaza() {
@@ -57,6 +72,13 @@ export function Plaza() {
   const [feedHeadLoading, setFeedHeadLoading] = useState(true);
   const [feedMoreLoading, setFeedMoreLoading] = useState(false);
   const feedReqEpoch = useRef(0);
+  const feedItemsRef = useRef<FeedRow[]>([]);
+  const feedTotalRef = useRef(0);
+  const feedMoreLoadingRef = useRef(false);
+  const feedHeadLoadingRef = useRef(true);
+  /** DOM 提交后再钉住/补偿 scrollTop，避免加载时视口跳动 */
+  const feedScrollPinRef = useRef<number | null>(null);
+  const feedScrollBoostRef = useRef<number | null>(null);
   const feedScrollRef = useRef<HTMLDivElement>(null);
   const feedSentinelRef = useRef<HTMLDivElement>(null);
   const [feedThumbTop, setFeedThumbTop] = useState(0);
@@ -67,6 +89,10 @@ export function Plaza() {
   const bootLoading = isPublicLoading();
   const boardLoading = isLeaderboardLoading();
   const profile = useMemo(() => social.profile(), [tick, lang, socialRev]);
+  feedItemsRef.current = feedItems;
+  feedTotalRef.current = feedTotal;
+  feedMoreLoadingRef.current = feedMoreLoading;
+  feedHeadLoadingRef.current = feedHeadLoading;
   // 点赞态跟 social 刷新
   const feed = useMemo(() => {
     const local = social.activities();
@@ -126,32 +152,46 @@ export function Plaza() {
     if (tab === 'hot' || tab === 'rank') void cloudSync.refreshLeaderboards();
   }, [tab, tick, socialRev]);
 
-  /** 首屏 / 轮询：只拉最新 10 条，不保留旧页 */
-  const loadFeedHead = useCallback(async () => {
-    const epoch = ++feedReqEpoch.current;
-    setFeedHeadLoading(true);
+  /** replace：进 Tab / 发动态后整表对齐；soft：轮询只补新帖，不裁掉已加载页，避免滚动跳动 */
+  const loadFeedHead = useCallback(async (mode: 'replace' | 'soft' = 'replace') => {
+    const hadItems = feedItemsRef.current.length > 0;
+    const epoch = mode === 'replace' ? ++feedReqEpoch.current : feedReqEpoch.current;
+    if (mode === 'replace' && !hadItems) setFeedHeadLoading(true);
     try {
       const r = await fetchChipetFeed({ limit: FEED_PAGE, offset: 0 });
-      if (epoch !== feedReqEpoch.current) return;
+      if (mode === 'replace' && epoch !== feedReqEpoch.current) return;
       if (!r) return;
       const items = (r.items ?? []) as Activity[];
       const likes = r.likes ?? {};
+      const next = mergeLikeState(items, likes);
       setFeedTotal(Math.max(0, Number(r.total) || items.length));
-      setFeedItems(mergeLikeState(items, likes));
-      // 顺带刷新 social 点赞态，不把整库塞进本地页缓存
+      if (mode === 'soft' && hadItems) {
+        const scroller = feedScrollRef.current;
+        const prevTop = scroller?.scrollTop ?? 0;
+        const prevHeight = scroller?.scrollHeight ?? 0;
+        setFeedItems((prev) => softMergeFeedHead(prev, next));
+        // 顶部插入新帖：记下高度差，layout 后再补偿
+        if (prevTop > 0) feedScrollBoostRef.current = prevHeight;
+      } else {
+        setFeedItems(next);
+      }
       if (items.length) social.applyCloudFeed(items, likes, false);
     } finally {
-      if (epoch === feedReqEpoch.current) setFeedHeadLoading(false);
+      if (mode === 'replace' && epoch === feedReqEpoch.current) setFeedHeadLoading(false);
     }
   }, []);
 
-  /** 触底：再拉后面 10 条并追加 */
+  /** 触底：再拉后面一批并追加；锁 scrollTop，底栏高度固定，减少抖动 */
   const loadFeedMore = useCallback(async () => {
-    if (feedMoreLoading || feedHeadLoading) return;
-    const offset = feedItems.length;
-    if (offset >= feedTotal && feedTotal > 0) return;
+    if (feedMoreLoadingRef.current || feedHeadLoadingRef.current) return;
+    const offset = feedItemsRef.current.length;
+    const total = feedTotalRef.current;
+    if (offset >= total && total > 0) return;
     const epoch = feedReqEpoch.current;
+    feedMoreLoadingRef.current = true;
     setFeedMoreLoading(true);
+    const scroller = feedScrollRef.current;
+    const pinnedTop = scroller?.scrollTop ?? 0;
     try {
       const r = await fetchChipetFeed({ limit: FEED_PAGE, offset });
       if (epoch !== feedReqEpoch.current) return;
@@ -163,6 +203,7 @@ export function Plaza() {
         setFeedTotal((prev) => Math.min(prev, offset));
         return;
       }
+      feedScrollPinRef.current = pinnedTop;
       setFeedItems((prev) => {
         const seen = new Set(prev.map((a) => a.id));
         const next = mergeLikeState(items, likes).filter((a) => !seen.has(a.id));
@@ -170,16 +211,32 @@ export function Plaza() {
       });
       social.applyCloudFeed(items, likes, false);
     } finally {
+      feedMoreLoadingRef.current = false;
       setFeedMoreLoading(false);
     }
-  }, [feedItems.length, feedTotal, feedMoreLoading, feedHeadLoading]);
+  }, []);
 
-  // 进动态 Tab / 发动态成功(cloudRev)：重拉首页；停留时每 8s 再刷
+  useLayoutEffect(() => {
+    const el = feedScrollRef.current;
+    if (!el) return;
+    if (feedScrollPinRef.current != null) {
+      el.scrollTop = feedScrollPinRef.current;
+      feedScrollPinRef.current = null;
+    }
+    if (feedScrollBoostRef.current != null) {
+      const prevHeight = feedScrollBoostRef.current;
+      feedScrollBoostRef.current = null;
+      const delta = el.scrollHeight - prevHeight;
+      if (delta > 0) el.scrollTop += delta;
+    }
+  }, [feedItems]);
+
+  // 进动态 Tab / 发动态成功：整表重拉；停留时 soft 轮询补新帖
   useEffect(() => {
     if (tab !== 'feed') return;
-    void loadFeedHead();
+    void loadFeedHead('replace');
     const timer = window.setInterval(() => {
-      void loadFeedHead();
+      void loadFeedHead('soft');
     }, 8_000);
     return () => window.clearInterval(timer);
   }, [tab, cloudRev, loadFeedHead]);
@@ -209,7 +266,7 @@ export function Plaza() {
     return () => ro.disconnect();
   }, [tab, feed.length, feedLoadingMore, syncFeedThumb]);
 
-  // 触底哨兵：再抓后面 10 条
+  // 触底哨兵：再抓下一批（依赖尽量少，避免反复 disconnect 造成抖动）
   useEffect(() => {
     if (tab !== 'feed') return;
     const root = feedScrollRef.current;
@@ -217,12 +274,13 @@ export function Plaza() {
     if (!root || !sentinel) return;
     const io = new IntersectionObserver((entries) => {
       if (!entries.some((e) => e.isIntersecting)) return;
-      if (!feedHasMore || feedMoreLoading || feedHeadLoading) return;
+      if (feedMoreLoadingRef.current || feedHeadLoadingRef.current) return;
+      if (feedItemsRef.current.length >= feedTotalRef.current && feedTotalRef.current > 0) return;
       void loadFeedMore();
     }, { root, rootMargin: '120px 0px', threshold: 0 });
     io.observe(sentinel);
     return () => io.disconnect();
-  }, [tab, feedHasMore, feedMoreLoading, feedHeadLoading, feed.length, loadFeedMore]);
+  }, [tab, showFeedSkeleton, loadFeedMore]);
 
   // 侧栏邻居 /「更多邻居」混入其他玩家的链上芯喵
   useEffect(() => {
@@ -333,16 +391,18 @@ export function Plaza() {
                         })}
                       </div>
                       <div ref={feedSentinelRef} className="h-px w-full" aria-hidden />
-                      {feedLoadingMore && (
-                        <p className="px-5 py-3 text-center text-xs text-mute">
-                          {t('加载更多动态…', 'Loading more…')}
-                        </p>
-                      )}
-                      {!feedHasMore && feed.length > 0 && !feedLoadingMore && (
-                        <p className="px-5 py-3 text-center text-xs text-faint">
-                          {t('已经到底了', 'You\'re all caught up')}
-                        </p>
-                      )}
+                      {/* 固定底栏高度：加载中 / 到底文案切换不撑缩 */}
+                      <div className={cn(FEED_FOOTER_H, 'flex items-center justify-center px-5')}>
+                        {feedLoadingMore ? (
+                          <p className="text-center text-xs text-mute">
+                            {t('加载更多动态…', 'Loading more…')}
+                          </p>
+                        ) : !feedHasMore && feed.length > 0 ? (
+                          <p className="text-center text-xs text-faint">
+                            {t('已经到底了', 'You\'re all caught up')}
+                          </p>
+                        ) : null}
+                      </div>
                     </div>
                     <div
                       className={cn('chip-scroll-feed-track', !feedThumbShow && 'invisible')}
