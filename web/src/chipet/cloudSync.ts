@@ -187,6 +187,10 @@ export const cloudSync = {
     leaderboardLoading = true;
     notifyLeaderboard();
     try {
+      // 本机宠名写回库，避免排行榜仍显示 mine:1 占位
+      for (const p of localChipet.list().filter((x) => !isChainPet(x))) {
+        this.pushLocalPetStats(p);
+      }
       const kinds: RankKind[] = ['heat', 'pats', 'wins', 'intimacy', 'level'];
       const results = await Promise.all(kinds.map((k) => fetchChipetLeaderboard(k, k === 'heat' ? 6 : 10)));
       kinds.forEach((k, i) => {
@@ -419,22 +423,66 @@ export const cloudSync = {
   },
 };
 
-/** 把排行榜 DTO 转成 Plaza 用的 pet 展示形状 */
-export function leaderboardItemToPet(item: ChipetLeaderboardItemDto) {
-  const owner = typeof item.owner === 'string' ? item.owner : txt(item.owner);
+function isPlaceholderLbName(name: string, petKey: string): boolean {
+  const n = (name || '').trim();
+  if (!n) return true;
+  if (n === petKey) return true;
+  if (/^mine:\d+$/i.test(n)) return true;
+  if (/^npc:-?\d+$/i.test(n)) return true;
+  return false;
+}
+
+export type LeaderboardPetView = {
+  key: string;
+  id: number;
+  name: string;
+  owner: string;
+  cpu: Address;
+  circuitId: bigint;
+  rarity: 0 | 1 | 2;
+  energy: number;
+  mood: number;
+  intimacy: number;
+  level: number;
+  wins: number;
+  mine: boolean;
+};
+
+/**
+ * 排行榜 DTO → 展示宠。找不到真名、本机/邻居也已不存在时返回 null（前端直接丢掉）。
+ */
+export function leaderboardItemToPet(item: ChipetLeaderboardItemDto): LeaderboardPetView | null {
+  const id = item.routeId
+    || (item.petKey.startsWith('npc:') ? Number(item.petKey.slice(4)) : Number(item.petKey.replace(/^mine:/, '')) || 0);
+  const local = item.petKey.startsWith('mine:') && id > 0 ? localChipet.get(id) : undefined;
+  const pub = !local && id ? social.getByRouteId(id) ?? social.getPet(item.petKey) : undefined;
+  // 「我的」只标本机真正持有的宠
+  const mine = !!local;
+
+  let name = item.name;
+  if (isPlaceholderLbName(name, item.petKey)) {
+    if (local?.name) name = local.name;
+    else if (pub?.name && !isPlaceholderLbName(pub.name, item.petKey)) name = pub.name;
+    else return null; // 宠已不在 / 只有 mine:id 占位 → 不展示
+  }
+
+  let owner = typeof item.owner === 'string' ? item.owner : txt(item.owner);
+  if (!owner && local) owner = txt(social.profile().displayName);
+  else if (!owner && pub) owner = pub.owner;
+
   return {
     key: item.petKey,
-    id: item.routeId || (item.petKey.startsWith('npc:') ? Number(item.petKey.slice(4)) : Number(item.petKey.replace(/^mine:/, '')) || 0),
-    name: item.name,
+    id,
+    name,
     owner,
-    cpu: (item.cpu || '0x000000000000000000000000000000000000c111') as Address,
-    circuitId: BigInt(item.circuitId || '0'),
-    rarity: (Math.max(0, Math.min(2, item.rarity)) || 0) as 0 | 1 | 2,
-    energy: item.energy,
-    mood: item.mood,
-    intimacy: item.intimacy,
-    level: item.level,
-    wins: item.wins,
-    mine: item.petKey.startsWith('mine:'),
+    cpu: (local?.cpu || pub?.cpu || item.cpu || '0x000000000000000000000000000000000000c111') as Address,
+    circuitId: local?.circuitId ?? pub?.circuitId ?? BigInt(item.circuitId || '0'),
+    rarity: (local?.rarity ?? pub?.rarity ?? (Math.max(0, Math.min(2, item.rarity)) || 0)) as 0 | 1 | 2,
+    energy: local?.energy ?? pub?.energy ?? item.energy,
+    mood: local?.mood ?? pub?.mood ?? item.mood,
+    intimacy: local?.intimacy ?? pub?.intimacy ?? item.intimacy,
+    level: local?.level ?? pub?.level ?? item.level,
+    wins: local?.wins ?? pub?.wins ?? item.wins,
+    mine,
   };
 }

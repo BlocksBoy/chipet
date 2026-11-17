@@ -139,6 +139,20 @@ describe('chipet social sync', () => {
     expect(wins.some((p) => p.petKey === 'mine:1' && p.wins === 3)).toBe(true);
   });
 
+  it('排行榜：不把 mine:id 占位当成展示名；无名鬼宠不入榜', () => {
+    bumpPetAgg('mine:42', 'pats', 5);
+    bumpPetAgg('mine:99', 'pats', 8);
+    getAdminDb().prepare(`
+      INSERT INTO chipet_activities (id, at, kind, actor_json, pet_key, pet_name, text_json, wallet)
+      VALUES ('act-name-1', ?, 'pat', '"A"', 'mine:42', '豆花', '"摸了摸"', '')
+    `).run(Date.now());
+    recomputeAndStoreLeaderboards();
+    const row = listLeaderboard('pats', 20).find((p) => p.petKey === 'mine:42');
+    expect(row?.name).toBe('豆花');
+    expect(row?.name).not.toMatch(/^mine:/);
+    expect(listLeaderboard('pats', 50).some((p) => p.petKey === 'mine:99')).toBe(false);
+  });
+
   it('HTTP：feed 公开；profile 需 address；留言限流', async () => {
     const app = createApp({ ctx });
     const feed = await app.request('/api/chipet/feed');

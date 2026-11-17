@@ -560,6 +560,35 @@ function ensureNpcProfiles() {
   }
 }
 
+/** 名字是否仍是 petKey 占位（mine:1 / npc:-2） */
+function isPlaceholderPetName(name: string, petKey: string): boolean {
+  const n = name.trim();
+  if (!n) return true;
+  if (n === petKey) return true;
+  if (/^mine:\d+$/i.test(n)) return true;
+  if (/^npc:-?\d+$/i.test(n)) return true;
+  return false;
+}
+
+/** 从动态表回填真实宠名；仍没有则返回空串（绝不回落成 mine:1）。 */
+function resolvePetDisplayName(petKey: string, stored: string): string {
+  if (!isPlaceholderPetName(stored, petKey)) return stored.trim().slice(0, 32);
+  try {
+    const row = getAdminDb().prepare(`
+      SELECT pet_name FROM chipet_activities
+      WHERE pet_key = ?
+        AND pet_name IS NOT NULL AND TRIM(pet_name) != ''
+        AND pet_name NOT LIKE 'mine:%'
+        AND pet_name NOT LIKE 'npc:%'
+      ORDER BY at DESC
+      LIMIT 1
+    `).get(petKey) as { pet_name: string } | undefined;
+    const fromAct = String(row?.pet_name ?? '').trim();
+    if (fromAct && !isPlaceholderPetName(fromAct, petKey)) return fromAct.slice(0, 32);
+  } catch { /* ignore */ }
+  return '';
+}
+
 function rowToAgg(r: Record<string, unknown>): ChipetPetAggRow {
   const petKey = String(r.pet_key ?? '');
   let routeId = Number(r.route_id) || 0;
@@ -567,6 +596,7 @@ function rowToAgg(r: Record<string, unknown>): ChipetPetAggRow {
     if (petKey.startsWith('npc:')) routeId = Number(petKey.slice(4)) || 0;
     else if (petKey.startsWith('mine:')) routeId = Number(petKey.slice(5)) || 0;
   }
+  const rawName = String(r.name ?? '');
   return {
     petKey,
     pats: Number(r.pats) || 0,
@@ -577,7 +607,7 @@ function rowToAgg(r: Record<string, unknown>): ChipetPetAggRow {
     rarity: Math.max(0, Math.min(2, Number(r.rarity) || 0)),
     energy: Math.max(0, Math.min(100, Number(r.energy) || 80)),
     mood: Math.max(0, Math.min(100, Number(r.mood) || 70)),
-    name: String(r.name ?? '') || petKey,
+    name: resolvePetDisplayName(petKey, rawName),
     owner: parseJson<JsonText>(String(r.owner_json ?? '""'), ''),
     cpu: String(r.cpu ?? '') || MOCK_CPU,
     circuitId: String(r.circuit_id ?? '0') || '0',
@@ -626,10 +656,16 @@ export function upsertPetStats(input: {
     rarity: input.rarity != null ? Math.max(0, Math.min(2, Math.floor(input.rarity))) : Math.max(0, Math.min(2, Number(prev?.rarity) || 0)),
     energy: input.energy != null ? Math.max(0, Math.min(100, Math.floor(input.energy))) : Math.max(0, Math.min(100, Number(prev?.energy) || 80)),
     mood: input.mood != null ? Math.max(0, Math.min(100, Math.floor(input.mood))) : Math.max(0, Math.min(100, Number(prev?.mood) || 70)),
-    name: (input.name ?? String(prev?.name ?? '')).slice(0, 32),
+    name: (() => {
+      const incoming = input.name != null ? String(input.name).trim() : '';
+      const prevName = String(prev?.name ?? '').trim();
+      if (incoming && !isPlaceholderPetName(incoming, key)) return incoming.slice(0, 32);
+      if (prevName && !isPlaceholderPetName(prevName, key)) return prevName.slice(0, 32);
+      return resolvePetDisplayName(key, incoming || prevName).slice(0, 32);
+    })(),
     owner: input.owner ?? parseJson<JsonText>(String(prev?.owner_json ?? '""'), ''),
-      cpu: (input.cpu ?? (String(prev?.cpu ?? '') || MOCK_CPU)).slice(0, 66),
-      circuitId: (input.circuitId ?? (String(prev?.circuit_id ?? '0') || '0')).slice(0, 64),
+    cpu: (input.cpu ?? (String(prev?.cpu ?? '') || MOCK_CPU)).slice(0, 66),
+    circuitId: (input.circuitId ?? (String(prev?.circuit_id ?? '0') || '0')).slice(0, 64),
     routeId: input.routeId != null ? Math.trunc(input.routeId) : (Number(prev?.route_id) || 0),
   };
   if (!next.routeId) {
@@ -718,11 +754,22 @@ export function recomputeAndStoreLeaderboards(opts?: {
 }): number {
   seedIfEmpty();
   ensureNpcProfiles();
-  const pets = (opts?.pets ?? listAllPetAgg()).filter(
-    (p) => p.name || p.pats > 0 || p.visits > 0 || p.wins > 0,
-  );
-  const recentMap = recentActivityCounts(opts?.recentExtra);
   const db = getAdminDb();
+  // 物化前把 agg 里的 mine:1 占位名回填成真实昵称
+  const rawPets = opts?.pets ?? listAllPetAgg();
+  const pets = rawPets
+    .map((p) => {
+      if (!isPlaceholderPetName(p.name, p.petKey)) return p;
+      const fixed = resolvePetDisplayName(p.petKey, p.name);
+      if (!fixed || fixed === p.name) return { ...p, name: '' };
+      try {
+        db.prepare(`UPDATE chipet_pet_agg SET name = ? WHERE pet_key = ?`).run(fixed, p.petKey);
+      } catch { /* ignore */ }
+      return { ...p, name: fixed };
+    })
+    // 没有真实昵称的（宠已不在 / 只有 mine:id）不进排行榜
+    .filter((p) => !!p.name && !isPlaceholderPetName(p.name, p.petKey));
+  const recentMap = recentActivityCounts(opts?.recentExtra);
   const now = Date.now();
   const insert = db.prepare(`
     INSERT INTO chipet_leaderboard (

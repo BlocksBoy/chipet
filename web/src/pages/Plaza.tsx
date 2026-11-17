@@ -45,18 +45,29 @@ export function Plaza() {
     const start = (page - 1) * FEED_PAGE;
     return activities.slice(start, start + FEED_PAGE);
   }, [activities, feedPage, feedPages]);
-  // 热门 / 排行：优先读库缓存；未拉到时回退本地现算
+  // 热门 / 排行：优先读库缓存；找不到/已消失的宠直接丢掉
   const hot = useMemo(() => {
     const cloud = getCachedLeaderboard('heat');
     if (cloud?.length) {
-      return cloud.map((row) => ({ pet: leaderboardItemToPet(row), score: row.score, pats: row.pats, visits: row.visits }));
+      return cloud
+        .map((row) => {
+          const pet = leaderboardItemToPet(row);
+          return pet ? { pet, score: row.score, pats: row.pats, visits: row.visits } : null;
+        })
+        .filter((x): x is NonNullable<typeof x> => !!x)
+        .slice(0, 6);
     }
     return social.leaderboard('heat').slice(0, 6);
   }, [tick, socialRev, boardRev]);
   const ranks = useMemo(() => {
     const cloud = getCachedLeaderboard(rankKind);
     if (cloud?.length) {
-      return cloud.map((row) => ({ pet: leaderboardItemToPet(row), score: row.score, pats: row.pats, visits: row.visits }));
+      return cloud
+        .map((row) => {
+          const pet = leaderboardItemToPet(row);
+          return pet ? { pet, score: row.score, pats: row.pats, visits: row.visits } : null;
+        })
+        .filter((x): x is NonNullable<typeof x> => !!x);
     }
     return social.leaderboard(rankKind);
   }, [tick, socialRev, boardRev, rankKind]);
