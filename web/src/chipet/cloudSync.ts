@@ -47,11 +47,13 @@ const cloudSubs = new Set<() => void>();
 let cloudRev = 0;
 /** 广场动态服务端总数（分页） */
 let feedTotal = 0;
-/** 按页缓存：key=页码(从1起)，避免用「本地条数」当 offset 对不齐 */
+/** 按页缓存：key=页码(从1起)；展示以 API 为准，可被 force 整页替换 */
 const feedPageCache = new Map<number, Parameters<typeof social.applyCloudFeed>[0]>();
 let feedPageSizeCached = 0;
 const feedLoadingPages = new Set<number>();
 const feedPagePromises = new Map<number, Promise<void>>();
+/** 防止并发 force/非 force 旧请求回写覆盖新结果 */
+const feedPageEpoch = new Map<number, number>();
 let feedPageLoading = false;
 
 function notifyCloud() {
@@ -168,8 +170,7 @@ export const cloudSync = {
 
   /**
    * 按页直打后端 /api/chipet/feed?offset&limit。
-   * page 从 1 起；不攒本地长列表，不拿「本地条数」当 offset。
-   * force：强制重拉；force 第 1 页时清掉后续页缓存（新动态插顶会挪页）。
+   * page 从 1 起；广场列表以本次 API 结果为准（force 可打穿缓存）。
    */
   async loadFeedPage(page: number, pageSize: number, opts?: { force?: boolean }): Promise<void> {
     const size = Math.max(1, pageSize);
@@ -185,8 +186,12 @@ export const cloudSync = {
       if (existing) return existing;
     }
     if (force && p === 1) {
+      // 只清分页缓存；请求失败时不留下空首页
       feedPageCache.clear();
     }
+
+    const epoch = (feedPageEpoch.get(p) ?? 0) + 1;
+    feedPageEpoch.set(p, epoch);
 
     feedLoadingPages.add(p);
     feedPageLoading = true;
@@ -195,24 +200,25 @@ export const cloudSync = {
       try {
         const offset = (p - 1) * size;
         const r = await fetchChipetFeed({ limit: size, offset });
+        // 旧请求作废：不写缓存
+        if (feedPageEpoch.get(p) !== epoch) return;
         if (!r) {
-          feedPageCache.set(p, []);
+          // 失败保留旧缓存，避免把列表刷空
           return;
         }
         if (r.total != null) feedTotal = Math.max(0, Number(r.total) || 0);
         const items = (r.items ?? []) as Parameters<typeof social.applyCloudFeed>[0];
         feedPageCache.set(p, items);
-        // 点赞态仍走 social；顺带合并进本地列表供家园预览等使用
         if (items.length) {
-          // 合并进 social（家园预览等）；广场列表以 feedPageCache 为准
           social.applyCloudFeed(items, r.likes ?? {}, false);
         } else if (offset >= feedTotal) {
-          // 越界空页：把 total 收到实有，避免页码虚高
           feedTotal = Math.min(feedTotal, offset);
         }
       } finally {
-        feedLoadingPages.delete(p);
-        feedPagePromises.delete(p);
+        if (feedPageEpoch.get(p) === epoch) {
+          feedLoadingPages.delete(p);
+          feedPagePromises.delete(p);
+        }
         feedPageLoading = feedLoadingPages.size > 0;
         notifyCloud();
       }
@@ -221,7 +227,7 @@ export const cloudSync = {
     return job;
   },
 
-  /** 重拉广场动态首页（清缓存）；给停留在广场时的轮询 / 切回 Tab 用 */
+  /** 重拉广场动态首页（打穿缓存）；切 Tab / 轮询 / 发动态后调用 */
   async refreshFeedHead(pageSize: number): Promise<void> {
     return this.loadFeedPage(1, pageSize, { force: true });
   },
@@ -434,7 +440,15 @@ export const cloudSync = {
     text: ChipetText;
   }) {
     const addr = wallet();
-    void postChipetActivity({
+    // 先插进首页缓存，广场立刻能看见自己刚发的；再打 API，成功后 force 对齐服务端
+    const size = feedPageSizeCached || 10;
+    const head = feedPageCache.get(1) ?? [];
+    if (!head.some((a) => a.id === act.id)) {
+      feedPageCache.set(1, [act as Parameters<typeof social.applyCloudFeed>[0][number], ...head].slice(0, size));
+      feedTotal = Math.max(feedTotal + 1, feedPageCache.get(1)?.length ?? 0);
+      notifyCloud();
+    }
+    const body = {
       address: addr || undefined,
       id: act.id,
       at: act.at,
@@ -443,7 +457,21 @@ export const cloudSync = {
       petKey: act.petKey,
       petName: act.petName,
       text: act.text,
-    });
+    };
+    const tryPost = async (attempt: number): Promise<void> => {
+      const item = await postChipetActivity(body);
+      if (item) {
+        void this.refreshFeedHead(size);
+        return;
+      }
+      if (attempt >= 3) {
+        console.warn('[chipet] post activity failed after retries', act.id, act.kind);
+        return;
+      }
+      await new Promise((r) => setTimeout(r, 400 * attempt));
+      return tryPost(attempt + 1);
+    };
+    void tryPost(1);
   },
 
   pushNote(note: {

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { ArrowRight, Cable, CalendarCheck, Check, Fish, Flame, Hand, Pencil, Sparkles, Swords, ThumbsUp, Trophy, Users } from 'lucide-react';
 import {
   DataLoading, FeedSkeleton, PetCardGridSkeleton, PlazaSidebarSkeleton, RankListSkeleton, StatBandSkeleton,
@@ -23,6 +23,8 @@ import { plural, txt, useLang, useT } from '../i18n.ts';
 const FEED_PAGE = 10;
 /** 可视区约 10 行高（与行 min-h-[4.75rem] 对齐） */
 const FEED_VIEW_CLASS = 'max-h-[47.5rem]';
+/** 自定义绿色拇指固定高度（px），故意比原生可视比拇指短 */
+const FEED_THUMB_PX = 48;
 
 export function Plaza() {
   const t = useT();
@@ -37,6 +39,8 @@ export function Plaza() {
   const [feedLoadedPages, setFeedLoadedPages] = useState(1);
   const feedScrollRef = useRef<HTMLDivElement>(null);
   const feedSentinelRef = useRef<HTMLDivElement>(null);
+  const [feedThumbTop, setFeedThumbTop] = useState(0);
+  const [feedThumbShow, setFeedThumbShow] = useState(false);
   const socialRev = useSyncExternalStore(subscribeSocial, getSocialRev, getSocialRev);
   const boardRev = useSyncExternalStore(subscribeLeaderboard, getLeaderboardRev, getLeaderboardRev);
   const cloudRev = useSyncExternalStore(subscribeCloudSync, getCloudSyncRev, getCloudSyncRev);
@@ -119,14 +123,15 @@ export function Plaza() {
     if (tab === 'hot' || tab === 'rank') void cloudSync.refreshLeaderboards();
   }, [tab, tick, socialRev]);
 
-  // 进动态 Tab：强制重拉首页（清掉旧缓存）；停留时每 30s 再刷一次头
+  // 进动态 Tab：强制打 API 重拉首页；停留时每 8s 再刷（不以本地旧缓存当真理）
   useEffect(() => {
     if (tab !== 'feed') return;
     setFeedLoadedPages(1);
     void cloudSync.refreshFeedHead(FEED_PAGE);
     const timer = window.setInterval(() => {
+      setFeedLoadedPages(1);
       void cloudSync.refreshFeedHead(FEED_PAGE);
-    }, 30_000);
+    }, 8_000);
     return () => window.clearInterval(timer);
   }, [tab]);
 
@@ -137,6 +142,31 @@ export function Plaza() {
       void cloudSync.loadFeedPage(p, FEED_PAGE);
     }
   }, [tab, safeLoadedPages]);
+
+  const syncFeedThumb = useCallback(() => {
+    const el = feedScrollRef.current;
+    if (!el) return;
+    const { scrollTop, scrollHeight, clientHeight } = el;
+    const track = Math.max(0, clientHeight - 16);
+    if (scrollHeight <= clientHeight + 1 || track <= FEED_THUMB_PX) {
+      setFeedThumbShow(false);
+      return;
+    }
+    const maxTop = track - FEED_THUMB_PX;
+    const ratio = scrollTop / Math.max(1, scrollHeight - clientHeight);
+    setFeedThumbTop(ratio * maxTop);
+    setFeedThumbShow(true);
+  }, []);
+
+  useEffect(() => {
+    if (tab !== 'feed') return;
+    syncFeedThumb();
+    const el = feedScrollRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => syncFeedThumb());
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [tab, feed.length, feedLoadingMore, syncFeedThumb, cloudRev]);
 
   // 触底哨兵：滚动区固定约 10 行高，到底再拼下一批
   useEffect(() => {
@@ -230,56 +260,79 @@ export function Plaza() {
           ]} />
 
           {tab === 'feed' && (
-            <Panel className="mt-4" bodyClass="p-0">
-              {showFeedSkeleton ? (
-                <DataLoading label={t('加载广场动态…', 'Loading plaza feed…')}>
-                  <FeedSkeleton rows={10} />
-                </DataLoading>
-              ) : feedTotal === 0 ? (
-                <p className="p-10 text-center text-sm text-mute">{t('还没有动态，去孵化或摸摸邻居吧。', 'Nothing here yet. Hatch a kitty or go pat a neighbor.')}</p>
-              ) : (
-                <div
-                  ref={feedScrollRef}
-                  className={cn('chip-scroll overflow-y-auto overscroll-contain', FEED_VIEW_CLASS)}
-                >
-                  <div className="divide-y divide-line/70">
-                    {feed.map((a) => {
-                      const I = ACT_ICON[a.kind] ?? Sparkles;
-                      return (
-                        <div key={a.id} className="flex min-h-[4.75rem] items-center gap-2 pr-4 transition hover:bg-panel-2/50">
-                          <button type="button" onClick={() => a.petKey && go(`/pet/${routeIdOf(a.petKey)}`)}
-                            className="flex min-w-0 flex-1 items-start gap-3 py-4 pl-5 text-left">
-                            <span className={cn('mt-0.5 grid size-9 shrink-0 place-items-center rounded-xl', actTone(a.kind))}>
-                              <I className="size-4" />
-                            </span>
-                            <span className="min-w-0 flex-1">
-                              <span className="block text-sm text-pretty text-ink">{txt(a.text)}</span>
-                              <span className="mt-1 block text-xs text-faint">{txt(a.actor)} · {timeAgo(a.at)}</span>
-                            </span>
-                          </button>
-                          <button type="button" onClick={() => like(a.id)} aria-pressed={a.liked} aria-label={t('击掌', 'High five')}
-                            className={cn('flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3 font-mono text-xs transition active:scale-95', a.liked ? 'bg-copper/10 text-copper-dim ring-1 ring-copper/40' : 'text-faint ring-1 ring-line hover:text-copper-dim hover:ring-copper/40')}>
-                            <ThumbsUp className={cn('size-3.5', a.liked && 'fill-copper/30')} />
-                            {a.likes > 0 ? a.likes : t('击掌', 'High five')}
-                          </button>
-                        </div>
-                      );
-                    })}
+            <>
+              <Panel className="mt-4" bodyClass="p-0">
+                {showFeedSkeleton ? (
+                  <DataLoading label={t('加载广场动态…', 'Loading plaza feed…')}>
+                    <FeedSkeleton rows={10} />
+                  </DataLoading>
+                ) : feedTotal === 0 ? (
+                  <p className="p-10 text-center text-sm text-mute">{t('还没有动态，去孵化或摸摸邻居吧。', 'Nothing here yet. Hatch a kitty or go pat a neighbor.')}</p>
+                ) : (
+                  <div className={cn('flex min-h-0 items-stretch overflow-hidden', FEED_VIEW_CLASS)}>
+                    <div
+                      ref={feedScrollRef}
+                      onScroll={syncFeedThumb}
+                      className="chip-scroll-feed min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain"
+                    >
+                      <div className="divide-y divide-line/70">
+                        {feed.map((a) => {
+                          const I = ACT_ICON[a.kind] ?? Sparkles;
+                          return (
+                            <div key={a.id} className="flex min-h-[4.75rem] items-center gap-2 pr-4 transition hover:bg-panel-2/50">
+                              <button type="button" onClick={() => a.petKey && go(`/pet/${routeIdOf(a.petKey)}`)}
+                                className="flex min-w-0 flex-1 items-start gap-3 py-4 pl-5 text-left">
+                                <span className={cn('mt-0.5 grid size-9 shrink-0 place-items-center rounded-xl', actTone(a.kind))}>
+                                  <I className="size-4" />
+                                </span>
+                                <span className="min-w-0 flex-1">
+                                  <span className="block text-sm text-pretty text-ink">{txt(a.text)}</span>
+                                  <span className="mt-1 block text-xs text-faint">{txt(a.actor)} · {timeAgo(a.at)}</span>
+                                </span>
+                              </button>
+                              <button type="button" onClick={() => like(a.id)} aria-pressed={a.liked} aria-label={t('击掌', 'High five')}
+                                className={cn('flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3 font-mono text-xs transition active:scale-95', a.liked ? 'bg-copper/10 text-copper-dim ring-1 ring-copper/40' : 'text-faint ring-1 ring-line hover:text-copper-dim hover:ring-copper/40')}>
+                                <ThumbsUp className={cn('size-3.5', a.liked && 'fill-copper/30')} />
+                                {a.likes > 0 ? a.likes : t('击掌', 'High five')}
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <div ref={feedSentinelRef} className="h-px w-full" aria-hidden />
+                      {feedLoadingMore && (
+                        <p className="px-5 py-3 text-center text-xs text-mute">
+                          {t('加载更多动态…', 'Loading more…')}
+                        </p>
+                      )}
+                      {!feedHasMore && feed.length > 0 && !feedLoadingMore && (
+                        <p className="px-5 py-3 text-center text-xs text-faint">
+                          {t('已经到底了', 'You\'re all caught up')}
+                        </p>
+                      )}
+                    </div>
+                    <div
+                      className={cn('chip-scroll-feed-track', !feedThumbShow && 'invisible')}
+                      aria-hidden
+                    >
+                      <div className="chip-scroll-feed-thumb" style={{ top: feedThumbTop }} />
+                    </div>
                   </div>
-                  <div ref={feedSentinelRef} className="h-px w-full" aria-hidden />
-                  {feedLoadingMore && (
-                    <p className="px-5 py-3 text-center text-xs text-mute">
-                      {t('加载更多动态…', 'Loading more…')}
-                    </p>
-                  )}
-                  {!feedHasMore && feed.length > 0 && !feedLoadingMore && (
-                    <p className="px-5 py-3 text-center text-xs text-faint">
-                      {t('已经到底了', 'You\'re all caught up')}
-                    </p>
-                  )}
-                </div>
+                )}
+              </Panel>
+              {feedTotal > 0 && !showFeedSkeleton && (
+                <p className="mt-3 flex items-center justify-center gap-2 text-center text-[12px] leading-relaxed text-mute">
+                  <span className="h-px w-8 bg-line/80" aria-hidden />
+                  <span>
+                    {t(
+                      '列表内下拉滚动，触底后自动加载下一批动态',
+                      'Scroll inside the list — more posts load as you reach the bottom',
+                    )}
+                  </span>
+                  <span className="h-px w-8 bg-line/80" aria-hidden />
+                </p>
               )}
-            </Panel>
+            </>
           )}
 
           {tab === 'hot' && (

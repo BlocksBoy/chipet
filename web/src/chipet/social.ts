@@ -597,11 +597,18 @@ function me(s: SocialState): Text {
 }
 
 function pushAct(s: SocialState, act: Omit<Activity, 'id' | 'at'>): Activity {
-  const full: Activity = { ...act, id: `a${Date.now()}${Math.random()}`, at: Date.now() };
+  // 避免 Math.random() 带小数点进 id（旧格式 a{ts}0.xxx）
+  const full: Activity = {
+    ...act,
+    id: `a${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`,
+    at: Date.now(),
+  };
   s.activities.unshift(full);
   // 保留足够多条，避免云端拉下来的分页被本地新动态截断成「只有两页」
   s.activities = s.activities.slice(0, 2000);
-  void import('./cloudSync.ts').then(({ cloudSync }) => cloudSync.pushActivity(full));
+  void import('./cloudSync.ts')
+    .then(({ cloudSync }) => cloudSync.pushActivity(full))
+    .catch((e) => console.warn('[chipet] pushActivity import failed', e));
   return full;
 }
 

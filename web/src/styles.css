@@ -126,6 +126,42 @@
   background: transparent;
 }
 
+/* 广场动态：藏原生条，用固定偏短的绿色拇指（原生拇指高度跟可视比走，内容少时会拉很长） */
+.chip-scroll-feed {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.chip-scroll-feed::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+.chip-scroll-feed-track {
+  position: relative;
+  flex: none;
+  align-self: stretch;
+  width: 8px;
+  margin: 8px 0 8px 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-panel-2) 75%, var(--color-line));
+  pointer-events: none;
+}
+.chip-scroll-feed-thumb {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  height: 48px; /* 固定短拇指，不跟内容比拉长 */
+  border-radius: 999px;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--color-si) 55%, #fff),
+    var(--color-si-dim)
+  );
+  box-sizing: border-box;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
 /* RainbowKit 紧凑弹窗把高度锁在 468px，中文下「获取钱包」页会被截断 */
 [data-rk] div[style*='max-height: 468px'] {
   max-height: min(580px, calc(100dvh - 32px)) !important;
