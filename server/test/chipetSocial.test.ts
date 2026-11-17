@@ -5,8 +5,9 @@ import { join } from 'node:path';
 import { closeAdminDb } from '../src/adminDb.ts';
 import {
   bootstrapPublic, getWalletProfile, insertActivity, insertNote, listFeed, listLeaderboard, listNotes,
-  putWalletProfile, toggleLike, bumpPetAgg, upsertPetStats,
+  putWalletProfile, toggleLike, bumpPetAgg, upsertPetStats, recomputeAndStoreLeaderboards, scorePet,
 } from '../src/chipetSocial.ts';
+import { getAdminDb } from '../src/adminDb.ts';
 import { getWalletBem, putWalletBem } from '../src/chipetBem.ts';
 import { getWalletPets, putWalletPets } from '../src/chipetWalletPets.ts';
 import { createApp } from '../src/app.ts';
@@ -117,12 +118,21 @@ describe('chipet social sync', () => {
     expect(row?.pats).toBe(99);
   });
 
-  it('排行榜 / pet-stats 读写', () => {
+  it('排行榜：现算落库再读；heat 公式正确', () => {
     bumpPetAgg('npc:-3', 'pats', 10);
     upsertPetStats({ petKey: 'mine:1', name: '测试猫', wins: 3, level: 2, intimacy: 9, rarity: 1, circuitId: '99', routeId: 1 });
+    const n = recomputeAndStoreLeaderboards();
+    expect(n).toBeGreaterThan(0);
+    const stored = getAdminDb().prepare(`SELECT COUNT(*) AS n FROM chipet_leaderboard WHERE kind = 'heat'`).get() as { n: number };
+    expect(Number(stored.n)).toBeGreaterThan(0);
+
     const heat = listLeaderboard('heat', 10);
     expect(heat.length).toBeGreaterThan(0);
     expect(heat[0]!.score).toBeGreaterThan(0);
+    // 校验 top 分数符合公式（用返回行自身字段）
+    const top = heat[0]!;
+    expect(top.score).toBe(scorePet('heat', top, top.recent));
+
     const pats = listLeaderboard('pats', 3);
     expect(pats.some((p) => p.petKey === 'npc:-3')).toBe(true);
     const wins = listLeaderboard('wins', 10);

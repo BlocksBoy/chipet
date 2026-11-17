@@ -5,7 +5,8 @@
 import { getRedis } from './adminAuth.ts';
 import { getAdminDb } from './adminDb.ts';
 import {
-  bumpPetAgg, getPetAgg, insertActivity, listAllPetAgg, listFeed,
+  bumpPetAgg, getPetAgg, insertActivity, listAllPetAgg, listFeed, listLeaderboard,
+  recomputeAndStoreLeaderboards, scheduleLeaderboardRecompute,
   type ChipetActivity, type ChipetLeaderboardItem, type ChipetPetAggRow,
   type JsonText, type LeaderboardKind,
 } from './chipetSocial.ts';
@@ -297,31 +298,23 @@ export function listAllPetAggWithPending(): ChipetPetAggRow[] {
   return [...byKey.values()];
 }
 
+/**
+ * 读排行：有 pending 时现算并落库，否则直接读 chipet_leaderboard。
+ */
 export function listLeaderboardWithPending(kind: LeaderboardKind, limit = 10): ChipetLeaderboardItem[] {
-  const lim = Math.min(Math.max(1, limit), 50);
-  const recentAt = Date.now() - 2 * 86_400_000;
-  const recentRows = getAdminDb().prepare(`
-    SELECT pet_key, COUNT(*) AS n FROM chipet_activities
-    WHERE at > ? AND pet_key != '' GROUP BY pet_key
-  `).all(recentAt) as { pet_key: string; n: number }[];
-  const recentMap = new Map(recentRows.map((r) => [r.pet_key, Number(r.n) || 0]));
-  // pending 动态也计入近两日
-  for (const a of pendingActs.values()) {
-    if (!a.petKey || a.at < recentAt) continue;
-    recentMap.set(a.petKey, (recentMap.get(a.petKey) ?? 0) + 1);
+  if (pendingActs.size > 0 || pendingAgg.size > 0) {
+    const recentAt = Date.now() - 2 * 86_400_000;
+    const recentExtra = new Map<string, number>();
+    for (const a of pendingActs.values()) {
+      if (!a.petKey || a.at < recentAt) continue;
+      recentExtra.set(a.petKey, (recentExtra.get(a.petKey) ?? 0) + 1);
+    }
+    recomputeAndStoreLeaderboards({
+      pets: listAllPetAggWithPending(),
+      recentExtra: recentExtra.size ? recentExtra : undefined,
+    });
   }
-
-  const pets = listAllPetAggWithPending().filter((p) => p.name || p.pats > 0 || p.visits > 0 || p.wins > 0);
-  return pets.map((p) => {
-    const recent = recentMap.get(p.petKey) ?? 0;
-    let score = 0;
-    if (kind === 'pats') score = p.pats;
-    else if (kind === 'wins') score = p.wins;
-    else if (kind === 'intimacy') score = p.intimacy;
-    else if (kind === 'level') score = p.level;
-    else score = p.pats * 3 + p.visits + p.wins * 2 + p.intimacy + p.level * 2 + recent * 4 + p.rarity * 5;
-    return { ...p, score, recent };
-  }).sort((a, b) => b.score - a.score || b.rarity - a.rarity || b.wins - a.wins).slice(0, lim);
+  return listLeaderboard(kind, limit);
 }
 
 export async function flushWriteQueue(): Promise<number> {
@@ -347,6 +340,7 @@ export async function flushWriteQueue(): Promise<number> {
       total += jobs.length;
       if (jobs.length < FLUSH_BATCH) break;
     }
+    if (total > 0) scheduleLeaderboardRecompute(200);
   } finally {
     flushing = false;
   }
@@ -355,6 +349,9 @@ export async function flushWriteQueue(): Promise<number> {
 
 export function startChipetWriteQueue(): void {
   if (flushTimer) return;
+  try { recomputeAndStoreLeaderboards(); } catch (e) {
+    console.error('[chipet-lb] boot recompute failed', e);
+  }
   flushTimer = setInterval(() => {
     void flushWriteQueue().catch((e) => console.error('[chipet-wq] timer flush', e));
   }, FLUSH_INTERVAL_MS);

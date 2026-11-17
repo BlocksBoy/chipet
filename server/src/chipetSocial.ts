@@ -124,6 +124,30 @@ function ensureTables() {
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS chipet_leaderboard (
+      kind TEXT NOT NULL,
+      rank INTEGER NOT NULL,
+      pet_key TEXT NOT NULL,
+      score INTEGER NOT NULL,
+      recent INTEGER NOT NULL DEFAULT 0,
+      pats INTEGER NOT NULL DEFAULT 0,
+      visits INTEGER NOT NULL DEFAULT 0,
+      wins INTEGER NOT NULL DEFAULT 0,
+      level INTEGER NOT NULL DEFAULT 1,
+      intimacy INTEGER NOT NULL DEFAULT 0,
+      rarity INTEGER NOT NULL DEFAULT 0,
+      energy INTEGER NOT NULL DEFAULT 80,
+      mood INTEGER NOT NULL DEFAULT 70,
+      name TEXT NOT NULL DEFAULT '',
+      owner_json TEXT NOT NULL DEFAULT '""',
+      cpu TEXT NOT NULL DEFAULT '',
+      circuit_id TEXT NOT NULL DEFAULT '0',
+      route_id INTEGER NOT NULL DEFAULT 0,
+      updated_at INTEGER NOT NULL,
+      PRIMARY KEY (kind, rank)
+    );
+    CREATE INDEX IF NOT EXISTS idx_chipet_lb_kind_pet ON chipet_leaderboard(kind, pet_key);
   `);
   // 兼容旧库：补齐排行榜字段
   const cols = getAdminDb().prepare(`PRAGMA table_info(chipet_pet_agg)`).all() as { name: string }[];
@@ -451,6 +475,7 @@ export function bumpPetAgg(petKey: string, field: 'pats' | 'visits', delta = 1):
     db.prepare(`UPDATE chipet_pet_agg SET visits = visits + ?, updated_at = ? WHERE pet_key = ?`).run(d, Date.now(), key);
   }
   const row = db.prepare(`SELECT pats, visits FROM chipet_pet_agg WHERE pet_key = ?`).get(key) as { pats: number; visits: number };
+  scheduleLeaderboardRecompute();
   return { pats: Number(row.pats) || 0, visits: Number(row.visits) || 0 };
 }
 
@@ -635,37 +660,147 @@ export function upsertPetStats(input: {
     key, next.pats, next.visits, next.wins, next.level, next.intimacy, next.rarity, next.energy, next.mood,
     next.name, toJson(next.owner), next.cpu, next.circuitId, next.routeId, now,
   );
+  scheduleLeaderboardRecompute();
   return rowToAgg(db.prepare(`SELECT * FROM chipet_pet_agg WHERE pet_key = ?`).get(key) as Record<string, unknown>);
 }
 
-export function listLeaderboard(kind: LeaderboardKind, limit = 10): ChipetLeaderboardItem[] {
-  seedIfEmpty();
-  ensureNpcProfiles();
-  const lim = Math.min(Math.max(1, limit), 50);
+/** 计分规则（写入 chipet_leaderboard 前现算） */
+export function scorePet(
+  kind: LeaderboardKind,
+  p: Pick<ChipetPetAggRow, 'pats' | 'visits' | 'wins' | 'intimacy' | 'level' | 'rarity'>,
+  recent: number,
+): number {
+  if (kind === 'pats') return p.pats;
+  if (kind === 'wins') return p.wins;
+  if (kind === 'intimacy') return p.intimacy;
+  if (kind === 'level') return p.level;
+  // heat：摸头×3 + 串门 + 胜场×2 + 亲密 + 等级×2 + 近两日动态×4 + 稀有度×5
+  return p.pats * 3 + p.visits + p.wins * 2 + p.intimacy + p.level * 2 + recent * 4 + p.rarity * 5;
+}
+
+function recentActivityCounts(extra?: Map<string, number>): Map<string, number> {
   const recentAt = Date.now() - 2 * 86_400_000;
   const recentRows = getAdminDb().prepare(`
     SELECT pet_key, COUNT(*) AS n FROM chipet_activities
     WHERE at > ? AND pet_key != '' GROUP BY pet_key
   `).all(recentAt) as { pet_key: string; n: number }[];
-  const recentMap = new Map(recentRows.map((r) => [r.pet_key, Number(r.n) || 0]));
+  const map = new Map(recentRows.map((r) => [r.pet_key, Number(r.n) || 0]));
+  if (extra) {
+    for (const [k, n] of extra) map.set(k, (map.get(k) ?? 0) + n);
+  }
+  return map;
+}
 
-  const pets = listAllPetAgg().filter((p) => p.name || p.pats > 0 || p.visits > 0 || p.wins > 0);
-  const scored: ChipetLeaderboardItem[] = pets.map((p) => {
+function computeKindScores(
+  kind: LeaderboardKind,
+  pets: ChipetPetAggRow[],
+  recentMap: Map<string, number>,
+  limit = 50,
+): ChipetLeaderboardItem[] {
+  return pets.map((p) => {
     const recent = recentMap.get(p.petKey) ?? 0;
-    let score = 0;
-    if (kind === 'pats') score = p.pats;
-    else if (kind === 'wins') score = p.wins;
-    else if (kind === 'intimacy') score = p.intimacy;
-    else if (kind === 'level') score = p.level;
-    else {
-      // heat：与前端 social.leaderboard('heat') 同公式
-      score = p.pats * 3 + p.visits + p.wins * 2 + p.intimacy + p.level * 2 + recent * 4 + p.rarity * 5;
-    }
-    return { ...p, score, recent };
-  });
-  return scored
+    return { ...p, score: scorePet(kind, p, recent), recent };
+  })
     .sort((a, b) => b.score - a.score || b.rarity - a.rarity || b.wins - a.wins)
-    .slice(0, lim);
+    .slice(0, limit);
+}
+
+const LB_KINDS: LeaderboardKind[] = ['heat', 'pats', 'wins', 'intimacy', 'level'];
+let lbRecomputeTimer: ReturnType<typeof setTimeout> | null = null;
+
+/**
+ * 动态算分并整表写入 chipet_leaderboard（每种榜 top 50）。
+ * pets / recentExtra 可注入写队列 pending，使刷库前也能物化最新榜。
+ */
+export function recomputeAndStoreLeaderboards(opts?: {
+  pets?: ChipetPetAggRow[];
+  recentExtra?: Map<string, number>;
+}): number {
+  seedIfEmpty();
+  ensureNpcProfiles();
+  const pets = (opts?.pets ?? listAllPetAgg()).filter(
+    (p) => p.name || p.pats > 0 || p.visits > 0 || p.wins > 0,
+  );
+  const recentMap = recentActivityCounts(opts?.recentExtra);
+  const db = getAdminDb();
+  const now = Date.now();
+  const insert = db.prepare(`
+    INSERT INTO chipet_leaderboard (
+      kind, rank, pet_key, score, recent, pats, visits, wins, level, intimacy, rarity,
+      energy, mood, name, owner_json, cpu, circuit_id, route_id, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+  let rows = 0;
+  db.exec('BEGIN');
+  try {
+    for (const kind of LB_KINDS) {
+      db.prepare(`DELETE FROM chipet_leaderboard WHERE kind = ?`).run(kind);
+      const scored = computeKindScores(kind, pets, recentMap, 50);
+      scored.forEach((p, i) => {
+        insert.run(
+          kind, i + 1, p.petKey, p.score, p.recent, p.pats, p.visits, p.wins, p.level, p.intimacy, p.rarity,
+          p.energy, p.mood, p.name, toJson(p.owner), p.cpu, p.circuitId, p.routeId, now,
+        );
+        rows += 1;
+      });
+    }
+    db.exec('COMMIT');
+  } catch (e) {
+    try { db.exec('ROLLBACK'); } catch { /* ignore */ }
+    throw e;
+  }
+  return rows;
+}
+
+/** 防抖重算（摸头/刷队列后调用） */
+export function scheduleLeaderboardRecompute(delayMs = 800): void {
+  if (lbRecomputeTimer) clearTimeout(lbRecomputeTimer);
+  lbRecomputeTimer = setTimeout(() => {
+    lbRecomputeTimer = null;
+    try {
+      recomputeAndStoreLeaderboards();
+    } catch (e) {
+      console.error('[chipet-lb] recompute failed', e);
+    }
+  }, delayMs);
+}
+
+/** 从物化表读取排行；空表则先算一遍再读。 */
+export function listLeaderboard(kind: LeaderboardKind, limit = 10): ChipetLeaderboardItem[] {
+  seedIfEmpty();
+  ensureNpcProfiles();
+  const lim = Math.min(Math.max(1, limit), 50);
+  const db = getAdminDb();
+  let n = Number(
+    (db.prepare(`SELECT COUNT(*) AS n FROM chipet_leaderboard WHERE kind = ?`).get(kind) as { n: number })?.n,
+  ) || 0;
+  if (n === 0) recomputeAndStoreLeaderboards();
+
+  const rows = db.prepare(`
+    SELECT * FROM chipet_leaderboard WHERE kind = ? ORDER BY rank ASC LIMIT ?
+  `).all(kind, lim) as Record<string, unknown>[];
+
+  return rows.map((r) => ({
+    ...rowToAgg({
+      pet_key: r.pet_key,
+      pats: r.pats,
+      visits: r.visits,
+      wins: r.wins,
+      level: r.level,
+      intimacy: r.intimacy,
+      rarity: r.rarity,
+      energy: r.energy,
+      mood: r.mood,
+      name: r.name,
+      owner_json: r.owner_json,
+      cpu: r.cpu,
+      circuit_id: r.circuit_id,
+      route_id: r.route_id,
+      updated_at: r.updated_at,
+    }),
+    score: Number(r.score) || 0,
+    recent: Number(r.recent) || 0,
+  }));
 }
 
 export function getWalletProfile(address: string): ChipetWalletProfile {
@@ -917,5 +1052,6 @@ export function bootstrapPublic(input: {
     }
   }
 
+  if (nAct + nNote + nAgg + nLike > 0) scheduleLeaderboardRecompute(200);
   return { activities: nAct, notes: nNote, petAggs: nAgg, likes: nLike };
 }

@@ -167,7 +167,7 @@ export function Plaza() {
           {tab === 'hot' && (
             <div className="mt-4">
               <p className="mb-3 text-[12px] text-pretty text-mute">
-                {t('热度按摸头、串门、胜场、亲密、等级与近两日动态在服务端综合计算，全站共用，摸一摸排行就会变。', 'Heat is scored on the server from pats, visits, wins, affection, level, and last-two-days activity — shared for everyone, and it moves when you pat.')}
+                {t('热度 = 摸头×3 + 串门 + 胜场×2 + 亲密 + 等级×2 + 近两日动态×4 + 稀有度×5；服务端算完写入排行表，全站读同一份。', 'Heat = pats×3 + visits + wins×2 + affection + level×2 + last-2-days feed×4 + rarity×5. Scored on the server, stored in the rank table, same for everyone.')}
               </p>
               <ul className="grid grid-cols-2 gap-4 md:grid-cols-3">
                 {hot.map(({ pet, score, pats }, i) => (
