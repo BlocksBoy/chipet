@@ -33,8 +33,9 @@ const FEED_PAGE = 20;
 const FEED_SOFT_POLL_MS = 30_000;
 /** 第一页本地缓存（stale-while-revalidate） */
 const FEED_HEAD_CACHE_KEY = 'chipet.plaza.feedHead.v1';
-/** 可视区约 10 行高（与行 min-h-[4.75rem] 对齐） */
-const FEED_VIEW_CLASS = 'max-h-[47.5rem]';
+/** 桌面约 10 行；手机按视口扣顶栏+底栏，避免列表底被 tab bar 挡住 */
+const FEED_VIEW_CLASS =
+  'max-h-[calc(100dvh-12.5rem-env(safe-area-inset-bottom,0px))] md:max-h-[47.5rem]';
 /** 自定义绿色拇指固定高度（px），故意比原生可视比拇指短 */
 const FEED_THUMB_PX = 48;
 /** 列表底栏固定高度，避免「加载中 / 到底」切换时撑缩抖动 */
@@ -561,8 +562,8 @@ export function Plaza() {
                         })}
                       </div>
                       <div ref={feedSentinelRef} className="h-px w-full" aria-hidden />
-                      {/* 固定底栏高度：加载中 / 到底文案切换不撑缩 */}
-                      <div className={cn(FEED_FOOTER_H, 'flex items-center justify-center px-5')}>
+                      {/* 固定底栏高度：加载中 / 到底文案切换不撑缩；手机再留一点，防贴底栏 */}
+                      <div className={cn(FEED_FOOTER_H, 'mb-2 flex items-center justify-center px-5 md:mb-0')}>
                         {feedLoadingMore ? (
                           <p className="flex items-center justify-center gap-2 text-[12px] leading-relaxed text-mute" role="status" aria-live="polite">
                             <span className="h-px w-8 bg-line/80" aria-hidden />

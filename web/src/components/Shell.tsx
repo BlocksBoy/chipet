@@ -186,26 +186,54 @@ const LAB_NAV = [
   { to: '/lab/new', key: 'new', label: both('发布悬赏', 'Post bounty'), icon: Plus },
 ];
 
-/** 实验室二级导航：桌面左侧栏，手机顶部横滑。 */
+/** 实验室二级导航：手机贴顶全宽横滑（同玩法手册）；桌面左侧竖栏。 */
 function LabNav({ sub }: { sub: string }) {
   const t = useT();
   // 擂台详情页归在「擂台」下
   const at = sub === 'bounty' ? '' : sub;
   return (
-    <nav aria-label={t('实验室导航', 'Lab navigation')} className="min-w-0 max-w-full lg:sticky lg:top-20 lg:self-start">
-      <div className="grid max-w-full grid-cols-2 gap-1.5 sm:flex sm:flex-wrap sm:items-center lg:mx-0 lg:flex-col lg:items-stretch lg:rounded-3xl lg:border lg:border-line/80 lg:bg-panel lg:p-2 lg:shadow-sm lg:shadow-si/5">
-        <div className="mb-1 hidden items-center gap-1.5 px-2.5 py-2 font-mono text-[11px] text-faint lg:flex">
+    <nav
+      aria-label={t('实验室导航', 'Lab navigation')}
+      className={cn(
+        'sticky z-10 w-full min-w-0',
+        'top-14 border-b border-line/70 bg-panel/95 py-2.5 backdrop-blur-xl',
+        'sm:top-16',
+        'lg:top-20 lg:self-start lg:border-0 lg:bg-transparent lg:py-0 lg:backdrop-blur-none',
+      )}
+    >
+      <ul
+        className={cn(
+          'flex w-full min-w-0 gap-1.5 overflow-x-auto overscroll-x-contain touch-pan-x scroll-px-3 py-0.5',
+          'px-3 sm:scroll-px-7 sm:px-7',
+          '[-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden',
+          '[mask-image:linear-gradient(to_right,black_0%,black_calc(100%-1.5rem),transparent)]',
+          'lg:flex-col lg:overflow-visible lg:rounded-3xl lg:border lg:border-line/80 lg:bg-panel lg:p-2 lg:shadow-sm lg:shadow-si/5',
+          'lg:px-2 lg:scroll-px-0 lg:py-2 lg:[mask-image:none] lg:touch-auto',
+        )}
+      >
+        <li className="mb-1 hidden items-center gap-1.5 px-2.5 py-2 font-mono text-[11px] text-faint lg:flex">
           <FlaskConical className="size-3.5" />TapeArena
-        </div>
+        </li>
         {LAB_NAV.map(({ to, key, label, icon: I }) => (
-          <Link key={key} to={to} aria-current={at === key ? 'page' : undefined} className={cn(
-            'flex min-w-0 items-center justify-center gap-1.5 rounded-2xl px-2.5 py-2 text-[12px] no-underline transition-colors sm:justify-start sm:rounded-full sm:px-3 sm:text-[13px] lg:rounded-2xl',
-            at === key ? 'bg-si/15 font-semibold text-si-dim' : 'bg-panel text-mute ring-1 ring-line/70 lg:bg-transparent lg:ring-0 hover:bg-panel-2/70 hover:text-ink',
-          )}>
-            <I className="size-3.5 shrink-0" /><span className="truncate">{txt(label)}</span>
-          </Link>
+          <li key={key} className="shrink-0 lg:w-full">
+            <Link
+              to={to}
+              aria-current={at === key ? 'page' : undefined}
+              className={cn(
+                'flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-2 text-[12px] whitespace-nowrap no-underline transition-colors sm:text-[13px]',
+                'lg:w-full lg:justify-start lg:rounded-2xl',
+                at === key
+                  ? 'border-si/40 bg-si/15 font-semibold text-si-dim'
+                  : 'border-line bg-panel text-mute lg:border-transparent hover:border-line hover:text-ink',
+              )}
+            >
+              <I className="size-3.5 shrink-0" />
+              <span className="shrink-0">{txt(label)}</span>
+            </Link>
+          </li>
         ))}
-      </div>
+        <li className="w-8 shrink-0 lg:hidden" aria-hidden />
+      </ul>
     </nav>
   );
 }
@@ -271,9 +299,9 @@ export function Shell({ children }: { children: ReactNode }) {
       </header>
 
       {here === 'lab' ? (
-        <div className="mx-auto grid w-full min-w-0 max-w-[1180px] flex-1 grid-cols-1 items-start gap-5 overflow-x-clip px-3 pt-4 sm:px-7 lg:grid-cols-[200px_minmax(0,1fr)] lg:gap-6 lg:pt-6">
+        <div className="mx-auto flex w-full min-w-0 max-w-[1180px] flex-1 flex-col overflow-x-clip lg:grid lg:grid-cols-[200px_minmax(0,1fr)] lg:items-start lg:gap-6 lg:px-7 lg:pt-6">
           <LabNav sub={r.parts[1] ?? ''} />
-          <main className="min-w-0 overflow-x-clip">{children}</main>
+          <main className="min-w-0 overflow-x-clip px-3 pt-4 sm:px-7 lg:px-0 lg:pt-0">{children}</main>
         </div>
       ) : (
         <main className="min-w-0 w-full flex-1 overflow-x-clip">{children}</main>

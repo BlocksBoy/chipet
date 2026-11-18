@@ -283,7 +283,13 @@ export function Home() {
                 </p>
               )}
             </div>
-            <ol className="mt-5 flex w-full max-w-xl flex-wrap items-center gap-1 rounded-[1.25rem] bg-panel-2/80 p-1 ring-1 ring-line/70 sm:mt-6 sm:w-fit sm:flex-nowrap sm:rounded-full" aria-label={t('四步玩法', 'Four-step loop')}>
+            <ol
+              className={cn(
+                'mt-5 grid w-full max-w-xl grid-cols-2 gap-2.5',
+                'sm:mt-6 sm:flex sm:w-fit sm:grid-cols-none sm:items-center sm:gap-1 sm:rounded-full sm:border sm:border-line sm:bg-panel-2/80 sm:p-1.5',
+              )}
+              aria-label={t('四步玩法', 'Four-step loop')}
+            >
               {STEPS.map(({ icon: I, n, t: title }, i) => {
                 const first = pets[0];
                 const goStep = () => {
@@ -293,18 +299,28 @@ export function Home() {
                   else go('/plaza');
                 };
                 return (
-                  <li key={n} className="flex min-w-0 items-center gap-1 max-sm:basis-[calc(50%-0.125rem)] max-sm:grow">
+                  <li key={n} className="min-w-0 sm:flex sm:items-center sm:gap-1">
                     {i > 0 && <span className="mx-0.5 hidden size-1 shrink-0 rounded-full bg-si/35 sm:block" aria-hidden />}
                     <button
                       type="button"
                       onClick={goStep}
-                      className="inline-flex w-full min-w-0 items-center justify-center gap-1 rounded-full bg-panel px-2 py-1.5 text-[11px] font-semibold whitespace-nowrap text-ink shadow-sm ring-1 ring-line/60 transition hover:-translate-y-0.5 hover:ring-si/40 sm:w-auto sm:justify-start sm:gap-1.5 sm:px-2.5 sm:text-[12px]"
+                      className={cn(
+                        // 手机：疏朗方卡；描边用 border（overflow 父级会裁掉 ring 上沿）
+                        'flex w-full items-center gap-3 rounded-2xl border border-line bg-panel p-3.5 text-left shadow-sm shadow-si/5 transition',
+                        'hover:-translate-y-0.5 hover:border-si/50 active:translate-y-0',
+                        // 桌面：收回胶囊条
+                        'sm:inline-flex sm:w-auto sm:gap-1.5 sm:rounded-full sm:border-line sm:p-0 sm:px-2.5 sm:py-1.5 sm:shadow-none',
+                        'sm:hover:border-si/50',
+                      )}
                     >
-                      <span className="grid size-5 shrink-0 place-items-center rounded-full bg-si/10 text-si">
-                        <I className="size-3" />
+                      <span className="grid size-10 shrink-0 place-items-center rounded-2xl bg-si/10 text-si sm:size-5 sm:rounded-full">
+                        <I className="size-4 sm:size-3" />
                       </span>
-                      <span className="font-mono text-[10px] font-medium text-faint">{n}</span>
-                      <span className="truncate">{txt(title)}</span>
+                      <span className="min-w-0 flex-1 sm:flex sm:flex-none sm:items-center sm:gap-1.5">
+                        <span className="block font-mono text-[10px] font-medium tabular-nums text-faint sm:inline">{n}</span>
+                        <span className="mt-0.5 block text-[15px] font-semibold text-ink sm:mt-0 sm:text-[12px]">{txt(title)}</span>
+                      </span>
+                      <ArrowRight className="size-4 shrink-0 text-faint sm:hidden" aria-hidden />
                     </button>
                   </li>
                 );

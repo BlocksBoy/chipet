@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ComponentType, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from 'react';
 import {
   BookOpen, Cable, Cat, Coins, Cpu, Egg, ExternalLink, Fish, FlaskConical, Hand, Sparkles, Swords, Users, Zap,
   type LucideProps,
@@ -40,7 +40,7 @@ function Sec({ id, icon: I, title, lead, children, action }: {
   action?: ReactNode;
 }) {
   return (
-    <section id={id} className="scroll-mt-28">
+    <section id={id} className="scroll-mt-[7.5rem] lg:scroll-mt-28">
       <Panel className="p-5 sm:p-7">
         <SectionTitle icon={I} title={title} desc={lead} right={action} />
         <div className="mt-5 space-y-4 text-sm leading-relaxed text-ink/90">{children}</div>
@@ -68,6 +68,7 @@ export function Guide() {
   const r = useRoute();
   const active = (TOC.find((s) => s.id === r.parts[1])?.id ?? 'overview') as SecId;
   const [here, setHere] = useState<SecId>(active);
+  const tocRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
     const id = (TOC.find((s) => s.id === r.parts[1])?.id ?? 'overview') as SecId;
@@ -89,6 +90,12 @@ export function Guide() {
     return () => io.disconnect();
   }, []);
 
+  // 移动端横滑目录：当前章滚到中间，避免夹在两边看不见
+  useEffect(() => {
+    const btn = tocRef.current?.querySelector<HTMLButtonElement>('button[aria-current="true"]');
+    btn?.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' });
+  }, [here]);
+
   const triangle = useMemo(() => ([
     { from: MOVES[0]!.name, to: MOVES[2]!.name },
     { from: MOVES[2]!.name, to: MOVES[1]!.name },
@@ -109,27 +116,50 @@ export function Guide() {
       />
 
       <div className="mt-6 grid items-start gap-6 lg:grid-cols-[220px_minmax(0,1fr)]">
+        {/* 手机：贴在顶栏下的单行横滑；桌面：左侧竖栏。内边距放在 ul 上，避免胶囊被裁半截 */}
         <nav
+          ref={tocRef}
           aria-label={t('目录', 'Contents')}
-          className="sticky top-20 z-10 min-w-0 max-w-full lg:overflow-visible"
+          className={cn(
+            'sticky z-10 w-full min-w-0 max-w-full',
+            'top-14 -mx-4 border-b border-line/70 bg-panel/95 py-2.5 backdrop-blur-xl',
+            'sm:top-16 sm:-mx-7',
+            'lg:top-20 lg:mx-0 lg:border-0 lg:bg-transparent lg:py-0 lg:backdrop-blur-none',
+          )}
         >
-          <ul className="grid grid-cols-2 gap-1.5 sm:flex sm:flex-wrap lg:flex-col lg:rounded-3xl lg:border lg:border-line/80 lg:bg-panel lg:p-2 lg:shadow-sm lg:shadow-si/5">
+          <ul
+            className={cn(
+              // py 给描边留空：overflow 横滑会裁掉 ring 外圈，改用 border 并垫一点上下
+              'flex w-full min-w-0 gap-1.5 overflow-x-auto overscroll-x-contain touch-pan-x scroll-px-4 py-0.5',
+              'px-4 sm:scroll-px-7 sm:px-7',
+              '[-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden',
+              // 右侧淡出提示还能往右滑，避免硬裁切观感
+              '[mask-image:linear-gradient(to_right,black_0%,black_calc(100%-1.5rem),transparent)]',
+              'lg:flex-col lg:overflow-visible lg:rounded-3xl lg:border lg:border-line/80 lg:bg-panel lg:p-2 lg:py-2 lg:shadow-sm lg:shadow-si/5',
+              'lg:px-2 lg:scroll-px-0 lg:[mask-image:none] lg:touch-auto',
+            )}
+          >
             {TOC.map(({ id, label, icon: I }) => (
-              <li key={id} className="min-w-0">
+              <li key={id} className="shrink-0 lg:w-full">
                 <button
                   type="button"
                   onClick={() => scrollTo(id)}
                   aria-current={here === id ? 'true' : undefined}
                   className={cn(
-                    'flex w-full min-w-0 items-center justify-center gap-1.5 rounded-2xl px-2.5 py-2 text-[12px] transition-colors sm:justify-start sm:rounded-full sm:px-3 sm:text-[13px] lg:rounded-2xl',
-                    here === id ? 'bg-si/15 font-semibold text-si-dim' : 'bg-panel text-mute ring-1 ring-line/70 lg:bg-transparent lg:ring-0 hover:text-ink',
+                    'flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-2 text-[12px] whitespace-nowrap transition-colors sm:text-[13px]',
+                    'lg:w-full lg:justify-start lg:rounded-2xl',
+                    here === id
+                      ? 'border-si/40 bg-si/15 font-semibold text-si-dim'
+                      : 'border-line bg-panel text-mute lg:border-transparent hover:border-line hover:text-ink',
                   )}
                 >
                   <I className="size-3.5 shrink-0" />
-                  <span className="truncate">{txt(label)}</span>
+                  <span className="shrink-0">{txt(label)}</span>
                 </button>
               </li>
             ))}
+            {/* 末端垫块：滑到头时最后一颗胶囊完整露出（盖过右侧淡出区） */}
+            <li className="w-8 shrink-0 lg:hidden" aria-hidden />
           </ul>
         </nav>
 

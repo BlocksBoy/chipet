@@ -97,7 +97,11 @@ export function Segmented<K extends string>({ value, onChange, options, size = '
   className?: string;
 }) {
   return (
-    <div role="tablist" className={cn('flex w-fit max-w-full gap-1 overflow-x-auto rounded-full bg-panel-2/80 p-1', className)}>
+    <div role="tablist" className={cn(
+      'flex w-fit max-w-full gap-1 overflow-x-auto rounded-full bg-panel-2/80 p-1',
+      '[-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden',
+      className,
+    )}>
       {options.map(([k, label, I]) => (
         <button key={k} type="button" role="tab" aria-selected={value === k} onClick={() => onChange(k)}
           className={cn(
