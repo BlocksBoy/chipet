@@ -15,7 +15,7 @@ import {
 } from '../chipet/BattleFx.tsx';
 import { fuse, heartByKey, heartOf, type Fusion, type Heart } from '../chipet/heart.ts';
 import {
-  aiPick, clash, favOf, fusionClash, maxHpOf, MOOD_HP, MOVES, roll, rollAll, wildHpOf, WILDS, xpFor,
+  aiPick, clash, favOf, fusionClash, maxHpOf, MOOD_HP, MOVES, roll, rollAll, wildHpOf, WILDS, withAuxPowerAll, xpFor,
   type Clash, type Move, type Roll, type Wild,
 } from '../chipet/battle.ts';
 import { petSeed, phenotypeOf } from '../chipet/phenotype.ts';
@@ -420,6 +420,8 @@ interface Fight {
   petId: number;
   petName: string;
   heart: Heart;
+  /** 装备副心脏纹时，普通出招功率 +1 */
+  auxPower: boolean;
   myMax: number;
   seed: number;
   round: number;
@@ -826,17 +828,19 @@ export function Train() {
     const seed = Math.floor(Math.random() * 0xffffffff) >>> 0;
     const f = partner ? fuse(myHeart, heartOf(partner.circuitId, partner.rarity)) : undefined;
     const myMax = maxHpOf(me.level, me.rarity, me.mood);
+    const auxPower = localChipet.hasAuxHeart(me);
     setFight({
       opp,
       petId: me.id,
       petName: me.name,
       heart: myHeart,
+      auxPower,
       myMax,
       seed,
       round: 1,
       myHp: myMax,
       opHp: opp.maxHp,
-      myRolls: rollAll(myHeart, seed, 'me', 1),
+      myRolls: withAuxPowerAll(rollAll(myHeart, seed, 'me', 1), auxPower),
       opRolls: rollAll(opp.heart, seed, 'op', 1),
       fusion: f && partner ? { partner, f, roll: roll(f, seed, 'fuse', 1, FUSION), used: false } : undefined,
       busy: false,
@@ -913,7 +917,7 @@ export function Train() {
       ...done,
       busy: false,
       round,
-      myRolls: rollAll(done.heart, done.seed, 'me', round),
+      myRolls: withAuxPowerAll(rollAll(done.heart, done.seed, 'me', round), done.auxPower),
       opRolls: rollAll(done.opp.heart, done.seed, 'op', round),
       fusion: done.fusion && { ...done.fusion, roll: roll(done.fusion.f, done.seed, 'fuse', round, FUSION) },
     };
@@ -1045,6 +1049,11 @@ export function Train() {
                 {lang === 'zh'
                   ? <>{opp.name}偏爱<b className="font-semibold text-ink">{MOVES[opp.fav]!.name}</b> · 选一招，功率是你的{fight.heart.name}这回合算出来的</>
                   : <>{opp.name} favors <b className="font-semibold text-ink">{MOVES[opp.fav]!.name}</b> · pick a move; the power is what your {fight.heart.name} computed this round</>}
+                {fight.auxPower && (
+                  <span className="mt-1 block font-medium text-gold-dim">
+                    {t('副心脏纹生效：普通出招功率 +1', 'Aux-heart crest active: +1 power on normal moves')}
+                  </span>
+                )}
               </p>
               <div className="mt-2 grid grid-cols-3 gap-2 sm:gap-3">
                 {MOVES.map((m, i) => {

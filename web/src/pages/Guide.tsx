@@ -1,16 +1,16 @@
 import { useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from 'react';
 import {
-  BookOpen, Cable, Cat, Coins, Cpu, Egg, ExternalLink, Fish, FlaskConical, Hand, Sparkles, Swords, Users, Zap,
+  BookOpen, Cable, Cat, Coins, Cpu, Egg, ExternalLink, Fish, FlaskConical, Hand, Sparkles, Swords, Trophy, Users, Zap,
   type LucideProps,
 } from 'lucide-react';
 import { Button, PAGE, PageHeader, Panel, SectionTitle, Tag, cn } from '../components/ui.tsx';
 import { Link, go, useRoute } from '../router.tsx';
 import { both, txt, useT, type Txt } from '../i18n.ts';
 import { BATTLE_ENERGY } from '../chipet/store.ts';
-import { MOOD_HP, MOVES } from '../chipet/battle.ts';
+import { AUX_HEART_POWER, MOOD_HP, MOVES } from '../chipet/battle.ts';
 import { BEM_SKU_LIST, BOND_SLOTS_DEFAULT, BOND_SLOTS_MAX, FAUCET_AMOUNT } from '../chipet/bem.ts';
 
-type SecId = 'overview' | 'hatch' | 'raise' | 'battle' | 'plaza' | 'dex' | 'lab' | 'shop' | 'network';
+type SecId = 'overview' | 'hatch' | 'raise' | 'battle' | 'plaza' | 'dex' | 'lab' | 'crest' | 'shop' | 'network';
 
 const TOC: { id: SecId; label: Txt; icon: ComponentType<LucideProps> }[] = [
   { id: 'overview', label: both('总览', 'Overview'), icon: BookOpen },
@@ -20,6 +20,7 @@ const TOC: { id: SecId; label: Txt; icon: ComponentType<LucideProps> }[] = [
   { id: 'plaza', label: both('广场', 'Plaza'), icon: Users },
   { id: 'dex', label: both('图鉴', 'Dex'), icon: Cat },
   { id: 'lab', label: both('实验室', 'Lab'), icon: FlaskConical },
+  { id: 'crest', label: both('副心脏', 'Aux heart'), icon: Trophy },
   { id: 'shop', label: both('免费与 BEM', 'Free & BEM'), icon: Coins },
   { id: 'network', label: both('网络', 'Network'), icon: Cpu },
 ];
@@ -183,6 +184,7 @@ export function Guide() {
               <Bullet>{t('训练场：用心脏电路算出的功率打 Bug / 邻居', 'Training: fight bugs or neighbors with circuit-computed power')}</Bullet>
               <Bullet>{t('图鉴：收集物种与心脏电路', 'Dex: collect species and heart circuits')}</Bullet>
               <Bullet>{t('实验室：写 TapeHDL、打擂台悬赏（偏黑客松赛道）', 'Lab: write TapeHDL and compete on bounties (the hackathon track)')}</Bullet>
+              <Bullet>{t('副心脏：擂台冠军电路焊进芯喵，对战功率 +1', 'Aux heart: weld a bounty-winning circuit onto your Chipet for +1 battle power')}</Bullet>
             </ul>
             <Callout>
               {t(
@@ -283,6 +285,12 @@ export function Guide() {
               <Bullet>
                 {t('牵过线的线友可放一次合体技：两颗心脏串成合体电路，功率 +2 且无视克制，每场限一次。', 'A linked wire pal unlocks one fusion move: two hearts wired into one circuit, +2 power and ignores the triangle, once per battle.')}
               </Bullet>
+              <Bullet>
+                {t(`装备副心脏擂台纹时，普通出招功率额外 +${AUX_HEART_POWER}（合体技不加）。`, `With an aux-heart Arena crest equipped, normal moves get +${AUX_HEART_POWER} power (fusion moves do not). `)}
+                <button type="button" className="font-semibold text-si-dim underline-offset-2 hover:underline" onClick={() => scrollTo('crest')}>
+                  {t('详见「副心脏」', 'See Aux heart')}
+                </button>
+              </Bullet>
             </ul>
             <Callout tone="copper">
               {t(
@@ -365,10 +373,74 @@ export function Guide() {
                 {' · '}
                 {t('赢下的或登记的电路可被后续设计引用；被引用时原作者参与分成。', 'Won or registered circuits can be reused in later designs; originals share royalties when cited.')}
               </Bullet>
+              <Bullet>
+                {t('擂台与养成如何合流，见下一章', 'How the Arena feeds back into raising is in the next chapter: ')}
+                <button type="button" className="font-semibold text-si-dim underline-offset-2 hover:underline" onClick={() => scrollTo('crest')}>
+                  {t('「副心脏」', 'Aux heart')}
+                </button>
+              </Bullet>
             </ul>
             <p className="text-mute">
               {t('芯喵养成不依赖合约也能玩；实验室功能在对应链部署 TapeArena 后完整可用。', 'Raising Chipets works without the contract; full Lab features need TapeArena deployed on the selected chain.')}
             </p>
+          </Sec>
+
+          <Sec
+            id="crest"
+            icon={Trophy}
+            title={t('副心脏：擂台纹焊进芯喵', 'Aux heart: weld an Arena crest')}
+            lead={t('实验室夺冠不再停在奖金——获胜电路可以装进日常养成与对战。', 'Winning a bounty is no longer just a prize—the winning circuit plugs into raising and battle.')}
+            action={<Button size="sm" icon={Trophy} onClick={() => go('/')}>{t('去家园试试', 'Try on Home')}</Button>}
+          >
+            <p>
+              {t(
+                '主心脏仍决定外形与物种，叙事不变。副心脏是「第二块可换装的纹」：展示擂台编号，并给对战一点实打实的加成。',
+                'The main heart still decides looks and species—the story stays deterministic. The aux heart is a swappable crest: it shows the bounty number and gives a real battle bonus.',
+              )}
+            </p>
+            <Callout tone="gold">
+              <span className="inline-flex items-start gap-1.5">
+                <Trophy className="mt-0.5 size-3.5 shrink-0 text-gold-dim" />
+                <span>
+                  {t(
+                    `效果：装备期间，训练场普通出招（进攻 / 防御 / 技巧）功率 +${AUX_HEART_POWER}；合体技与牵线网表不受影响。`,
+                    `Effect: while equipped, Training Ground normal moves (Attack / Defend / Trick) get +${AUX_HEART_POWER} power; fusion moves and link netlists are unchanged.`,
+                  )}
+                </span>
+              </span>
+            </Callout>
+            <ul className="space-y-2">
+              <Bullet>
+                <b className="font-semibold text-ink">{t('谁能焊', 'Who can weld')}</b>
+                {' · '}
+                {t('擂台结算后的最终冠军，可在悬赏详情或组件库的冠军条目里，选一只自家芯喵焊入。', 'After a bounty is finalized, the champion can weld from the bounty page or their champion card in the Library onto one of their Chipets.')}
+              </Bullet>
+              <Bullet>
+                <b className="font-semibold text-ink">{t('演示体验', 'Demo try')}</b>
+                {' · '}
+                {t('还没打过擂台也能玩：打开自家芯喵详情 →「心脏电路」卡片里的「副心脏 · 擂台纹」→「演示焊入」。', 'You can try before winning: open your kitty → Heart circuit panel → Aux heart · Arena crest → Weld demo.')}
+              </Bullet>
+              <Bullet>
+                <b className="font-semibold text-ink">{t('槽位与冷却', 'Slots & cooldown')}</b>
+                {' · '}
+                {t('每只芯喵同时只能装备 1 枚副心脏；再焊会覆盖旧纹。卸下免费，之后 24 小时内不能再换装。', 'Each kitty has one aux slot; welding again replaces the old crest. Unequip is free, then a 24-hour reslot cooldown applies.')}
+              </Bullet>
+              <Bullet>
+                <b className="font-semibold text-ink">{t('和牵线的区别', 'Vs linking up')}</b>
+                {' · '}
+                {t('牵线是两只宠的主心脏互相引用、放合体技；副心脏只加被动功率，不进合体网表。', 'Linking wires two main hearts for a fusion move; the aux heart only adds passive power and never enters the fusion netlist.')}
+              </Bullet>
+              <Bullet>
+                <b className="font-semibold text-ink">{t('今日任务', 'Daily quest')}</b>
+                {' · '}
+                {t('家园多了一项「逛一场擂台或在设计器仿真一次」，完成可领 1 条小鱼干——鼓励你顺路进实验室。', 'Home adds a quest to browse a bounty or simulate once in Studio for 1 fish treat—a light nudge into the Lab.')}
+              </Bullet>
+            </ul>
+            <div className="flex flex-wrap gap-2 pt-1">
+              <Button size="sm" variant="ghost" icon={FlaskConical} onClick={() => go('/lab')}>{t('去擂台', 'Arena')}</Button>
+              <Button size="sm" variant="ghost" icon={Cpu} onClick={() => go('/lab/studio')}>{t('打开设计器', 'Open Studio')}</Button>
+              <Button size="sm" variant="ghost" onClick={() => scrollTo('lab')}>{t('实验室章节', 'Lab chapter')}</Button>
+            </div>
           </Sec>
 
           <Sec

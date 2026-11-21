@@ -17,6 +17,7 @@ import { aiAvailable, aiDesign, type AiEvent } from '../api.ts';
 import { short } from '../format.ts';
 import { getLang, tr, useLang } from '../i18n.ts';
 import { Button, cn, Empty, ErrBar, Input, KV, Panel, Select, Tag, Textarea } from '../components/ui.tsx';
+import { social } from '../chipet/social.ts';
 
 const TEMPLATES = { ...EXAMPLES, nand9: { get title() { return tr('9 门全加器（NAND 手写）', '9-gate full adder (hand-written NAND)'); }, src: FULL_ADDER_NAND9 } };
 const DRAFT = 'tapearena.draft';
@@ -204,6 +205,10 @@ function SimPanel({ built }: { built: Built }) {
   }, [compiled, circuit, vals, state, lib]);
 
   useEffect(() => { if (r) simBus.emit(r.signals); }, [r]);
+  useEffect(() => {
+    // 今日任务：设计器成功跑通一次仿真
+    if (r) social.completeQuest('lab_peek');
+  }, [r]);
 
   const outs = r ? bitsToPins(compiled.outputs, unpackBits(r.outputs, circuit.nOut)) : {};
   const randomize = () => {

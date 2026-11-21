@@ -14,7 +14,7 @@ import { FxOverlay, type ChipImpulse } from '../chipet/FxOverlay.tsx';
 import { LiveDie } from '../chipet/LiveDie.tsx';
 import { PowerUpGame } from '../chipet/PowerUpGame.tsx';
 import { fuse, heartOf } from '../chipet/heart.ts';
-import { maxHpOf, MOOD_HP, MOVES, favOf } from '../chipet/battle.ts';
+import { AUX_HEART_POWER, maxHpOf, MOOD_HP, MOVES, favOf } from '../chipet/battle.ts';
 import { feedChipet, playChipet, readPet } from '@tapearena/chain';
 import { isChainPet, localChipet, xpNeed } from '../chipet/store.ts';
 import { cattributes, geneStory, petSeed, phenotypeOf, typeLabel } from '../chipet/phenotype.ts';
@@ -363,6 +363,9 @@ export function PetPage({ id, share: shareToken }: { id?: number; share?: string
               <span className="text-si-dim">CHIPET {idText}</span>
               <span className="text-faint">·</span>
               <span>{ph.species}</span>
+              {local && localChipet.hasAuxHeart(local) && (
+                <Tag tone="gold" icon={Trophy}>{t('擂台纹 · 功率 +1', 'Arena crest · +1 power')}</Tag>
+              )}
               {pet.mine
                 ? <Tag tone="si" className="ml-auto">{t('我的芯喵', 'My kitty')}</Tag>
                 : <span className="ml-auto flex items-center gap-1.5"><User className="size-3.5 text-faint" />{t('主人', 'Owner')} <span className="font-sans font-medium text-ink">{pet.owner}</span></span>}
@@ -482,6 +485,69 @@ export function PetPage({ id, share: shareToken }: { id?: number; share?: string
                 <Stat label={t('偏爱招式', 'Favorite move')} value={MOVES[favOf(ph.speciesId)]!.name} />
                 <Stat label={t('电路 ID', 'Circuit ID')} value={`#${pet.circuitId.toString()}`} />
               </div>
+              {pet.mine && local && (
+                <div className="mt-4 rounded-2xl border border-line/80 bg-panel-2/50 p-3.5">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="flex items-center gap-1.5 text-sm font-semibold text-ink">
+                        <Trophy className="size-3.5 shrink-0 text-gold" />
+                        {t('副心脏 · 擂台纹', 'Aux heart · Arena crest')}
+                      </p>
+                      {localChipet.hasAuxHeart(local) && local.auxHeart ? (
+                        <p className="mt-1 text-xs leading-relaxed text-mute">
+                          {local.auxHeart.bountyId > 0
+                            ? t(`擂台 #${local.auxHeart.bountyId} 纹 · 对战功率 +${AUX_HEART_POWER}`, `Bounty #${local.auxHeart.bountyId} crest · battle power +${AUX_HEART_POWER}`)
+                            : t(`演示纹 · 对战功率 +${AUX_HEART_POWER}`, `Demo crest · battle power +${AUX_HEART_POWER}`)}
+                        </p>
+                      ) : (
+                        <p className="mt-1 text-xs leading-relaxed text-mute">
+                          {t(
+                            '擂台夺冠后可把获胜电路焊成副心脏；主心脏与外形不变，合体也不改。',
+                            'After winning a bounty you can weld the winning circuit as an aux heart. Main heart and looks stay the same; fusion netlists are unchanged.',
+                          )}
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {localChipet.hasAuxHeart(local) ? (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => {
+                            try {
+                              localChipet.unequipAuxHeart(petId);
+                              setNow(Date.now());
+                              setTick((n) => n + 1);
+                              flash(t('已卸下副心脏纹', 'Aux-heart crest unequipped'));
+                            } catch (e) { fail(e); }
+                          }}
+                        >
+                          {t('卸下', 'Unequip')}
+                        </Button>
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          disabled={localChipet.auxHeartCdLeft(local) > 0}
+                          onClick={() => {
+                            try {
+                              localChipet.weldDemoAuxHeart(petId);
+                              setNow(Date.now());
+                              setTick((n) => n + 1);
+                              pulse('happy');
+                              flash(t(`演示纹已焊入 · 对战功率 +${AUX_HEART_POWER}`, `Demo crest welded · battle power +${AUX_HEART_POWER}`));
+                            } catch (e) { fail(e); }
+                          }}
+                        >
+                          {localChipet.auxHeartCdLeft(local) > 0
+                            ? t(`冷却 ${fmtCd(localChipet.auxHeartCdLeft(local))}`, `Cooldown ${fmtCd(localChipet.auxHeartCdLeft(local))}`)
+                            : t('演示焊入', 'Weld demo')}
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
               <div className="mt-4 flex items-start gap-2.5 rounded-2xl bg-panel-2/70 p-3.5 text-xs leading-relaxed text-mute">
                 <Heart className="mt-0.5 size-3.5 shrink-0 text-si" />
                 <span>

@@ -2,6 +2,16 @@ import type { Address } from 'viem';
 import { tr } from '../i18n.ts';
 import type { Rarity } from './phenotype.ts';
 
+/** 擂台冠军焊入的副心脏（主心脏不变；对战功率 +1）。 */
+export interface AuxHeart {
+  bountyId: number;
+  cpu: string;
+  circuitId: string;
+  weldedAt: number;
+  /** 卸下时间；用于 24h 换装冷却 */
+  unequippedAt?: number;
+}
+
 /** 本地演示宠：内存态展示；真源在 SQLite（连钱包后 hydrate / push）。 */
 export interface LocalPet {
   id: number;
@@ -19,7 +29,11 @@ export interface LocalPet {
   lastFeed: number;
   lastPlay: number;
   hatchedAt: number;
+  auxHeart?: AuxHeart;
 }
+
+/** 副心脏换装冷却 */
+export const AUX_HEART_CD = 24 * 60 * 60 * 1000;
 
 /** 旧版 localStorage 键；启动时一次性迁入内存后删除 */
 const LEGACY_KEY = 'chipet.local.pets';
@@ -30,15 +44,38 @@ export const BATTLE_ENERGY = 15;
 
 export const MOCK_CPU = '0x000000000000000000000000000000000000c111' as Address;
 
+/** 演示用冠军纹（无合约时体验功率 +1） */
+export const DEMO_AUX_HEART = {
+  bountyId: 0,
+  cpu: MOCK_CPU,
+  circuitId: '422',
+} as const;
+
 /** 链上宠物：cpu 不是本地占位地址 */
 export const isChainPet = (p: { cpu: Address }) => p.cpu.toLowerCase() !== MOCK_CPU.toLowerCase();
 
-type Stored = Omit<LocalPet, 'circuitId' | 'xp' | 'wins' | 'losses'> & {
+type Stored = Omit<LocalPet, 'circuitId' | 'xp' | 'wins' | 'losses' | 'auxHeart'> & {
   circuitId: string;
   xp?: number;
   wins?: number;
   losses?: number;
+  auxHeart?: AuxHeart;
 };
+
+function parseAuxHeart(raw: unknown): AuxHeart | undefined {
+  if (!raw || typeof raw !== 'object') return undefined;
+  const o = raw as Record<string, unknown>;
+  const circuitId = String(o.circuitId ?? '').trim();
+  const cpu = String(o.cpu ?? '').trim();
+  if (!circuitId || !cpu) return undefined;
+  return {
+    bountyId: Math.max(0, Math.trunc(Number(o.bountyId) || 0)),
+    cpu,
+    circuitId,
+    weldedAt: Number(o.weldedAt) || Date.now(),
+    unequippedAt: o.unequippedAt != null ? Number(o.unequippedAt) || undefined : undefined,
+  };
+}
 
 const petsSubs = new Set<() => void>();
 let petsRev = 0;
@@ -66,6 +103,7 @@ function parseStored(raw: Stored[]): LocalPet[] {
     xp: p.xp ?? 0,
     wins: p.wins ?? 0,
     losses: p.losses ?? 0,
+    auxHeart: parseAuxHeart(p.auxHeart),
   }));
 }
 
@@ -151,6 +189,7 @@ export const localChipet = {
         lastFeed: p.lastFeed,
         lastPlay: p.lastPlay,
         hatchedAt: p.hatchedAt,
+        auxHeart: p.auxHeart,
       }));
   },
   /** 用云端本地宠覆盖；保留链上缓存宠。 */
@@ -170,6 +209,7 @@ export const localChipet = {
     lastFeed: number;
     lastPlay: number;
     hatchedAt: number;
+    auxHeart?: AuxHeart;
   }[]) {
     const chain = load().filter((p) => isChainPet(p));
     const locals: LocalPet[] = remote.map((p) => ({
@@ -188,6 +228,7 @@ export const localChipet = {
       lastFeed: Number(p.lastFeed) || 0,
       lastPlay: Number(p.lastPlay) || 0,
       hatchedAt: Number(p.hatchedAt) || Date.now(),
+      auxHeart: parseAuxHeart(p.auxHeart),
     }));
     // 云端覆盖：只改内存，不回推
     save([...chain, ...locals], { push: false });
@@ -252,6 +293,7 @@ export const localChipet = {
       lastFeed: input.lastFeed ? input.lastFeed * 1000 : 0,
       lastPlay: input.lastPlay ? input.lastPlay * 1000 : 0,
       hatchedAt: prev?.hatchedAt ?? Date.now(),
+      auxHeart: prev?.auxHeart,
     };
     if (i >= 0) pets[i] = pet;
     else pets.push(pet);
@@ -283,10 +325,54 @@ export const localChipet = {
         lastFeed: c.lastFeed ? c.lastFeed * 1000 : 0,
         lastPlay: c.lastPlay ? c.lastPlay * 1000 : 0,
         hatchedAt: prev?.hatchedAt ?? Date.now(),
+        auxHeart: prev?.auxHeart,
       } satisfies LocalPet;
     });
     save([...keep, ...mapped]);
     return mapped;
+  },
+  /** 副心脏是否处于装备态（有记录且未卸下）。 */
+  hasAuxHeart(p: LocalPet) {
+    return Boolean(p.auxHeart && !p.auxHeart.unequippedAt);
+  },
+  auxHeartCdLeft(p: LocalPet) {
+    const at = p.auxHeart?.unequippedAt;
+    if (!at) return 0;
+    return Math.max(0, AUX_HEART_CD - (Date.now() - at));
+  },
+  /** 焊入 / 覆盖副心脏（擂台冠军或演示纹）。 */
+  weldAuxHeart(id: number, input: { bountyId: number; cpu: string; circuitId: string }) {
+    const pets = load();
+    const p = mustFind(pets, id);
+    const cd = this.auxHeartCdLeft(p);
+    if (cd > 0) {
+      throw new Error(tr(
+        `换装冷却中，约 ${Math.ceil(cd / 3600000)} 小时后再试`,
+        `Reslot cooling down · try again in ~${Math.ceil(cd / 3600000)}h`,
+      ));
+    }
+    p.auxHeart = {
+      bountyId: Math.max(0, Math.trunc(input.bountyId) || 0),
+      cpu: input.cpu,
+      circuitId: String(input.circuitId),
+      weldedAt: Date.now(),
+    };
+    save(pets);
+    return p;
+  },
+  /** 演示焊入：不依赖真实擂台夺冠。 */
+  weldDemoAuxHeart(id: number) {
+    return this.weldAuxHeart(id, DEMO_AUX_HEART);
+  },
+  unequipAuxHeart(id: number) {
+    const pets = load();
+    const p = mustFind(pets, id);
+    if (!this.hasAuxHeart(p) || !p.auxHeart) {
+      throw new Error(tr('这只芯喵还没有副心脏纹', 'This kitty has no aux-heart crest yet'));
+    }
+    p.auxHeart = { ...p.auxHeart, unequippedAt: Date.now() };
+    save(pets);
+    return p;
   },
   feed(id: number) {
     const pets = load();

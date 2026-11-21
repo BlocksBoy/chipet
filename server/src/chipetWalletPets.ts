@@ -4,6 +4,14 @@
 import { getAdminDb } from './adminDb.ts';
 import { normalizeAddress } from './walletUsers.ts';
 
+export interface ChipetAuxHeartDto {
+  bountyId: number;
+  cpu: string;
+  circuitId: string;
+  weldedAt: number;
+  unequippedAt?: number;
+}
+
 export interface ChipetLocalPetDto {
   id: number;
   name: string;
@@ -20,6 +28,23 @@ export interface ChipetLocalPetDto {
   lastFeed: number;
   lastPlay: number;
   hatchedAt: number;
+  auxHeart?: ChipetAuxHeartDto;
+}
+
+function parseAuxHeart(raw: unknown): ChipetAuxHeartDto | undefined {
+  if (!raw || typeof raw !== 'object') return undefined;
+  const o = raw as Record<string, unknown>;
+  const cpu = String(o.cpu ?? '').trim();
+  const circuitId = String(o.circuitId ?? '').trim();
+  if (!cpu || !circuitId) return undefined;
+  const unequippedAt = o.unequippedAt != null ? Number(o.unequippedAt) : undefined;
+  return {
+    bountyId: Math.max(0, Math.trunc(Number(o.bountyId) || 0)),
+    cpu,
+    circuitId,
+    weldedAt: Number(o.weldedAt) || Date.now(),
+    ...(unequippedAt && unequippedAt > 0 ? { unequippedAt } : {}),
+  };
 }
 
 export interface ChipetWalletPets {
@@ -45,6 +70,7 @@ function parsePets(raw: string): ChipetLocalPetDto[] {
     if (!Array.isArray(v)) return [];
     return v.filter((p) => p && typeof p === 'object').map((p) => {
       const o = p as Record<string, unknown>;
+      const auxHeart = parseAuxHeart(o.auxHeart);
       return {
         id: Number(o.id) || 0,
         name: String(o.name ?? '').slice(0, 32),
@@ -61,6 +87,7 @@ function parsePets(raw: string): ChipetLocalPetDto[] {
         lastFeed: Number(o.lastFeed) || 0,
         lastPlay: Number(o.lastPlay) || 0,
         hatchedAt: Number(o.hatchedAt) || 0,
+        ...(auxHeart ? { auxHeart } : {}),
       };
     }).filter((p) => p.id > 0);
   } catch {

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ComponentType } from 'react';
 import { motion } from 'motion/react';
-import { Egg, Sparkles, Hammer, Swords, BookOpen, ArrowRight, Users, Fish, ListChecks, CircleCheck, Zap, Hand, CalendarCheck, Cable, Cat, Trophy, Coins, type LucideProps } from 'lucide-react';
+import { Egg, Sparkles, Hammer, Swords, BookOpen, ArrowRight, Users, Fish, ListChecks, CircleCheck, Zap, Hand, CalendarCheck, Cable, Cat, Trophy, Coins, FlaskConical, type LucideProps } from 'lucide-react';
 import { DataLoading, FeedSkeleton } from '../components/Skeleton.tsx';
 import { Button, Panel, Tag, Input, PAGE, SectionTitle, StatBand, Trait, cn } from '../components/ui.tsx';
 import { Link, go, useRoute } from '../router.tsx';
@@ -49,6 +49,7 @@ const QUEST_ICON: Record<QuestId, ComponentType<LucideProps>> = {
   power: Zap,
   battle: Swords,
   visit: Hand,
+  lab_peek: FlaskConical,
 };
 
 export function Home() {
@@ -240,6 +241,7 @@ export function Home() {
     if (id === 'checkin') return checkin();
     if (id === 'battle') return go('/train');
     if (id === 'visit') return go('/neighbors');
+    if (id === 'lab_peek') return go('/lab');
     const first = pets[0];
     if (first) return go(`/pet/${first.id}`);
     document.getElementById(NAME_INPUT_ID)?.focus();
@@ -437,6 +439,43 @@ export function Home() {
         { icon: Fish, label: t(`小鱼干 · 连续签到 ${profile.streak} 天`, `Fish treats · ${profile.streak}-day streak`), value: profile.fish, tone: 'violet' },
       ]} />
 
+      <Panel className="mt-6 overflow-hidden border-si/25 bg-gradient-to-br from-si/10 via-panel to-gold/5 p-0" bodyClass="p-0">
+        <div className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
+          <div className="min-w-0">
+            <div className="inline-flex items-center gap-1.5 rounded-full bg-si/15 px-2.5 py-1 font-mono text-[11px] font-semibold text-si-dim">
+              <FlaskConical className="size-3.5" />
+              {t('新玩法 · 实验室合流', 'New · Lab crossover')}
+            </div>
+            <h3 className="mt-2 font-display text-lg font-bold text-ink sm:text-xl">
+              {t('擂台冠军电路，可焊进芯喵副心脏', 'Weld bounty-winning circuits onto your Chipet')}
+            </h3>
+            <p className="mt-1 max-w-xl text-sm text-pretty text-mute">
+              {t(
+                '打开自家芯喵详情 →「副心脏 · 擂台纹」可先演示焊入；对战普通出招功率 +1。今日任务多了一项「逛擂台 / 设计器仿真」。',
+                'Open your kitty → “Aux heart · Arena crest” to try a demo weld; +1 power on normal battle moves. Daily quests now include browsing a bounty or simulating in Studio.',
+              )}
+            </p>
+          </div>
+          <div className="flex shrink-0 flex-wrap gap-2">
+            <Button
+              size="sm"
+              variant="si"
+              icon={Cat}
+              onClick={() => {
+                const first = pets[0];
+                if (first) go(`/pet/${first.id}`);
+                else document.getElementById(NAME_INPUT_ID)?.focus();
+              }}
+            >
+              {pets[0] ? t('去焊入演示纹', 'Try demo crest') : t('先孵一只', 'Hatch first')}
+            </Button>
+            <Button size="sm" variant="ghost" icon={FlaskConical} onClick={() => go('/lab')}>
+              {t('去实验室', 'Open Lab')}
+            </Button>
+          </div>
+        </div>
+      </Panel>
+
       <Panel
         title={t('今日任务', 'Daily quests')}
         icon={ListChecks}
@@ -561,6 +600,7 @@ export function Home() {
               {(pets.length > 6 ? pets.slice(0, 5) : pets).map((p) => {
                 const petPh = phenotypeOf(p.cpu, p.circuitId, p.rarity, petSeed(p));
                 const h = heartOf(p.circuitId, p.rarity);
+                const auxOn = localChipet.hasAuxHeart(p);
                 return (
                   <li key={p.id}>
                     <PetCard
@@ -568,7 +608,13 @@ export function Home() {
                       name={p.name}
                       sub={`${petPh.species} · ${h.name}`}
                       badge={`#${String(p.id).padStart(4, '0')}`}
-                      tags={<><Tag tone="faint">{petPh.coat}</Tag><Tag tone="copper">{t(`${h.gates} 门`, `${h.gates} gates`)}</Tag></>}
+                      tags={(
+                        <>
+                          <Tag tone="faint">{petPh.coat}</Tag>
+                          <Tag tone="copper">{t(`${h.gates} 门`, `${h.gates} gates`)}</Tag>
+                          {auxOn && <Tag tone="gold">{t('擂台纹', 'Arena crest')}</Tag>}
+                        </>
+                      )}
                       onClick={() => go(`/pet/${p.id}`)}
                     />
                   </li>

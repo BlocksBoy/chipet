@@ -69,6 +69,19 @@ export function rollAll(h: Heart, seed: number, side: string, round: number): [R
   return [roll(h, seed, side, round, 0), roll(h, seed, side, round, 1), roll(h, seed, side, round, 2)];
 }
 
+/** 副心脏纹：普通出招功率 +1（不改网表、不进合体技）。 */
+export const AUX_HEART_POWER = 1;
+
+export function withAuxPower(r: Roll, on: boolean): Roll {
+  if (!on) return r;
+  return { ...r, power: r.power + AUX_HEART_POWER };
+}
+
+export function withAuxPowerAll(rolls: [Roll, Roll, Roll], on: boolean): [Roll, Roll, Roll] {
+  if (!on) return rolls;
+  return [withAuxPower(rolls[0], true), withAuxPower(rolls[1], true), withAuxPower(rolls[2], true)];
+}
+
 /** 对手出招：功率越高越想用，再叠上性格偏好。 */
 export function aiPick(rolls: Roll[], fav: Move, rand = Math.random): Move {
   const w = rolls.map((r, i) => r.power ** 1.4 * (i === fav ? 1.7 : 1));

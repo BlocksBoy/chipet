@@ -1,4 +1,4 @@
-import { Fragment, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import { formatEther, isAddress, zeroAddress, type Address, type Hex } from 'viem';
 import {
   arenaAbi, libraryAbi, bountyPhase, challenge, challengeHint, challengeVector, claimBond, fetchBounty, finalize, precheck, submit, withdraw,
@@ -15,6 +15,8 @@ import { amount, left, phaseText, short, unit } from '../format.ts';
 import { tr } from '../i18n.ts';
 import { BountyPageSkeleton } from '../components/Skeleton.tsx';
 import { btn, Button, cn, Empty, Input, KV, Panel, PhaseTag, Tag } from '../components/ui.tsx';
+import { WeldAuxHeartControl } from '../chipet/WeldAuxHeart.tsx';
+import { social } from '../chipet/social.ts';
 
 export function BountyPage({ id }: { id: number }) {
   const app = useApp();
@@ -41,6 +43,11 @@ export function BountyPage({ id }: { id: number }) {
     return { winner: w.solver, fee, each, owners, comps, prize: b.reward - fee - each * BigInt(owners.length) };
   }, [q.data, app.deployment?.library]);
 
+  useEffect(() => {
+    // 今日任务：打开任意擂台详情即算「逛一场」
+    social.completeQuest('lab_peek');
+  }, [id]);
+
   if (q.loading && !q.data) return <BountyPageSkeleton />;
   if (!q.data) return <div className="w-full"><Empty icon={ShieldAlert} title={tr(`找不到擂台 #${id}`, `Bounty #${id} not found`)} action={<Link to="/lab" className={btn('ghost')}><ArrowLeft />{tr('回到擂台', 'Back to the Arena')}</Link>}><span className="text-danger">{q.error?.message}</span></Empty></div>;
   const b = q.data;
@@ -51,6 +58,8 @@ export function BountyPage({ id }: { id: number }) {
   const at = stages.indexOf(phase);
   const STAGE_ICON = { open: Send, challenge: Swords, settle: Gauge, finalized: CircleCheck };
   const pinText = b.meta.inputs && `${b.meta.inputs.map((p) => p.name + (p.width > 1 ? `[${p.width}]` : '')).join(', ')} → ${b.meta.outputs?.map((p) => p.name + (p.width > 1 ? `[${p.width}]` : '')).join(', ')}`;
+  const winSub = b.finalized && b.best >= 0 ? b.submissions[b.best] : undefined;
+  const iAmWinner = !!(winSub && app.account && winSub.solver.toLowerCase() === app.account.toLowerCase());
 
   return (
     <div className="min-w-0 w-full overflow-x-clip pb-16">
@@ -122,6 +131,18 @@ export function BountyPage({ id }: { id: number }) {
                 <Fragment key={k}><Payee icon={Blocks} tone="text-si" label={`${tr('上游组件', 'Upstream component')} ${payout.data!.comps[k].slice(0, 8)}`} who={o} v={`${amount(payout.data!.each)} ${unit(b.token, sym)}`} /></Fragment>
               ))}
               <Payee icon={Landmark} tone="text-mute" label={tr('平台费', 'Platform fee')} v={`${amount(payout.data.fee)} ${unit(b.token, sym)}`} />
+            </Panel>
+          )}
+
+          {iAmWinner && winSub && (
+            <Panel title={tr('焊入芯喵副心脏', 'Weld Chipet aux heart')} icon={Trophy} bodyClass="p-4">
+              <p className="mb-3 text-xs leading-relaxed text-mute">
+                {tr(
+                  '把这枚夺冠电路焊成副心脏纹：主心脏与外形不变，对战普通出招功率 +1，不改牵线合体网表。',
+                  'Weld this winning circuit as an aux-heart crest: main heart and looks stay the same, +1 power on normal battle moves, fusion netlists unchanged.',
+                )}
+              </p>
+              <WeldAuxHeartControl bountyId={b.id} cpu={winSub.cpu} circuitId={winSub.circuitId} />
             </Panel>
           )}
 

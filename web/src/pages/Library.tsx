@@ -1,13 +1,14 @@
 import { useState } from 'react';
 import { parseEther } from 'viem';
 import { listComponents, tipComponent, type ComponentInfo } from '@tapearena/chain';
-import { ArrowDownWideNarrow, BadgeCheck, BookOpen, Check, Copy, Cpu, Gift, Link2, PackageOpen, PenTool, User } from 'lucide-react';
+import { ArrowDownWideNarrow, BadgeCheck, BookOpen, Check, Copy, Cpu, Gift, Link2, PackageOpen, PenTool, Trophy, User } from 'lucide-react';
 import { useApp, useAsync } from '../state.tsx';
 import { Link } from '../router.tsx';
 import { short } from '../format.ts';
 import { getLang, tr } from '../i18n.ts';
 import { DataLoading, LibraryGridSkeleton } from '../components/Skeleton.tsx';
 import { btn, Button, Empty, PageHeader, Panel, Select, Tag } from '../components/ui.tsx';
+import { WeldAuxHeartControl } from '../chipet/WeldAuxHeart.tsx';
 
 function useLine(c: ComponentInfo) {
   const ident = c.name.replace(/[^A-Za-z0-9_]/g, '_').replace(/^(\d)/, '_$1') || 'C';
@@ -18,9 +19,12 @@ function Card({ c }: { c: ComponentInfo }) {
   const app = useApp();
   const line = useLine(c);
   const [copied, setCopied] = useState(false);
+  const [weldOpen, setWeldOpen] = useState(false);
   const pins = (c.meta.inputs as { name: string; width: number }[] | undefined);
   const outs = (c.meta.outputs as { name: string; width: number }[] | undefined);
   const fmt = (ps?: { name: string; width: number }[]) => ps?.map((p) => p.name + (p.width > 1 ? `[${p.width}]` : '')).join(', ');
+  const mineChamp = c.verifiedBounty >= 0 && !!app.account
+    && c.registrant.toLowerCase() === app.account.toLowerCase();
 
   return (
     <div className="flex animate-rise flex-col rounded-3xl border border-line/80 bg-panel shadow-sm shadow-si/5 p-5 transition-colors hover:border-copper-dim">
@@ -58,11 +62,25 @@ function Card({ c }: { c: ComponentInfo }) {
           onClick={() => { navigator.clipboard.writeText(line); setCopied(true); setTimeout(() => setCopied(false), 1500); }}>
           {copied ? tr('已复制', 'Copied') : tr('复制 use', 'Copy use')}
         </Button>
-        <Button variant="ghost" size="sm" icon={Gift}
-          onClick={() => app.run(tr('打赏', 'Tip'), async (st) => tipComponent(await app.signer(), app.deployment!.library!, c.key, parseEther('0.01'), st))}>
-          {tr('打赏 0.01', 'Tip 0.01')}
-        </Button>
+        {mineChamp ? (
+          <Button variant="ghost" size="sm" icon={Trophy} onClick={() => setWeldOpen((v) => !v)}>
+            {weldOpen ? tr('收起', 'Close') : tr('去焊入', 'Weld')}
+          </Button>
+        ) : (
+          <Button variant="ghost" size="sm" icon={Gift}
+            onClick={() => app.run(tr('打赏', 'Tip'), async (st) => tipComponent(await app.signer(), app.deployment!.library!, c.key, parseEther('0.01'), st))}>
+            {tr('打赏 0.01', 'Tip 0.01')}
+          </Button>
+        )}
       </div>
+      {mineChamp && weldOpen && (
+        <WeldAuxHeartControl
+          className="mt-3 border-t border-line/70 pt-3"
+          bountyId={c.verifiedBounty}
+          cpu={c.cpu}
+          circuitId={c.circuitId}
+        />
+      )}
     </div>
   );
 }
