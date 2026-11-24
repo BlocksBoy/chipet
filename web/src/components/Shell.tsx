@@ -363,6 +363,7 @@ export function Shell({ children }: { children: ReactNode }) {
                 <li><Link to="/shop" className="inline-flex items-center gap-1.5 text-mute no-underline transition-colors hover:text-ink"><Coins className="size-3.5 shrink-0" />{t('BEM 商店', 'BEM Shop')}</Link></li>
                 <li><a href="https://tapeout.net/" target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-mute no-underline transition-colors hover:text-ink">{t('TapeOut 官网', 'TapeOut')}<ExternalLink className="size-3.5 shrink-0" /></a></li>
                 <li><a href={t('https://web3.okx.com/zh-hans/xlayer/build-x-series', 'https://web3.okx.com/xlayer/build-x-series')} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-mute no-underline transition-colors hover:text-ink">X Layer TapeOut<ExternalLink className="size-3.5 shrink-0" /></a></li>
+                <li><a href={t('https://web3.okx.com/zh-hans/xlayer/hackathon-voting', 'https://web3.okx.com/xlayer/hackathon-voting')} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-mute no-underline transition-colors hover:text-ink"><Trophy className="size-3.5 shrink-0" />{t('黑客松投票', 'Hackathon voting')}<ExternalLink className="size-3.5 shrink-0" /></a></li>
                 <li><a href="https://github.com/TapeOutProtocol/TapeKit" target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-mute no-underline transition-colors hover:text-ink"><Code2 className="size-3.5 shrink-0" />TapeKit</a></li>
                 <li><Link to="/lab/studio" className="inline-flex items-center gap-1.5 text-mute no-underline transition-colors hover:text-ink"><PenTool className="size-3.5 shrink-0" />{t('电路设计器', 'Circuit Studio')}</Link></li>
               </ul>
@@ -370,18 +371,37 @@ export function Shell({ children }: { children: ReactNode }) {
           </div>
         </div>
         <div className="border-t border-line/60">
-          <div className="mx-auto flex max-w-[1180px] flex-col gap-2 px-4 py-4 font-mono text-[11px] text-faint sm:px-7 lg:flex-row lg:flex-wrap lg:items-center lg:gap-x-4 lg:gap-y-1">
-            <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1">
-              <span className="flex items-center gap-1.5"><Cpu className="size-3.5 text-si" />Chipet · X Layer TapeOut Accelerate</span>
-              <a href="https://x.com/chipet_" target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-faint no-underline transition-colors hover:text-ink">
-                <svg viewBox="0 0 24 24" className="size-3" aria-hidden fill="currentColor">
-                  <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.727-8.835L1.254 2.25H8.08l4.259 5.63 5.905-5.63Zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
-                </svg>
-                @chipet_
-              </a>
-              <a href="https://tapeout.net/" target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-faint no-underline transition-colors hover:text-ink">
-                tapeout.net<ExternalLink className="size-3 shrink-0" />
-              </a>
+          <div className="mx-auto flex max-w-[1180px] flex-col gap-3 px-4 py-4 sm:px-7">
+            <a
+              href={t('https://web3.okx.com/zh-hans/xlayer/hackathon-voting', 'https://web3.okx.com/xlayer/hackathon-voting')}
+              target="_blank"
+              rel="noreferrer"
+              className="flex flex-col gap-2 rounded-2xl bg-copper/10 px-4 py-3 text-sm no-underline ring-1 ring-copper/25 transition-colors hover:bg-copper/15 sm:flex-row sm:items-center sm:justify-between"
+            >
+              <span className="flex min-w-0 items-start gap-2.5 text-ink">
+                <Trophy className="mt-0.5 size-4 shrink-0 text-copper" />
+                <span className="min-w-0">
+                  <span className="block font-semibold">{t('为 Chipet 投票 · X Layer 黑客松', 'Vote for Chipet · X Layer Hackathon')}</span>
+                  <span className="mt-0.5 block text-[12px] text-mute">{t('在 OKX Web3 投票页支持我们，助力 TapeOut Accelerate。', 'Support us on the OKX Web3 voting page for TapeOut Accelerate.')}</span>
+                </span>
+              </span>
+              <span className="inline-flex shrink-0 items-center justify-center gap-1.5 self-start rounded-full bg-copper px-3 py-1.5 text-[12px] font-semibold text-white sm:self-center">
+                {t('去投票', 'Vote now')}<ExternalLink className="size-3.5" />
+              </span>
+            </a>
+            <div className="flex flex-col gap-2 font-mono text-[11px] text-faint lg:flex-row lg:flex-wrap lg:items-center lg:gap-x-4 lg:gap-y-1">
+              <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1">
+                <span className="flex items-center gap-1.5"><Cpu className="size-3.5 text-si" />Chipet · X Layer TapeOut Accelerate</span>
+                <a href="https://x.com/chipet_" target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-faint no-underline transition-colors hover:text-ink">
+                  <svg viewBox="0 0 24 24" className="size-3" aria-hidden fill="currentColor">
+                    <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.727-8.835L1.254 2.25H8.08l4.259 5.63 5.905-5.63Zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+                  </svg>
+                  @chipet_
+                </a>
+                <a href="https://tapeout.net/" target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-faint no-underline transition-colors hover:text-ink">
+                  tapeout.net<ExternalLink className="size-3 shrink-0" />
+                </a>
+              </div>
             </div>
           </div>
         </div>
