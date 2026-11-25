@@ -237,6 +237,15 @@ export function countArchivedPets(chainId?: number | null, filters?: Omit<PetArc
   return Number(row?.n ?? 0);
 }
 
+/** 某链已存档的最大 petId；没有则 0。用于增量同步，避免每次从 #1 全量重拉。 */
+export function maxArchivedPetId(chainId: number): number {
+  ensureTable();
+  const row = getAdminDb()
+    .prepare(`SELECT MAX(pet_id) AS m FROM chipet_pets WHERE chain_id = ?`)
+    .get(chainId) as { m: number | null } | undefined;
+  return Number(row?.m ?? 0) || 0;
+}
+
 /** chainId 省略时一张表拉全链，行内带 chainId 区分；支持稀有度 / 等级 / 能量筛选 */
 export function listArchivedPets(
   opts?: PetArchiveListOpts,

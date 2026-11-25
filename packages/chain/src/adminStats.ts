@@ -22,10 +22,13 @@ export const SCAN_FROM: Record<number, bigint> = {
   56: 70_000_000n,
 };
 
-/** 付费节点（Alchemy / dRPC 等）可拉更大区间；公共节点保守一点。 */
+/**
+ * getLogs 块窗口。dRPC 对 eth_getLogs 按扫描块数计 CU，窗口过大一旦失败再二分，
+ * 会把一次请求打成十几二十次；付费节点也压到 8k，宁可多几轮顺序请求。
+ */
 function chunkFor(rpcHost?: string): bigint {
   const h = (rpcHost ?? '').toLowerCase();
-  if (h.includes('alchemy.com') || h.includes('drpc.live') || h.includes('drpc.org')) return 50_000n;
+  if (h.includes('alchemy.com') || h.includes('drpc.live') || h.includes('drpc.org')) return 8_000n;
   return 2_000n;
 }
 
@@ -78,6 +81,8 @@ function shopReceivers(chainId: number): Address[] {
     : [bem.treasury];
 }
 
+const GET_LOGS_MAX_DEPTH = 6;
+
 async function getLogsSafe(
   pub: PublicClient,
   params: {
@@ -87,15 +92,22 @@ async function getLogsSafe(
     fromBlock: bigint;
     toBlock: bigint;
   },
+  depth = 0,
 ): Promise<{ args: LogArgs }[]> {
   try {
     return await pub.getLogs(params as never) as unknown as { args: LogArgs }[];
-  } catch {
+  } catch (e) {
     const { fromBlock: from, toBlock: to } = params;
-    if (to <= from) return [];
+    if (to <= from || depth >= GET_LOGS_MAX_DEPTH) {
+      console.warn('[adminStats] getLogs give up', {
+        from: from.toString(), to: to.toString(), depth,
+        err: e instanceof Error ? e.message : String(e),
+      });
+      return [];
+    }
     const mid = from + (to - from) / 2n;
-    const left = await getLogsSafe(pub, { ...params, fromBlock: from, toBlock: mid });
-    const right = await getLogsSafe(pub, { ...params, fromBlock: mid + 1n, toBlock: to });
+    const left = await getLogsSafe(pub, { ...params, fromBlock: from, toBlock: mid }, depth + 1);
+    const right = await getLogsSafe(pub, { ...params, fromBlock: mid + 1n, toBlock: to }, depth + 1);
     return [...left, ...right];
   }
 }
@@ -140,7 +152,7 @@ async function resolveOwners(
   return players;
 }
 
-async function readLiveBalances(
+export async function readLiveBalances(
   pub: PublicClient,
   chainId: number,
   chipet: Address | undefined,
@@ -193,6 +205,8 @@ export async function loadAdminStats(
      * 仍扫 Hatched/Played；checkpoint 里充值字段保持上次冻结值。
      */
     skipTransfers?: boolean;
+    /** 跳过 Played 日志（通电事件多，自动巡检可不扫，省 eth_getLogs CU） */
+    skipPlayed?: boolean;
     /** 全量重扫时用于保留历史充值基线（通常传旧 checkpoint） */
     rechargeSeed?: AdminScanCheckpoint | null;
   },
@@ -204,6 +218,7 @@ export async function loadAdminStats(
   const budgetMs = opts?.budgetMs;
   const deadline = budgetMs && budgetMs > 0 ? Date.now() + budgetMs : Number.POSITIVE_INFINITY;
   const skipTransfers = !!opts?.skipTransfers;
+  const skipPlayed = !!opts?.skipPlayed;
 
   const base = opts?.full || !opts?.checkpoint ? emptyAdminCheckpoint() : opts.checkpoint;
   const full = !!opts?.full || !opts?.checkpoint;
@@ -290,24 +305,26 @@ export async function loadAdminStats(
           if (l.args.owner) hatchers.add(l.args.owner.toLowerCase());
         }
 
-        const played = await getLogsSafe(pub, {
-          address: chipet,
-          event: PLAYED,
-          fromBlock: a,
-          toBlock: b,
-        });
-        for (const l of played) {
-          if (l.args.petId == null) continue;
-          const id = l.args.petId.toString();
-          if (!playedPets.has(id)) {
-            playedPets.add(id);
-            newPlayed.push(id);
+        if (!skipPlayed) {
+          const played = await getLogsSafe(pub, {
+            address: chipet,
+            event: PLAYED,
+            fromBlock: a,
+            toBlock: b,
+          });
+          for (const l of played) {
+            if (l.args.petId == null) continue;
+            const id = l.args.petId.toString();
+            if (!playedPets.has(id)) {
+              playedPets.add(id);
+              newPlayed.push(id);
+            }
           }
-        }
 
-        if (newPlayed.length) {
-          const added = await resolveOwners(pub, chipet, newPlayed);
-          for (const p of added) players.add(p);
+          if (newPlayed.length) {
+            const added = await resolveOwners(pub, chipet, newPlayed);
+            for (const p of added) players.add(p);
+          }
         }
       }
 
@@ -327,13 +344,14 @@ export async function loadAdminStats(
   };
 
   const transferNote = skipTransfers ? '（充值 Transfer 已跳过，由商店上报入库）' : '';
+  const playedNote = skipPlayed ? '（Played 已跳过）' : '';
   const note = !complete
-    ? `分片扫链进行中：已至 #${checkpoint.scannedTo} / 链头 #${head}。后台会继续，页面可轮询。${transferNote}`
+    ? `分片扫链进行中：已至 #${checkpoint.scannedTo} / 链头 #${head}。后台会继续，页面可轮询。${transferNote}${playedNote}`
     : scanMode === 'incremental'
-      ? `增量扫链完成：接上次游标合并去重集合。${transferNote}`
+      ? `增量扫链完成：接上次游标合并去重集合。${transferNote}${playedNote}`
       : scanMode === 'noop'
         ? '链头未前进：未拉日志，仅刷新猫咪数与收款余额。'
-        : `全量扫链完成：从部署起点重建。${transferNote}`;
+        : `全量扫链完成：从部署起点重建。${transferNote}${playedNote}`;
 
   const stats: AdminStats = {
     chainId,

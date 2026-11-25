@@ -4,7 +4,7 @@
  */
 import type { Address, PublicClient } from 'viem';
 import { chipetAbi } from '@tapearena/chain';
-import { countArchivedPets, upsertArchivedPet } from './petArchive.ts';
+import { countArchivedPets, maxArchivedPetId, upsertArchivedPet } from './petArchive.ts';
 
 export type PetSyncResult = {
   chainId: number;
@@ -135,14 +135,28 @@ export async function syncChipetPetsFully(
   client: PublicClient,
   chainId: number,
   chipet: Address,
-  opts?: { sliceMs?: number },
+  opts?: { sliceMs?: number; fromId?: number },
 ): Promise<PetSyncResult> {
   const sliceMs = opts?.sliceMs ?? 15_000;
-  let fromId = 1;
+  let fromId = Math.max(1, Number(opts?.fromId ?? 1) || 1);
   let last: PetSyncResult | null = null;
   for (;;) {
     last = await syncChipetPets(client, chainId, chipet, { fromId, budgetMs: sliceMs });
     if (last.complete) return last;
     fromId = last.cursor + 1;
   }
+}
+
+/**
+ * 只同步「比存档更大的新宠」；已有档案不重拉（省 eth_call）。
+ * 自动扫链完成后应走这条，而不是每次从 #1 全量。
+ */
+export async function syncChipetPetsIncremental(
+  client: PublicClient,
+  chainId: number,
+  chipet: Address,
+  opts?: { sliceMs?: number },
+): Promise<PetSyncResult> {
+  const fromId = maxArchivedPetId(chainId) + 1;
+  return syncChipetPetsFully(client, chainId, chipet, { ...opts, fromId });
 }
