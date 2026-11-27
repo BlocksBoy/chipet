@@ -601,6 +601,25 @@ function save(s: SocialState) {
   }
 }
 
+/**
+ * 读路径（neighbors / leaderboard 等）里可能顺便刷新 npcLive。
+ * 必须延迟 notify：这些函数会进 useMemo，同步 commitLocal 会在渲染 Plaza 时
+ * 触发仍挂着的 Home 等订阅 → React “update Home while rendering Plaza”。
+ */
+function saveAfterRender(s: SocialState) {
+  if (s.boundWallet) {
+    s.walletIdentities[s.boundWallet] = snapshotWallet(s);
+  }
+  socialMem = s;
+  queueMicrotask(() => {
+    socialRev += 1;
+    socialSubs.forEach((fn) => fn());
+    if (s.boundWallet) {
+      void import('./cloudSync.ts').then(({ cloudSync }) => cloudSync.scheduleProfilePush());
+    }
+  });
+}
+
 export function subscribeSocial(fn: () => void) {
   socialSubs.add(fn);
   return () => { socialSubs.delete(fn); };
@@ -819,7 +838,7 @@ export const social = {
       dirty ||= d;
       return pet;
     });
-    if (dirty) save(s);
+    if (dirty) saveAfterRender(s);
     return [...mine, ...chainRivalsCache, ...visitors, ...npcs];
   },
   neighbors(): PublicPet[] {
@@ -839,7 +858,7 @@ export const social = {
       dirty ||= d;
       return pet;
     });
-    if (dirty) save(s);
+    if (dirty) saveAfterRender(s);
     const seen = new Set(chainRivalsCache.map((p) => p.key));
     const filler = [...visitors, ...npcs].filter((p) => !seen.has(p.key));
     return [...chainRivalsCache, ...filler];

@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState, type ComponentType, type ReactElement, type ReactNode } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import {
-  ArrowRight, Cable, ChevronLeft, ChevronRight, Cpu, Egg, Fish, Flag, RotateCcw, ScrollText, Shield, Swords, Trophy, WandSparkles, X, Zap, type LucideProps,
+  ArrowRight, Cable, Cpu, Egg, Fish, Flag, RotateCcw, ScrollText, Shield, Swords, Trophy, WandSparkles, X, Zap, type LucideProps,
 } from 'lucide-react';
 import { useAccount } from 'wagmi';
 import { DataLoading, PetCardGridSkeleton } from '../components/Skeleton.tsx';
+import { PaginationBar } from '../components/Pagination.tsx';
 import { Button, ErrBar, PAGE, PageHeader, Panel, Tag, cn } from '../components/ui.tsx';
 import { Link, go, useRoute } from '../router.tsx';
 import { PetAvatar } from '../chipet/PetAvatar.tsx';
@@ -31,24 +32,6 @@ const FUSION = 3;
 const REVEAL_MS = Math.round(BEAT.total * 1000) + 200;
 /** 切磋对手每页条数（超过后分页，交互对齐广场动态） */
 const SPAR_PAGE = 12;
-
-/** 页码窗口：当前页附近若干号，两端保留首尾 */
-function pageWindow(current: number, total: number, radius = 2): (number | '…')[] {
-  if (total <= 1) return total === 1 ? [1] : [];
-  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
-  const set = new Set<number>([1, total]);
-  for (let i = current - radius; i <= current + radius; i++) {
-    if (i >= 1 && i <= total) set.add(i);
-  }
-  const sorted = [...set].sort((a, b) => a - b);
-  const out: (number | '…')[] = [];
-  for (let i = 0; i < sorted.length; i++) {
-    const n = sorted[i]!;
-    if (i > 0 && n - sorted[i - 1]! > 1) out.push('…');
-    out.push(n);
-  }
-  return out;
-}
 
 /** 结算弹框：冲击波 + 星屑 + 标题砸入；胜利再加金光与彩带 */
 function BattleResultModal({
@@ -1378,59 +1361,12 @@ export function Train() {
         </ul>
         )}
         {rivalPages > 1 && !rivalsLoading && (
-          <nav
-            aria-label={t('切磋对手分页', 'Spar rivals pagination')}
-            className="flex flex-wrap items-center justify-end gap-3 border-t border-line/70 bg-substrate/40 px-4 py-3"
-          >
-            <span className="mr-auto font-mono text-[11px] tabular-nums text-faint">
-              {t(`第 ${Math.min(rivalPage, rivalPages)} / ${rivalPages} 页`, `Page ${Math.min(rivalPage, rivalPages)} / ${rivalPages}`)}
-            </span>
-            <div className="inline-flex items-center gap-0.5 rounded-full bg-panel p-1 shadow-sm ring-1 ring-line/80">
-              <button
-                type="button"
-                disabled={rivalPage <= 1}
-                onClick={() => setRivalPage((p) => Math.max(1, p - 1))}
-                aria-label={t('上一页', 'Previous page')}
-                className="inline-flex h-8 items-center gap-1 rounded-full px-2.5 text-[12px] font-semibold text-mute transition enabled:hover:bg-panel-2 enabled:hover:text-ink disabled:cursor-not-allowed disabled:opacity-35"
-              >
-                <ChevronLeft className="size-3.5" />
-                {t('上一页', 'Prev')}
-              </button>
-              <div className="flex items-center gap-0.5 px-0.5">
-                {pageWindow(Math.min(rivalPage, rivalPages), rivalPages).map((item, i) => (
-                  item === '…' ? (
-                    <span key={`e${i}`} className="grid size-8 place-items-center font-mono text-xs text-faint" aria-hidden>…</span>
-                  ) : (
-                    <button
-                      key={item}
-                      type="button"
-                      aria-label={t(`第 ${item} 页`, `Page ${item}`)}
-                      aria-current={item === rivalPage ? 'page' : undefined}
-                      onClick={() => setRivalPage(item)}
-                      className={cn(
-                        'grid size-8 place-items-center rounded-full font-mono text-[12px] tabular-nums transition',
-                        item === rivalPage
-                          ? 'bg-copper font-bold text-white shadow-sm shadow-copper/30'
-                          : 'text-mute hover:bg-panel-2 hover:text-ink',
-                      )}
-                    >
-                      {item}
-                    </button>
-                  )
-                ))}
-              </div>
-              <button
-                type="button"
-                disabled={rivalPage >= rivalPages}
-                onClick={() => setRivalPage((p) => Math.min(rivalPages, p + 1))}
-                aria-label={t('下一页', 'Next page')}
-                className="inline-flex h-8 items-center gap-1 rounded-full px-2.5 text-[12px] font-semibold text-mute transition enabled:hover:bg-panel-2 enabled:hover:text-ink disabled:cursor-not-allowed disabled:opacity-35"
-              >
-                {t('下一页', 'Next')}
-                <ChevronRight className="size-3.5" />
-              </button>
-            </div>
-          </nav>
+          <PaginationBar
+            page={Math.min(rivalPage, rivalPages)}
+            pages={rivalPages}
+            onChange={setRivalPage}
+            label={t('切磋对手分页', 'Spar rivals pagination')}
+          />
         )}
       </Panel>
     </div>
