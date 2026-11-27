@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from 'react';
 import {
-  BookOpen, Cable, Cat, Coins, Cpu, Egg, ExternalLink, Fish, FlaskConical, Hand, Sparkles, Swords, Trophy, Users, Zap,
+  BookOpen, Cable, Cat, Coins, Cpu, Egg, ExternalLink, Fish, FlaskConical, Footprints, Hand, HeartPulse, Sparkles, Swords, Trophy, Users, Volume2, Zap,
   type LucideProps,
 } from 'lucide-react';
 import { Button, PAGE, PageHeader, Panel, SectionTitle, Tag, cn } from '../components/ui.tsx';
@@ -10,7 +10,7 @@ import { BATTLE_ENERGY } from '../chipet/store.ts';
 import { AUX_HEART_POWER, MOOD_HP, MOVES } from '../chipet/battle.ts';
 import { BEM_SKU_LIST, BOND_SLOTS_DEFAULT, BOND_SLOTS_MAX, FAUCET_AMOUNT } from '../chipet/bem.ts';
 
-type SecId = 'overview' | 'hatch' | 'raise' | 'battle' | 'plaza' | 'dex' | 'lab' | 'crest' | 'shop' | 'network';
+type SecId = 'overview' | 'hatch' | 'raise' | 'battle' | 'plaza' | 'walk' | 'dex' | 'lab' | 'crest' | 'shop' | 'network';
 
 const TOC: { id: SecId; label: Txt; icon: ComponentType<LucideProps> }[] = [
   { id: 'overview', label: both('总览', 'Overview'), icon: BookOpen },
@@ -18,6 +18,7 @@ const TOC: { id: SecId; label: Txt; icon: ComponentType<LucideProps> }[] = [
   { id: 'raise', label: both('养成', 'Raise'), icon: Zap },
   { id: 'battle', label: both('对战', 'Battle'), icon: Swords },
   { id: 'plaza', label: both('广场', 'Plaza'), icon: Users },
+  { id: 'walk', label: both('遛猫大道', 'Cat Boulevard'), icon: Footprints },
   { id: 'dex', label: both('图鉴', 'Dex'), icon: Cat },
   { id: 'lab', label: both('实验室', 'Lab'), icon: FlaskConical },
   { id: 'crest', label: both('副心脏', 'Aux heart'), icon: Trophy },
@@ -335,6 +336,71 @@ export function Guide() {
                 <Cable className="size-3.5 text-gold-dim" />
                 {t('线友名额有限，挑一只合得来的心脏再牵。', 'Wire-pal slots are limited—pick a heart that vibes with yours.')}
               </span>
+            </Callout>
+          </Sec>
+
+          <Sec
+            id="walk"
+            icon={Footprints}
+            title={t('遛猫大道：牵着芯喵逛街', 'Cat Boulevard: take your kitty for a stroll')}
+            lead={t(
+              '所有人共用的林荫大道。牵上芯喵往前走，跳长椅、躲花箱、捡鱼干，还会遇到遛猫遛狗的路人。',
+              'A shared tree-lined street. Walk your kitty, hop onto benches, dodge planters, pick up treats and meet people walking their cats and dogs.',
+            )}
+            action={<Button size="sm" icon={Footprints} onClick={() => go('/walk')}>{t('去遛猫', 'Go for a walk')}</Button>}
+          >
+            <ol className="list-decimal space-y-2 pl-5">
+              <li>{t('打开「遛猫」，在画面下方选一只芯喵；还没有芯喵也能先牵演示橘猫上街。', 'Open Walk and pick a kitty under the scene; no kitty yet? Take the demo ginger cat.')}</li>
+              <li>{t('点按画面或按空格出门，主人和猫会沿街一直往前走，越走越快。', 'Tap the scene or press Space to set off; you and your cat keep walking and slowly speed up.')}</li>
+              <li>{t('看前方的长椅和花箱，算好时机起跳；路边的小鱼干碰到就收。', 'Watch for benches and planters ahead and time your jumps; treats along the way are picked up on contact.')}</li>
+              <li>{t('三颗心用完这一圈就结束，点按画面再遛一圈。', 'When your three hearts run out the walk ends; tap to go again.')}</li>
+            </ol>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {[
+                { k: t('点按 / 空格 / ↑ / W', 'Tap / Space / ↑ / W'), v: t('出发、跳跃；走到长椅、花箱前再按可以跳上去', 'Start and jump; press again in front of a bench or planter to hop onto it') },
+                { k: t('E / H 或「打招呼」', 'E / H or "Say hi"'), v: t('和身边的路人打招呼，遛狗遛猫的人会回礼一条鱼干', 'Greet the walker next to you; people walking a dog or cat give back a treat') },
+              ].map((x) => (
+                <div key={x.k} className="rounded-2xl bg-panel-2/70 px-3 py-3">
+                  <div className="font-mono text-xs font-semibold text-ink">{x.k}</div>
+                  <div className="mt-1 text-xs text-mute">{x.v}</div>
+                </div>
+              ))}
+            </div>
+            <ul className="space-y-2">
+              <Bullet>
+                <b className="font-semibold text-ink">{t('心情', 'Hearts')}</b>
+                {' · '}
+                {t('每圈 3 颗心。撞上花箱扣 1 颗（同一个花箱只扣一次），扣完就收工。', 'Three hearts per walk. Bumping a planter costs one (once per planter); lose them all and the walk ends.')}
+              </Bullet>
+              <Bullet>
+                <b className="font-semibold text-ink">{t('计分', 'Score')}</b>
+                {' · '}
+                {t('走过的米数 + 每条鱼干 10 分 + 每次招呼 15 分，本机最佳会记在页首。', 'Metres walked + 10 per treat + 15 per greeting; your best on this device shows at the top.')}
+              </Bullet>
+              <Bullet>
+                <Fish className="mr-1 inline size-3.5 text-copper" />
+                <b className="font-semibold text-ink">{t('鱼干入账', 'Treats')}</b>
+                {' · '}
+                {t('每圈结束时，捡到和收到的鱼干最多 5 条存进口袋，可以拿去广场送给邻居或牵线。', 'At the end of each walk up to 5 treats go into your pocket, ready to gift or link up on the Plaza.')}
+              </Bullet>
+              <Bullet>
+                <HeartPulse className="mr-1 inline size-3.5 text-copper" />
+                <b className="font-semibold text-ink">{t('心脏透视', 'Heart x-ray')}</b>
+                {' · '}
+                {t('猫头顶挂着它的名字，胸口有一扇心形透视窗，背上方的放大镜里是它真实的心脏电路：每次心跳喂一组输入，信号沿逻辑门逐层点亮。换一只芯喵，电路就跟着换。', 'A name tag floats over your cat, its chest has a heart-shaped x-ray window, and the lens above shows its real heart circuit: every beat feeds new inputs and the signal lights up gate by gate. Switch kitties and the circuit changes with it.')}
+              </Bullet>
+              <Bullet>
+                <Volume2 className="mr-1 inline size-3.5 text-si" />
+                <b className="font-semibold text-ink">{t('声音', 'Sound')}</b>
+                {' · '}
+                {t('有街头背景乐和跳跃、捡鱼干、打招呼的音效；画面右上角可一键静音。', 'Street music plus sounds for jumps, treats and greetings; mute from the top-right of the scene.')}
+              </Bullet>
+            </ul>
+            <Callout>
+              {t(
+                '出门的猫按芯喵毛色上色，换猫会在下一圈生效。街上走的路人和猫狗是大家共享的街景，打招呼不消耗能量，适合养成间隙放松一下。',
+                'Your cat is tinted to your kitty\'s coat; switching takes effect from the next walk. The passersby are part of the shared street, and greeting costs no energy — a nice break between raising sessions.',
+              )}
             </Callout>
           </Sec>
 
