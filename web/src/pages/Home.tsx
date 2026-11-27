@@ -10,7 +10,7 @@ import { PetAvatar } from '../chipet/PetAvatar.tsx';
 import { KittyEgg } from '../chipet/KittyEgg.tsx';
 import { FxOverlay, type ChipImpulse } from '../chipet/FxOverlay.tsx';
 import { SceneStage } from '../chipet/SceneStage.tsx';
-import { hatchChipet, nameAvailable, petsOfOwner } from '@tapearena/chain';
+import { hatchChipet, nameAvailable } from '@tapearena/chain';
 import { getLocalPetsRev, localChipet, subscribeLocalPets } from '../chipet/store.ts';
 import { cattributes, petSeed, phenotypeOf, SPECIES_COUNT, typeLabel } from '../chipet/phenotype.ts';
 import { heartOf } from '../chipet/heart.ts';
@@ -91,17 +91,6 @@ export function Home() {
 
   useEffect(() => () => timers.current.forEach((t) => window.clearTimeout(t)), []);
 
-  /** 钱包连上且合约已部署时，把链上宠物拉进本地缓存。 */
-  useEffect(() => {
-    if (!chipet || !account) return;
-    let live = true;
-    petsOfOwner(pub, chipet, account).then((list) => {
-      if (!live) return;
-      localChipet.syncChainPets(list);
-      setTick((n) => n + 1);
-    }).catch(() => { /* 读失败时保留本地缓存 */ });
-    return () => { live = false; };
-  }, [chipet, account, pub, refreshKey]);
   const later = (fn: () => void, ms: number) => {
     timers.current.push(window.setTimeout(fn, ms));
   };

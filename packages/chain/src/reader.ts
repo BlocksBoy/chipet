@@ -248,12 +248,31 @@ export async function readPet(client: PublicClient, chipet: Address, petId: numb
   return mapPet(petId, p);
 }
 
+/**
+ * 一个钱包的全部芯宠：有 Multicall3 时一次 eth_call 读完，否则逐只读。
+ * 公共 RPC 单个 JSON-RPC 批包超过约 10 条会整包拒绝，所以不能把几十个 petOf 塞进同一批。
+ */
 export async function petsOfOwner(client: PublicClient, chipet: Address, owner: Address): Promise<ChipetPet[]> {
   const ids = await client.readContract({ address: chipet, abi: chipetAbi, functionName: 'petsOfOwner', args: [owner] });
-  return Promise.all(ids.map(async (id) => {
-    const p = await client.readContract({ address: chipet, abi: chipetAbi, functionName: 'petOf', args: [id] });
-    return mapPet(Number(id), p);
-  }));
+  const out = new Map<bigint, ChipetPet>();
+  if (client.chain?.contracts?.multicall3 && ids.length > 1) {
+    try {
+      const rs = await client.multicall({
+        contracts: ids.map((id) => ({ address: chipet, abi: chipetAbi, functionName: 'petOf', args: [id] }) as const),
+        allowFailure: true,
+        batchSize: 16_384,
+      });
+      rs.forEach((r, i) => { if (r.status === 'success') out.set(ids[i]!, mapPet(Number(ids[i]), r.result)); });
+    } catch { /* 走下面的逐只读取 */ }
+  }
+  const rest = ids.filter((id) => !out.has(id));
+  for (let i = 0; i < rest.length; i += 8) {
+    await Promise.all(rest.slice(i, i + 8).map(async (id) => {
+      const p = await client.readContract({ address: chipet, abi: chipetAbi, functionName: 'petOf', args: [id] });
+      out.set(id, mapPet(Number(id), p));
+    }));
+  }
+  return ids.map((id) => out.get(id)!);
 }
 
 export async function listComponents(client: PublicClient, library: Address): Promise<ComponentInfo[]> {

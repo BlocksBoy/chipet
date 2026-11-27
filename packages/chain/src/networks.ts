@@ -7,6 +7,7 @@ export const xlayer = defineChain({
   nativeCurrency: { name: 'OKB', symbol: 'OKB', decimals: 18 },
   rpcUrls: { default: { http: ['https://rpc.xlayer.tech', 'https://xlayerrpc.okx.com'] } },
   blockExplorers: { default: { name: 'OKLink', url: 'https://www.oklink.com/xlayer' } },
+  contracts: { multicall3: { address: '0xcA11bde05977b3631167028862bE2a173976CA11' } },
 });
 
 export const bsc = defineChain({
@@ -15,6 +16,7 @@ export const bsc = defineChain({
   nativeCurrency: { name: 'BNB', symbol: 'BNB', decimals: 18 },
   rpcUrls: { default: { http: ['https://bsc-dataseed.bnbchain.org', 'https://bsc-dataseed1.binance.org', 'https://bsc-rpc.publicnode.com'] } },
   blockExplorers: { default: { name: 'BscScan', url: 'https://bscscan.com' } },
+  contracts: { multicall3: { address: '0xcA11bde05977b3631167028862bE2a173976CA11' } },
 });
 
 export const localFork = defineChain({

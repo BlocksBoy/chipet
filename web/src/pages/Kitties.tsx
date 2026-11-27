@@ -7,6 +7,7 @@ import { PetCard } from '../chipet/PetCard.tsx';
 import { heartOf } from '../chipet/heart.ts';
 import { getCloudSyncRev, isWalletHydrating, subscribeCloudSync } from '../chipet/cloudSync.ts';
 import { getLocalPetsRev, localChipet, subscribeLocalPets } from '../chipet/store.ts';
+import { getChainPetsRev, isChainPetsLoading, subscribeChainPets } from '../chipet/chainPets.ts';
 import { petSeed, phenotypeOf } from '../chipet/phenotype.ts';
 import { useApp } from '../state.tsx';
 import { useT } from '../i18n.ts';
@@ -17,8 +18,9 @@ export function Kitties() {
   const { account } = useApp();
   const cloudRev = useSyncExternalStore(subscribeCloudSync, getCloudSyncRev, getCloudSyncRev);
   const petsRev = useSyncExternalStore(subscribeLocalPets, getLocalPetsRev, getLocalPetsRev);
-  const pets = useMemo(() => localChipet.list(), [petsRev, cloudRev]);
-  const waitingCloud = !!account && isWalletHydrating() && pets.length === 0;
+  const chainRev = useSyncExternalStore(subscribeChainPets, getChainPetsRev, getChainPetsRev);
+  const pets = useMemo(() => localChipet.list(), [petsRev, cloudRev, chainRev]);
+  const waitingCloud = !!account && (isWalletHydrating() || isChainPetsLoading()) && pets.length === 0;
 
   return (
     <div className={cn(PAGE, 'py-8 sm:py-10')}>

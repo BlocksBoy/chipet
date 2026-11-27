@@ -1,11 +1,12 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { createPublicClient, http, type Address, type Chain, type Hex, type PublicClient, type WalletClient } from 'viem';
+import { createPublicClient, fallback, http, type Address, type Chain, type Hex, type PublicClient, type WalletClient } from 'viem';
 import { useAccount, useConnectors, useSwitchChain } from 'wagmi';
 import { getWalletClient } from 'wagmi/actions';
 import { useConnectModal } from '@rainbow-me/rainbowkit';
 import { CHAINS, ChainLibrary, DEPLOYMENTS, type Deployment, type Signer } from '@tapearena/chain';
 import { registerWalletUser } from './api.ts';
 import { cloudSync } from './chipet/cloudSync.ts';
+import { cancelChainPets, loadChainPets } from './chipet/chainPets.ts';
 import { social } from './chipet/social.ts';
 import { errMsg } from './format.ts';
 import { tr } from './i18n.ts';
@@ -63,7 +64,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const chain = CHAINS[chainId as keyof typeof CHAINS] as Chain;
   const { pub, lib } = useMemo(() => {
     const rpc = import.meta.env[`VITE_RPC_${chainId}`] as string | undefined;
-    const pub = createPublicClient({ chain, transport: http(rpc ?? chain.rpcUrls.default.http[0], { batch: true }) }) as PublicClient;
+    const urls = [...new Set([rpc, ...chain.rpcUrls.default.http].filter((u): u is string => !!u))];
+    // X Layer 公共 RPC 单批超过 ~10 条直接报 -32014，批包要压小
+    const transport = fallback(urls.map((u) => http(u, { batch: { batchSize: 8, wait: 16 }, retryCount: 2, timeout: 15_000 })));
+    const pub = createPublicClient({ chain, transport }) as PublicClient;
     return { pub, lib: new ChainLibrary(pub) };
   }, [chainId, chain]);
 
@@ -101,6 +105,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
     social.bindAccount(account);
     if (account) void cloudSync.hydrateWallet(account);
   }, [account]);
+
+  // 我的芯宠直接从合约读，任何页面都不依赖后端归档
+  const chipetAddr = DEPLOYMENTS[chainId]?.chipet;
+  useEffect(() => {
+    if (!account || !chipetAddr) {
+      cancelChainPets();
+      return;
+    }
+    void loadChainPets(pub, chipetAddr, account);
+  }, [account, chipetAddr, pub, refreshKey]);
 
   const signer = useCallback(async (): Promise<Signer> => {
     if (!account) {
