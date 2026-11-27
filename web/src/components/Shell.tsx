@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { CHAIN_LABEL, CHAINS, MAINNET_IDS } from '@tapearena/chain';
 import {
-  Blocks, BookMarked, BookOpen, Check, ChevronDown, CircleAlert, CircleCheck, Code2, Coins, Cpu, ExternalLink, FlaskConical, Home, Loader2, PenTool, Plus, Swords, TriangleAlert, Trophy, Users, Wallet, X as IconClose,
+  Blocks, BookMarked, BookOpen, Check, ChevronDown, CircleAlert, CircleCheck, Code2, Coins, Cpu, ExternalLink, FlaskConical, Footprints, Home, Loader2, PenTool, Plus, Swords, TriangleAlert, Trophy, Users, Wallet, X as IconClose,
 } from 'lucide-react';
 import { formatUnits } from 'viem';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
@@ -57,6 +57,7 @@ export function Logo({ className = 'size-7' }: { className?: string }) {
 const NAV = [
   { to: '/', key: '', label: both('家园', 'Home'), icon: Home },
   { to: '/plaza', key: 'plaza', label: both('广场', 'Plaza'), icon: Users },
+  { to: '/walk', key: 'walk', label: both('遛猫', 'Walk'), icon: Footprints },
   { to: '/train', key: 'train', label: both('训练场', 'Train'), icon: Swords },
   { to: '/dex', key: 'dex', label: both('图鉴', 'Dex'), icon: BookOpen },
   { to: '/lab', key: 'lab', label: both('实验室', 'Lab'), icon: FlaskConical },
@@ -247,24 +248,25 @@ export function Shell({ children }: { children: ReactNode }) {
   return (
     <div className="flex min-h-dvh min-w-0 flex-col overflow-x-clip">
       <header className="sticky top-0 z-20 border-b border-line/70 bg-panel/75 backdrop-blur-xl">
-        <div className="mx-auto flex h-14 min-w-0 max-w-[1180px] items-center gap-1.5 px-3 sm:h-16 sm:gap-3 sm:px-7">
+        <div className="mx-auto flex h-14 min-w-0 max-w-[1180px] items-center gap-1.5 px-3 sm:h-16 sm:gap-2 sm:px-5 lg:gap-3 lg:px-7">
           <Link to="/" aria-label="Chipet" className="flex shrink-0 items-center gap-2 font-display text-[20px] font-bold text-ink no-underline">
             <Logo className="size-7 sm:size-[34px]" /><span className="hidden sm:inline">Chipet</span>
-            <span className="hidden rounded-full bg-si/10 px-2 py-0.5 font-sans text-[11px] font-medium text-si-dim xl:inline">{t('芯宠', 'chip pets')}</span>
+            <span className="hidden rounded-full bg-si/10 px-2 py-0.5 font-sans text-[11px] font-medium text-si-dim 2xl:inline">{t('芯宠', 'chip pets')}</span>
           </Link>
-          {/* 桌面端导航在页头；手机上五个入口放到底部标签栏 */}
-          <nav className="hidden min-w-0 gap-0.5 rounded-full bg-panel-2/70 p-1 md:flex">
+          {/* 桌面顶栏；文案从 xl 起显示，避免 6 项挤爆右侧工具区 */}
+          <nav className="hidden min-w-0 shrink gap-0.5 overflow-hidden rounded-full bg-panel-2/70 p-1 md:flex">
             {NAV.map(({ to, key, label, icon: I }) => (
               <Link key={key} to={to} title={txt(label)} aria-label={txt(label)} className={cn(
-                'flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-sm whitespace-nowrap no-underline transition-colors xl:px-3',
+                'flex shrink-0 items-center gap-1 rounded-full px-2 py-1.5 text-[13px] whitespace-nowrap no-underline transition-colors xl:gap-1.5 xl:px-2.5 xl:text-sm',
                 here === key ? 'bg-panel text-ink shadow-sm' : 'text-mute hover:text-ink',
               )}>
-                <I className={cn('size-4', here === key && 'text-si')} /><span className="hidden lg:inline">{txt(label)}</span>
+                <I className={cn('size-4 shrink-0', here === key && 'text-si')} />
+                <span className="hidden xl:inline">{txt(label)}</span>
               </Link>
             ))}
           </nav>
           <div className="min-w-0 flex-1" />
-          <div className="flex shrink-0 items-center gap-0.5 sm:gap-1.5 lg:gap-2">
+          <div className="flex shrink-0 items-center gap-0.5 sm:gap-1 lg:gap-1.5">
             <Link
               to="/guide"
               title={t('玩法手册', 'Playbook')}
@@ -313,10 +315,10 @@ export function Shell({ children }: { children: ReactNode }) {
       >
         {NAV.map(({ to, key, label, icon: I }) => (
           <Link key={key} to={to} aria-current={here === key ? 'page' : undefined} className={cn(
-            'flex min-h-[52px] min-w-0 flex-1 flex-col items-center justify-center gap-1 px-1 py-1.5 text-[11px] leading-tight no-underline transition-colors',
+            'flex min-h-[52px] min-w-0 flex-1 flex-col items-center justify-center gap-0.5 px-0.5 py-1.5 text-[10px] leading-tight no-underline transition-colors sm:gap-1 sm:px-1 sm:text-[11px]',
             here === key ? 'font-semibold text-ink' : 'text-mute',
           )}>
-            <I className={cn('size-5 shrink-0', here === key && 'text-si')} />
+            <I className={cn('size-[18px] shrink-0 sm:size-5', here === key && 'text-si')} />
             <span className="max-w-full truncate">{txt(label)}</span>
           </Link>
         ))}

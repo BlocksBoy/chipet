@@ -219,10 +219,13 @@ function apiReady(): boolean {
   return !(DEWEB && !BASE);
 }
 
+/** 慢网下别让一个挂起的请求一直占着连接 */
+const timeout = () => (typeof AbortSignal.timeout === 'function' ? AbortSignal.timeout(12_000) : undefined);
+
 async function apiGet<T>(path: string, opts?: { cache?: RequestCache }): Promise<T | null> {
   if (!apiReady()) return null;
   try {
-    const r = await fetch(`${BASE}${path}`, { cache: opts?.cache });
+    const r = await fetch(`${BASE}${path}`, { cache: opts?.cache, signal: timeout() });
     if (!r.ok) return null;
     return await r.json() as T;
   } catch {
@@ -237,6 +240,7 @@ async function apiSend<T>(path: string, method: 'POST' | 'PUT', body: unknown): 
       method,
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(body),
+      signal: timeout(),
     });
     if (!r.ok) return null;
     return await r.json() as T;

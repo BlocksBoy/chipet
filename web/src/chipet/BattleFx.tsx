@@ -1,6 +1,7 @@
 import { motion } from 'motion/react';
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { cn } from '../components/ui.tsx';
+import { battleSfx } from './sound.ts';
 
 /** 招式的特效配色，下标：进攻 / 防御 / 技巧 / 合体技 */
 export const MOVE_FX = [
@@ -363,6 +364,8 @@ export function Banner({ text, color, delay = 0, stay = 0.75, big }: { text: str
 export function ArenaFx({ n, me, op, banner }: { n: number; me: Strike; op: Strike; banner: { text: string; color: string } }) {
   const fusion = me.kind === 3;
   const hard = Math.max(me.dmg, op.dmg) >= 4 || me.edge === 1 || op.edge === 1 || fusion;
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- 每回合挂载一次，只在挂载时排好整回合的音效
+  useEffect(() => { battleSfx.round(me, op, BEAT, fusion); }, []);
   return (
     <motion.div
       className="pointer-events-none absolute inset-0 z-10 overflow-hidden rounded-[1.75rem]"

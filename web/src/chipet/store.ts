@@ -79,8 +79,30 @@ function parseAuxHeart(raw: unknown): AuxHeart | undefined {
 
 const petsSubs = new Set<() => void>();
 let petsRev = 0;
-/** API 真源的内存缓存；不再持久化到 localStorage */
+/** API 真源的内存缓存 */
 let petsMem: LocalPet[] | null = null;
+/** 当前快照属于哪个钱包；未连钱包为 null */
+let cacheOwner: string | null = null;
+/** 按钱包存一份只读快照：下次打开先秒显，云端拉回后覆盖 */
+const CACHE_PREFIX = 'chipet.pets.snap.v1:';
+
+function toStored(p: LocalPet): Stored {
+  return { ...p, circuitId: p.circuitId.toString() };
+}
+
+function writeCache(pets: LocalPet[]) {
+  if (!cacheOwner) return;
+  try { localStorage.setItem(CACHE_PREFIX + cacheOwner, JSON.stringify(pets.map(toStored))); } catch { /* 满了就不存 */ }
+}
+
+function readCache(addr: string): LocalPet[] | null {
+  try {
+    const raw = localStorage.getItem(CACHE_PREFIX + addr);
+    return raw ? parseStored(JSON.parse(raw) as Stored[]) : null;
+  } catch {
+    return null;
+  }
+}
 
 function notifyPets() {
   petsRev += 1;
@@ -123,6 +145,7 @@ function load(): LocalPet[] {
 
 function save(pets: LocalPet[], opts?: { push?: boolean }) {
   petsMem = pets;
+  writeCache(pets);
   notifyPets();
   // 仅本地孵化宠上云；链上宠仍走 petArchive
   if (opts?.push === false) return;
@@ -163,6 +186,26 @@ function mustFind(pets: LocalPet[], id: number): LocalPet {
 }
 
 export const localChipet = {
+  /**
+   * 切到某个钱包：有本机快照就先换上；换了钱包而没有快照则清空，免得串号。
+   * 未连钱包时孵的宠保留在内存里，交给 hydrateWallet 决定上传还是被云端覆盖。
+   */
+  useWalletCache(address: string) {
+    const addr = address.toLowerCase();
+    if (cacheOwner === addr) return;
+    const prevOwner = cacheOwner;
+    cacheOwner = addr;
+    const snap = readCache(addr);
+    if (snap) {
+      const anon = prevOwner ? [] : load().filter((p) => !isChainPet(p) && !snap.some((x) => x.id === p.id));
+      petsMem = [...snap, ...anon];
+      notifyPets();
+    } else if (prevOwner) {
+      petsMem = [];
+      notifyPets();
+    }
+    writeCache(load());
+  },
   list(): LocalPet[] {
     return load().sort((a, b) => b.hatchedAt - a.hatchedAt);
   },

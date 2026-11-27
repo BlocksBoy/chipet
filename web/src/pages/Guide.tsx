@@ -182,6 +182,7 @@ export function Guide() {
               <Bullet>{t('家园：孵化、喂食、通电玩耍', 'Home: hatch, feed, Power Play')}</Bullet>
               <Bullet>{t('广场：拜访邻居、送鱼干、牵线合体', 'Plaza: visit neighbors, gift fish treats, link up')}</Bullet>
               <Bullet>{t('训练场：用心脏电路算出的功率打 Bug / 邻居', 'Training: fight bugs or neighbors with circuit-computed power')}</Bullet>
+              <Bullet>{t('遛猫大道：中心广场，咖啡馆/书店/花店/花鸟市，邂逅遛猫遛狗', 'Cat Boulevard: plaza with cafés, bookshops, florists & pet market — meet walkers')}</Bullet>
               <Bullet>{t('图鉴：收集物种与心脏电路', 'Dex: collect species and heart circuits')}</Bullet>
               <Bullet>{t('实验室：写 TapeHDL、打擂台悬赏（偏黑客松赛道）', 'Lab: write TapeHDL and compete on bounties (the hackathon track)')}</Bullet>
               <Bullet>{t('副心脏：擂台冠军电路焊进芯喵，对战功率 +1', 'Aux heart: weld a bounty-winning circuit onto your Chipet for +1 battle power')}</Bullet>

@@ -31,6 +31,12 @@ let profileTimer: ReturnType<typeof setTimeout> | null = null;
 let bemTimer: ReturnType<typeof setTimeout> | null = null;
 let petsTimer: ReturnType<typeof setTimeout> | null = null;
 let hydrating = false;
+/** 正在 hydrate 时又切了钱包：结束后补拉这个地址 */
+let pendingWallet: string | null = null;
+let publicTask: Promise<void> | null = null;
+let lbTimer: ReturnType<typeof setTimeout> | null = null;
+/** 每只宠最近一次上报的档案；没变就不再打接口 */
+const sentStats = new Map<string, string>();
 /** 启动即视为加载中，直到首次 hydratePublic 结束 */
 let publicLoading = true;
 let publicHydrated = false;
@@ -109,7 +115,12 @@ export const cloudSync = {
    * 启动：先把本机广场数据灌进库（一次性），再拉库覆盖展示。
    * 这样库不会空，所有人看到的是同一份服务端动态。
    */
-  async hydratePublic(): Promise<void> {
+  hydratePublic(): Promise<void> {
+    publicTask ??= this.loadPublic().finally(() => { publicTask = null; });
+    return publicTask;
+  },
+
+  async loadPublic(): Promise<void> {
     publicLoading = true;
     notifyCloud();
     try {
@@ -196,10 +207,6 @@ export const cloudSync = {
     leaderboardLoading = true;
     notifyLeaderboard();
     try {
-      // 本机宠名写回库，避免排行榜仍显示 mine:1 占位
-      for (const p of localChipet.list().filter((x) => !isChainPet(x))) {
-        this.pushLocalPetStats(p);
-      }
       const kinds: RankKind[] = ['heat', 'pats', 'wins', 'intimacy', 'level'];
       const results = await Promise.all(kinds.map((k) => fetchChipetLeaderboard(k, k === 'heat' ? 6 : 10)));
       kinds.forEach((k, i) => {
@@ -210,6 +217,15 @@ export const cloudSync = {
       leaderboardLoading = false;
       notifyLeaderboard();
     }
+  },
+
+  /** 上报完档案后合并成一次排行榜刷新 */
+  scheduleLeaderboardRefresh() {
+    if (lbTimer) clearTimeout(lbTimer);
+    lbTimer = setTimeout(() => {
+      lbTimer = null;
+      void this.refreshLeaderboards();
+    }, 1200);
   },
 
   async refreshLeaderboard(kind: RankKind, limit?: number): Promise<ChipetLeaderboardItemDto[]> {
@@ -231,8 +247,14 @@ export const cloudSync = {
   /** 连钱包后：拉 profile/bem/pets；云端空则上传本地，否则覆盖本地。 */
   async hydrateWallet(address: string): Promise<void> {
     const addr = address.trim().toLowerCase();
-    if (!addr || hydrating) return;
+    if (!addr) return;
+    if (hydrating) {
+      pendingWallet = addr;
+      return;
+    }
     hydrating = true;
+    // 先用本机快照把宠物秒显出来，云端回来再覆盖
+    localChipet.useWalletCache(addr);
     walletLoading = true;
     notifyCloud();
     // 取消 bindAccount/save 触发的待推送，避免用旧本地盖掉刚拉下的云端
@@ -240,7 +262,8 @@ export const cloudSync = {
     if (bemTimer) { clearTimeout(bemTimer); bemTimer = null; }
     if (petsTimer) { clearTimeout(petsTimer); petsTimer = null; }
     try {
-      if (!publicHydrated) await this.hydratePublic();
+      // 私有进度不等广场：两边并行
+      if (!publicHydrated) void this.hydratePublic();
 
       const [profile, bemState, petsState] = await Promise.all([
         fetchChipetProfile(addr),
@@ -280,10 +303,15 @@ export const cloudSync = {
           localChipet.applyCloudLocal(petsState.pets);
         }
       }
+      // 本机宠名写回排行档案（同内容会被去重，不会反复打接口）
+      for (const p of localChipet.list().filter((x) => !isChainPet(x))) this.pushLocalPetStats(p);
     } finally {
       hydrating = false;
       walletLoading = false;
       notifyCloud();
+      const next = pendingWallet;
+      pendingWallet = null;
+      if (next && next !== addr) void this.hydrateWallet(next);
     }
   },
 
@@ -405,7 +433,7 @@ export const cloudSync = {
     void postChipetPetAgg(petKey, field, delta).then((r) => {
       if (!r) return;
       social.applyCloudPetAgg(petKey, r.pats, r.visits);
-      void this.refreshLeaderboards();
+      this.scheduleLeaderboardRefresh();
     });
   },
 
@@ -424,9 +452,15 @@ export const cloudSync = {
     circuitId?: string;
     routeId?: number;
   }) {
+    const sig = JSON.stringify(input);
+    if (sentStats.get(input.petKey) === sig) return;
+    sentStats.set(input.petKey, sig);
     void putChipetPetStats(input).then((row) => {
-      if (!row) return;
-      void this.refreshLeaderboards();
+      if (!row) {
+        sentStats.delete(input.petKey);
+        return;
+      }
+      this.scheduleLeaderboardRefresh();
     });
   },
 

@@ -22,6 +22,8 @@ import {
 import { petSeed, phenotypeOf } from '../chipet/phenotype.ts';
 import { BATTLE_ENERGY, localChipet, xpNeed, type LocalPet } from '../chipet/store.ts';
 import { hydrateChainRivals } from '../chipet/rivals.ts';
+import { battleSfx } from '../chipet/sound.ts';
+import { SoundToggle } from '../chipet/SoundToggle.tsx';
 import { isOnchainPetKey, social, type PublicPet } from '../chipet/social.ts';
 import { both, plural, tr, txt, useLang, useT, type Txt } from '../i18n.ts';
 
@@ -792,6 +794,12 @@ export function Train() {
   }, [vs, tick]);
 
   useEffect(() => () => timers.current.forEach((t) => window.clearTimeout(t)), []);
+  const endResult = fight?.end?.result;
+  useEffect(() => {
+    if (endResult === 'win') battleSfx.win();
+    else if (endResult === 'lose') battleSfx.lose();
+    else if (endResult === 'draw') battleSfx.draw();
+  }, [endResult]);
   const later = (fn: () => void, ms: number) => { timers.current.push(window.setTimeout(fn, ms)); };
 
   const start = (opp: Opp) => {
@@ -830,6 +838,7 @@ export function Train() {
       log: [],
     });
     setTick((t) => t + 1);
+    battleSfx.fightStart();
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -919,6 +928,7 @@ export function Train() {
 
   const play = (move: Move | typeof FUSION) => {
     if (!fight || fight.end) return;
+    battleSfx.tap();
     if (fight.busy) {
       pendingMove.current = move;
       return;
@@ -957,7 +967,10 @@ export function Train() {
             <Tag tone="copper" icon={Swords}>{end ? t('对战结束', 'Battle over') : t(`第 ${fight.round} 回合`, `Round ${fight.round}`)}</Tag>
             <span className="font-mono text-[11px] text-faint" title={t('本场的随机种子；上链后改用区块随机数', 'Random seed for this battle; on-chain it will come from block randomness')}>seed 0x{fight.seed.toString(16).padStart(8, '0')}</span>
           </div>
-          {!end && <Button size="sm" variant="ghost" icon={Flag} disabled={fight.busy} onClick={() => finish(fight, 'lose')}>{t('认输', 'Surrender')}</Button>}
+          <div className="flex items-center gap-2">
+            <SoundToggle />
+            {!end && <Button size="sm" variant="ghost" icon={Flag} disabled={fight.busy} onClick={() => finish(fight, 'lose')}>{t('认输', 'Surrender')}</Button>}
+          </div>
         </div>
 
         <div className="rounded-[2rem] border border-line/80 bg-panel p-3 shadow-sm shadow-si/5 sm:p-5">

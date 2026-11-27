@@ -11,6 +11,7 @@ import { PetPage } from './pages/Pet.tsx';
 import { Dex } from './pages/Dex.tsx';
 import { Kitties } from './pages/Kitties.tsx';
 import { Train } from './pages/Train.tsx';
+import { Walk } from './pages/Walk.tsx';
 import { Plaza } from './pages/Plaza.tsx';
 import { Neighbors } from './pages/Neighbors.tsx';
 import { Arena } from './pages/Arena.tsx';
@@ -38,6 +39,7 @@ function App() {
   else if (a === 'dex') page = <Dex />;
   else if (a === 'kitties') page = <Kitties />;
   else if (a === 'train') page = <Train />;
+  else if (a === 'walk') page = <Walk />;
   else if (a === 'guide') page = <Guide />;
   else if (a === 'shop') page = <Shop />;
   else if (a === 'lab' && b === 'studio') page = <Studio />;
